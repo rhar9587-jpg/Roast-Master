@@ -7,13 +7,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import Home from "@/pages/Home";
 import NotFound from "@/pages/not-found";
-import LeagueHistoryDominance from "@/pages/LeagueHistoryDominance";
+import LeagueHistoryPage from "@/pages/LeagueHistory";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/league-history/dominance" component={LeagueHistoryDominance} />
+      <Route path="/league-history/dominance" component={LeagueHistoryPage} />
       <Route component={NotFound} />
     </Switch>
   );

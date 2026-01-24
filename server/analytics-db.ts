@@ -1,3 +1,4 @@
+// @ts-ignore - pg module types not available, but runtime works fine
 import pg from "pg";
 
 const { Pool } = pg;
@@ -176,7 +177,7 @@ export async function getRecentEvents(limit: number = 50): Promise<Array<{
         ORDER BY timestamp DESC LIMIT $1
       `, [limit]);
       
-      return rows.map(row => ({
+      return rows.map((row: { type: string; route: string; method: string; timestamp: string; meta: string | Record<string, any> }) => ({
         type: row.type,
         route: row.route,
         method: row.method,

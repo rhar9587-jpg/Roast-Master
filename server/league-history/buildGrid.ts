@@ -49,7 +49,9 @@ export function buildDominanceGrid(
 
     let countedThisWeek = 0;
 
-    for (const [, pair] of byMatchup.entries()) {
+    const matchupEntries = Array.from(byMatchup.entries());
+    for (let i = 0; i < matchupEntries.length; i++) {
+      const [, pair] = matchupEntries[i]!;
       if (pair.length < 2) continue;
 
       // Sleeper should provide exactly 2 entries for a matchup_id.

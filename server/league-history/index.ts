@@ -169,16 +169,18 @@ function buildDominanceGrid(managers: Manager[], matchupsByWeek: WeekMatchups[])
     return recordMap.get(key)!;
   };
 
-  for (const { matchups } of matchupsByWeek) {
-    const byMatchupId = new Map<number, MatchupEntry[]>();
+    for (const { matchups } of matchupsByWeek) {
+      const byMatchupId = new Map<number, MatchupEntry[]>();
 
-    for (const m of matchups) {
-      if (m.matchup_id == null) continue;
-      if (!byMatchupId.has(m.matchup_id)) byMatchupId.set(m.matchup_id, []);
-      byMatchupId.get(m.matchup_id)!.push(m);
-    }
+      for (const m of matchups) {
+        if (m.matchup_id == null) continue;
+        if (!byMatchupId.has(m.matchup_id)) byMatchupId.set(m.matchup_id, []);
+        byMatchupId.get(m.matchup_id)!.push(m);
+      }
 
-    for (const [, pair] of byMatchupId) {
+      const matchupPairs = Array.from(byMatchupId.entries());
+      for (let i = 0; i < matchupPairs.length; i++) {
+        const [, pair] = matchupPairs[i]!;
       if (pair.length !== 2) continue;
       const [a, b] = pair;
 

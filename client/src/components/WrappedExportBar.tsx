@@ -50,9 +50,7 @@ export function WrappedExportBar({ title, children }: Props) {
 
       // If native share available (mobile)
       // Otherwise, just download fallback
-      // @ts-expect-error - older TS lib defs
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        // @ts-expect-error - older TS lib defs
         await navigator.share({ files: [file], title: "Roast Wrapped" });
       } else {
         await exportPng();
