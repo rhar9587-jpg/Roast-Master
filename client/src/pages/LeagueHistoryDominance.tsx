@@ -179,6 +179,7 @@ export default function LeagueHistoryDominance() {
   const [endWeek, setEndWeek] = useState(17);
 
   const [selected, setSelected] = useState<DominanceCellDTO | null>(null);
+  const [activeBadge, setActiveBadge] = useState<Badge | null>(null);
 
   // Visible grid container (what the user scrolls)
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
@@ -714,7 +715,9 @@ export default function LeagueHistoryDominance() {
 
   // --- Render helpers ---
 
-  function GridInner({ forExport }: { forExport: boolean }) {
+  function GridInner({ forExport, activeBadge: filterBadge }: { forExport: boolean; activeBadge: Badge | null }) {
+    const applyFilter = !forExport && filterBadge != null;
+
     return (
       <div
         className="grid"
@@ -791,10 +794,18 @@ export default function LeagueHistoryDominance() {
                   );
                 }
 
+                const isMatch = applyFilter && c.badge === filterBadge;
+                const isDeemphasised = applyFilter && c.badge !== filterBadge;
+                const filterClasses = isMatch
+                  ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
+                  : isDeemphasised
+                    ? "opacity-20 grayscale"
+                    : "";
+
                 return (
                   <button
                     key={`cell-${c.a}-${c.b}-v`}
-                    className={`border p-2 text-left hover:opacity-90 transition ${bg}`}
+                    className={`border p-2 text-left hover:opacity-90 transition-all duration-200 ${bg} ${filterClasses}`}
                     onClick={() => setSelected(c)}
                     type="button"
                   >
@@ -909,12 +920,28 @@ export default function LeagueHistoryDominance() {
       </Card>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         {(["OWNED", "NEMESIS", "RIVAL", "EDGE", "SMALL SAMPLE"] as Badge[]).map((b) => (
-          <span key={b} className={`rounded px-2 py-1 ${badgePill(b)}`}>
+          <button
+            key={b}
+            type="button"
+            onClick={() => setActiveBadge((prev) => (prev === b ? null : b))}
+            className={`rounded px-2 py-1 transition-all duration-200 ${badgePill(b)} ${
+              activeBadge === b ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : "hover:opacity-90"
+            }`}
+          >
             {b}
-          </span>
+          </button>
         ))}
+        {activeBadge ? (
+          <button
+            type="button"
+            onClick={() => setActiveBadge(null)}
+            className="text-primary underline hover:no-underline"
+          >
+            Clear filter
+          </button>
+        ) : null}
       </div>
 
       {/* Hero cards */}
@@ -988,7 +1015,7 @@ export default function LeagueHistoryDominance() {
       {managers.length > 0 ? (
         <div ref={gridVisibleRef} className="rounded-lg border bg-background">
           <div className="overflow-auto">
-            <GridInner forExport={false} />
+            <GridInner forExport={false} activeBadge={activeBadge} />
           </div>
         </div>
       ) : (
@@ -1008,7 +1035,7 @@ export default function LeagueHistoryDominance() {
           }}
         >
           <div className="rounded-lg border bg-white">
-            <GridInner forExport={true} />
+            <GridInner forExport={true} activeBadge={null} />
           </div>
         </div>
       ) : null}
