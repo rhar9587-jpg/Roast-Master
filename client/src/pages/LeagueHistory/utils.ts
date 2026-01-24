@@ -78,7 +78,7 @@ export function clamp(n: number, min: number, max: number) {
 }
 
 export function scoreToBg(score: number, games: number): string {
-  if (games < 4) return "bg-slate-200/60 dark:bg-slate-700/40";
+  if (games < 4) return "bg-slate-100/30 dark:bg-slate-800/20";
 
   const s = clamp(score, -1, 1);
   const abs = Math.abs(s);
@@ -86,38 +86,42 @@ export function scoreToBg(score: number, games: number): string {
     abs >= 0.75 ? 5 : abs >= 0.55 ? 4 : abs >= 0.35 ? 3 : abs >= 0.15 ? 2 : 1;
 
   if (s > 0) {
-    return [
-      "bg-emerald-50",
+    const colors = [
       "bg-emerald-100",
       "bg-emerald-200",
       "bg-emerald-300",
       "bg-emerald-400",
-    ][tier - 1];
+      "bg-emerald-500",
+    ];
+    const shadows = abs >= 0.50 ? " shadow-sm shadow-emerald-200/50" : "";
+    return colors[tier - 1] + shadows;
   }
   if (s < 0) {
-    return [
-      "bg-rose-50",
+    const colors = [
       "bg-rose-100",
       "bg-rose-200",
       "bg-rose-300",
       "bg-rose-400",
-    ][tier - 1];
+      "bg-rose-500",
+    ];
+    const shadows = abs >= 0.50 ? " shadow-sm shadow-rose-200/50" : "";
+    return colors[tier - 1] + shadows;
   }
-  return "bg-muted";
+  return "bg-muted/20";
 }
 
 export function badgePill(badge: Badge): string {
   switch (badge) {
     case "OWNED":
-      return "bg-emerald-600 text-white";
+      return "bg-emerald-600 text-white text-[11px] font-semibold rounded-md px-2 py-0.5 shadow-sm";
     case "NEMESIS":
-      return "bg-rose-600 text-white";
+      return "bg-rose-600 text-white text-[11px] font-semibold rounded-md px-2 py-0.5 shadow-sm";
     case "RIVAL":
-      return "bg-amber-500 text-white";
+      return "bg-amber-500 text-white text-[11px] font-semibold rounded-md px-2 py-0.5";
     case "SMALL SAMPLE":
-      return "bg-slate-600 text-white";
+      return "bg-slate-400/40 text-slate-700 dark:text-slate-300 text-[9px] rounded-md px-1 py-0.5";
     default:
-      return "bg-muted-foreground/15 text-foreground";
+      return "bg-muted-foreground/20 text-foreground text-[11px] rounded-md px-2 py-0.5";
   }
 }
 

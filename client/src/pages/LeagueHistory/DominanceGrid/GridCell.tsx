@@ -27,31 +27,28 @@ export function GridCell({
   filterBadge,
   onSelect,
 }: Props) {
-  const bg = scoreToBg(cell.score, cell.games);
+  let bg = scoreToBg(cell.score, cell.games);
+  // Remove shadows for export (may not render well in PNG)
+  if (forExport) {
+    bg = bg.replace(/shadow-\S+/g, "").trim();
+  }
 
   if (forExport) {
     return (
       <div
-        className={`border p-2 text-left ${bg}`}
+        className={`p-2 text-left ${bg}`}
         data-cell-export
       >
-        <div className="flex items-center justify-between gap-2">
-          <span
-            className={`text-[10px] rounded px-1.5 py-0.5 ${badgePill(
-              cell.badge
-            )}`}
-          >
+        <div className="mb-1 overflow-hidden">
+          <span className={`${badgePill(cell.badge)} inline-block max-w-full truncate`}>
             {getBadgeDisplayName(cell.badge)}
           </span>
-          <span className="text-[10px] text-muted-foreground">
-            {cell.games}g
-          </span>
         </div>
-        <div className="mt-1 text-sm font-semibold">
+        <div className="text-lg font-bold leading-tight">{cell.record}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">
           {cell.score >= 0 ? "+" : ""}
           {cell.score.toFixed(2)}
         </div>
-        <div className="text-xs text-muted-foreground">{cell.record}</div>
       </div>
     );
   }
@@ -63,6 +60,14 @@ export function GridCell({
     : isDeemphasised
       ? "opacity-20 grayscale"
       : "";
+
+  // Hero treatment for OWNED and NEMESIS
+  const heroRing =
+    cell.badge === "OWNED"
+      ? "ring-2 ring-inset ring-emerald-400/40"
+      : cell.badge === "NEMESIS"
+        ? "ring-2 ring-inset ring-rose-400/40"
+        : "";
 
   const tooltipContent = (
     <div className="text-xs space-y-1">
@@ -84,29 +89,22 @@ export function GridCell({
       <TooltipTrigger asChild>
         <button
             type="button"
-            className={`border p-2 text-left transition-all duration-200 hover:opacity-90 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${bg} ${filterClasses}`}
+            className={`p-2 text-left transition-all duration-200 hover:opacity-90 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${bg} ${filterClasses} ${heroRing}`}
             onClick={onSelect}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span
-                className={`text-[10px] rounded px-1.5 py-0.5 ${badgePill(
-                  cell.badge
-                )}`}
-              >
+            <div className="mb-1 overflow-hidden">
+              <span className={`${badgePill(cell.badge)} inline-block max-w-full truncate`}>
                 {getBadgeDisplayName(cell.badge)}
               </span>
-              <span className="text-[10px] text-muted-foreground">
-                {cell.games}g
-              </span>
             </div>
-            <div className="mt-1 text-sm font-semibold">
+            <div className="text-lg font-bold leading-tight">{cell.record}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
               {cell.score >= 0 ? "+" : ""}
               {cell.score.toFixed(2)}
             </div>
-            <div className="text-xs text-muted-foreground">{cell.record}</div>
           </button>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-xs">
+      <TooltipContent side="top" className="max-w-xs !bg-background">
         {tooltipContent}
       </TooltipContent>
     </Tooltip>

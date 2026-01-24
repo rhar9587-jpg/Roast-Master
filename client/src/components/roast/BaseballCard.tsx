@@ -146,34 +146,34 @@ export function BaseballCard(props: LegacyProps | V2Props) {
   const tone =
     badge === "OWNED"
       ? {
-          frame: "from-emerald-500/30 via-emerald-500/10 to-transparent",
+          frame: "from-emerald-100/50 via-emerald-200/30 to-emerald-300/20",
           border: "border-emerald-400/70",
           chip: "bg-emerald-500/15 text-emerald-950 dark:text-emerald-50 border-emerald-500/30",
           accent: "text-emerald-700 dark:text-emerald-300",
         }
       : badge === "NEMESIS"
       ? {
-          frame: "from-rose-500/30 via-rose-500/10 to-transparent",
+          frame: "from-rose-100/50 via-rose-200/30 to-rose-300/20",
           border: "border-rose-400/70",
           chip: "bg-rose-500/15 text-rose-950 dark:text-rose-50 border-rose-500/30",
           accent: "text-rose-700 dark:text-rose-300",
         }
       : badge === "RIVAL"
       ? {
-          frame: "from-amber-500/30 via-amber-500/10 to-transparent",
+          frame: "from-amber-100/50 via-amber-200/30 to-amber-300/20",
           border: "border-amber-400/70",
           chip: "bg-amber-500/15 text-amber-950 dark:text-amber-50 border-amber-500/30",
           accent: "text-amber-700 dark:text-amber-300",
         }
       : badge === "EDGE"
       ? {
-          frame: "from-sky-500/30 via-sky-500/10 to-transparent",
+          frame: "from-sky-100/50 via-sky-200/30 to-sky-300/20",
           border: "border-sky-400/70",
           chip: "bg-sky-500/15 text-sky-950 dark:text-sky-50 border-sky-500/30",
           accent: "text-sky-700 dark:text-sky-300",
         }
       : {
-          frame: "from-violet-500/30 via-violet-500/10 to-transparent",
+          frame: "from-violet-100/50 via-violet-200/30 to-violet-300/20",
           border: "border-violet-400/70",
           chip: "bg-violet-500/15 text-violet-950 dark:text-violet-50 border-violet-500/30",
           accent: "text-violet-700 dark:text-violet-300",
@@ -232,10 +232,12 @@ export function BaseballCard(props: LegacyProps | V2Props) {
         "bg-background",
         // Fill stage + pin footer using flex
         "h-full flex flex-col",
+        // Inner ring for depth
+        "ring-1 ring-inset ring-white/20 dark:ring-white/10",
       ].join(" ")}
     >
       {bgLayers()}
-      <div className="relative h-full flex flex-col p-4">{children}</div>
+      <div className="relative h-full flex flex-col p-3.5">{children}</div>
     </div>
   );
 
@@ -246,8 +248,9 @@ export function BaseballCard(props: LegacyProps | V2Props) {
         <div className="flex items-center gap-2">
           <div
             className={[
-              "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide",
+              "inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide",
               tone.chip,
+              badge === "OWNED" || badge === "NEMESIS" ? "shadow-md" : "shadow-sm",
             ].join(" ")}
           >
             <span aria-hidden>{badgeIcon}</span>
@@ -262,45 +265,53 @@ export function BaseballCard(props: LegacyProps | V2Props) {
         </div>
 
         <div className="text-right">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</div>
           <div className="mt-0.5 text-[10px] uppercase tracking-wider opacity-70">{setCode}</div>
         </div>
       </div>
 
       {/* avatar */}
-      <div className="mt-4 flex items-center justify-center">
+      <div className="mt-3 flex items-center justify-center">
         {avatarUrl ? (
           <img
             src={avatarUrl}
             alt={name}
-            className={["h-20 w-20 rounded-md object-cover border-2 bg-background shadow-sm", tone.border].join(" ")}
+            className={[
+              "h-[88px] w-[88px] rounded-md object-cover border-[3px] bg-background shadow-md",
+              tone.border,
+              badge === "OWNED" ? "ring-2 ring-inset ring-emerald-300/40" : badge === "NEMESIS" ? "ring-2 ring-inset ring-rose-300/40" : badge === "RIVAL" ? "ring-2 ring-inset ring-amber-300/40" : "",
+            ].join(" ")}
           />
         ) : (
-          <div className={["h-20 w-20 rounded-md border-2 bg-background flex items-center justify-center text-sm text-muted-foreground", tone.border].join(" ")}>
+          <div className={[
+            "h-[88px] w-[88px] rounded-md border-[3px] bg-background flex items-center justify-center text-sm text-muted-foreground shadow-md",
+            tone.border,
+            badge === "OWNED" ? "ring-2 ring-inset ring-emerald-300/40" : badge === "NEMESIS" ? "ring-2 ring-inset ring-rose-300/40" : badge === "RIVAL" ? "ring-2 ring-inset ring-amber-300/40" : "",
+          ].join(" ")}>
             FR
           </div>
         )}
       </div>
 
       {/* nameplate */}
-      <div className="mt-3 text-center">
+      <div className="mt-2 text-center">
         <div className="mx-6 rounded-md border border-black/10 bg-black/5 py-1">
-          <div className="text-lg font-extrabold tracking-wide uppercase leading-tight line-clamp-2">{name}</div>
+          <div className="text-xl font-extrabold tracking-wide uppercase leading-tight line-clamp-2">{name}</div>
         </div>
         {punchline ? <div className="mt-1 text-xs text-muted-foreground">{punchline}</div> : null}
       </div>
 
       {/* primary stat */}
-      <div className="mt-4 text-center">
+      <div className="mt-2.5 text-center">
         <div className="text-5xl font-black leading-none">{primaryStat.value}</div>
-        {primaryStat.label ? <div className={`mt-1 text-xs font-semibold tracking-wide ${tone.accent}`}>{primaryStat.label}</div> : null}
+        {primaryStat.label ? <div className={`mt-1.5 text-sm font-bold uppercase tracking-wide ${tone.accent}`}>{primaryStat.label}</div> : null}
       </div>
 
       {/* stat lines */}
       {lines.length ? (
-        <div className="mt-4 space-y-2">
+        <div className="mt-2.5 space-y-1.5">
           {lines.slice(0, 4).map((l) => (
-            <div key={l.label} className="flex items-center justify-between gap-3 rounded-md border border-black/10 bg-background/80 px-3 py-2">
+            <div key={l.label} className="flex items-center justify-between gap-3 rounded-md border border-black/10 bg-background/80 px-3 py-1.5">
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{l.label}</div>
               <div className="text-sm font-semibold">{l.value}</div>
             </div>
@@ -309,7 +320,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
       ) : null}
 
       {/* footer pinned */}
-      <div className="mt-auto pt-3 flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="mt-auto pt-1 flex items-center justify-between text-[11px] text-muted-foreground">
         <div>{season}</div>
         <div className="flex items-center gap-2">
           <div className="opacity-80">{watermark}</div>
@@ -320,7 +331,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
       </div>
 
       {/* hint */}
-      <div className="pt-2 text-[10px] opacity-50">Tap to flip</div>
+      <div className="pt-1 pb-2.5 text-[10px] opacity-50">Tap to flip</div>
     </FaceShell>
   );
 
@@ -395,11 +406,12 @@ export function BaseballCard(props: LegacyProps | V2Props) {
   return (
     <Card
       className={[
-        "relative overflow-hidden border-2 p-1 rounded-md",
+        "relative overflow-hidden border-[3px] p-1 rounded-md",
         STAGE,
         tone.border,
         "cursor-pointer select-none",
         "touch-manipulation",
+        "shadow-lg",
       ].join(" ")}
       onPointerUp={handlePointerUp}
       onKeyDown={(e) => {

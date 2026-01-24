@@ -82,8 +82,16 @@ export function DominanceGrid({
           <div
             ref={gridVisibleRef as React.RefObject<HTMLDivElement>}
             className="rounded-lg border bg-background"
+            style={{ isolation: 'isolate' }}
           >
-            <div className="overflow-auto">
+            <div 
+              className="overflow-auto" 
+              style={{ 
+                WebkitOverflowScrolling: 'touch',
+                maxHeight: 'calc(100vh - 300px)',
+                minHeight: '400px'
+              }}
+            >
               <GridTable
                 managers={managers}
                 rowTotals={rowTotals}

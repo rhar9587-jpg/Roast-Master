@@ -39,26 +39,27 @@ export function GridTable({
 
   return (
     <div
-      className="grid"
+      className="grid gap-px"
       style={{
-        gridTemplateColumns: `220px repeat(${managers.length}, minmax(110px, 1fr)) 160px`,
+        gridTemplateColumns: `minmax(140px, 180px) repeat(${managers.length}, minmax(90px, 1fr)) minmax(120px, 160px)`,
       }}
     >
-      <div className="sticky top-0 z-10 bg-background border-b border-r p-2 text-xs font-medium">
+      <div className="sticky top-0 left-0 z-40 bg-background border-b border-r border-muted/30 p-2 text-xs font-medium shadow-sm" style={{ transform: 'translateZ(0)' }}>
         Team
       </div>
 
       {managers.map((m) => (
         <div
           key={`col-${m.key}-${suffix}`}
-          className="sticky top-0 z-10 bg-background border-b p-2 text-xs font-medium text-center"
+          className="sticky top-0 z-30 bg-background border-b p-2 text-xs font-medium text-center shadow-sm"
+          style={{ transform: 'translateZ(0)' }}
           title={m.name}
         >
           {abbrev(m.name)}
         </div>
       ))}
 
-      <div className="sticky top-0 z-10 bg-background border-b border-l p-2 text-xs font-medium text-center">
+      <div className="sticky top-0 z-30 bg-background border-b border-l border-muted/30 p-2 text-xs font-medium text-center shadow-sm" style={{ transform: 'translateZ(0)' }}>
         Total
       </div>
 
@@ -67,24 +68,26 @@ export function GridTable({
 
         return (
           <Fragment key={`r-${row.key}-${suffix}`}>
-            <div
-              className="sticky left-0 z-10 bg-background border-r p-2"
-              title={row.name}
-            >
-              <div className="text-xs font-medium">{row.name}</div>
-              {rt ? (
-                <div className="text-[11px] text-muted-foreground">
-                  {fmtRecord(rt.w, rt.l, rt.t)} • {fmtScore(rt.score)}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="sticky left-0 z-20 bg-background border-r border-muted/30 p-2 shadow-sm" style={{ transform: 'translateZ(0)' }}>
+                  <div className="text-xs font-medium truncate">{abbrev(row.name)}</div>
+                  {rt ? (
+                    <div className="text-[11px] text-muted-foreground">
+                      {fmtRecord(rt.w, rt.l, rt.t)} • {fmtScore(rt.score)}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
+              </TooltipTrigger>
+              <TooltipContent className="!bg-background">{row.name}</TooltipContent>
+            </Tooltip>
 
             {managers.map((col) => {
               if (row.key === col.key) {
                 return (
                   <div
                     key={`cell-${row.key}-${col.key}-${suffix}`}
-                    className="border p-2 bg-muted/30"
+                    className="p-2 bg-muted/10"
                   />
                 );
               }
@@ -94,7 +97,7 @@ export function GridTable({
                 return (
                   <div
                     key={`cell-${row.key}-${col.key}-${suffix}`}
-                    className="border p-2 text-xs text-muted-foreground"
+                    className="p-2 text-xs text-muted-foreground"
                   >
                     —
                   </div>
@@ -113,7 +116,7 @@ export function GridTable({
               );
             })}
 
-            <div className="border-l border p-2 bg-muted/20">
+            <div className="border-l border-muted/30 p-2 bg-muted/20">
               {rt ? (
                 <div className="space-y-1">
                   <div className="text-xs font-medium">Overall</div>
@@ -126,7 +129,7 @@ export function GridTable({
                         {fmtScore(rt.score)}
                       </div>
                     </TooltipTrigger>
-                    <TooltipContent>{SCORE_TOOLTIP}</TooltipContent>
+                    <TooltipContent className="!bg-background">{SCORE_TOOLTIP}</TooltipContent>
                   </Tooltip>
                   <div className="text-[10px] text-muted-foreground">
                     {rt.games} games
@@ -142,14 +145,14 @@ export function GridTable({
 
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="sticky left-0 z-10 bg-background border-t border-r p-2 cursor-help">
+          <div className="sticky left-0 z-20 bg-background border-t border-r border-muted/30 p-2 cursor-help shadow-sm" style={{ transform: 'translateZ(0)' }}>
             <div className="text-xs font-medium">League vs Team</div>
             <div className="text-[11px] text-muted-foreground">
               (how everyone does vs them)
             </div>
           </div>
         </TooltipTrigger>
-        <TooltipContent>{LEAGUE_VS_TEAM_TOOLTIP}</TooltipContent>
+        <TooltipContent className="!bg-background">{LEAGUE_VS_TEAM_TOOLTIP}</TooltipContent>
       </Tooltip>
 
       {managers.map((m) => {
@@ -157,7 +160,7 @@ export function GridTable({
         return (
           <div
             key={`coltotal-${m.key}-${suffix}`}
-            className="border-t p-2 text-center bg-muted/10"
+            className="p-2 text-center bg-muted/10"
           >
             {ct ? (
               <>
@@ -170,7 +173,7 @@ export function GridTable({
                       {fmtScore(ct.score)}
                     </div>
                   </TooltipTrigger>
-                  <TooltipContent>{SCORE_TOOLTIP}</TooltipContent>
+                  <TooltipContent className="!bg-background">{SCORE_TOOLTIP}</TooltipContent>
                 </Tooltip>
                 <div className="text-[10px] text-muted-foreground">
                   {ct.games} games
@@ -185,7 +188,7 @@ export function GridTable({
 
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="border-t border-l p-2 text-center bg-muted/20 cursor-help">
+          <div className="border-l border-muted/30 p-2 text-center bg-muted/20 cursor-help">
             <div className="text-xs font-medium">Grand</div>
             <div className="text-xs text-muted-foreground">
               {fmtRecord(grandTotals.w, grandTotals.l, grandTotals.t)}
@@ -198,7 +201,7 @@ export function GridTable({
             </div>
           </div>
         </TooltipTrigger>
-        <TooltipContent>{GRAND_TOOLTIP}</TooltipContent>
+        <TooltipContent className="!bg-background">{GRAND_TOOLTIP}</TooltipContent>
       </Tooltip>
     </div>
   );
