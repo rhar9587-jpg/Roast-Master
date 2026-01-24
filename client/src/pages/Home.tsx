@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { RoastCard } from "@/components/RoastCard";
 import { SeasonWrappedCard } from "@/components/SeasonWrappedCard";
 import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
@@ -415,6 +416,18 @@ export default function Home() {
             >
               Roast My League
             </button>
+          </div>
+
+          <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight">League History</h2>
+              <p className="text-sm text-gray-500">Dominance grid and matchup analytics</p>
+            </div>
+            <Link href="/league-history/dominance">
+              <button className="w-full rounded-xl bg-purple-600 px-4 py-3 text-white font-extrabold">
+                View League History
+              </button>
+            </Link>
           </div>
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">

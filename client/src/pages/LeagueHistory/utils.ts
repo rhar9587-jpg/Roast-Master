@@ -8,6 +8,66 @@ export const BADGES: Badge[] = [
   "SMALL SAMPLE",
 ];
 
+export type RecentLeague = {
+  leagueId: string;
+  leagueName?: string;
+  season?: string;
+  startWeek: number;
+  endWeek: number;
+  timestamp: number;
+};
+
+const STORAGE_KEY = "fantasy-roast-recent-leagues";
+const MAX_RECENT_LEAGUES = 10;
+
+export function getRecentLeagues(): RecentLeague[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored) as RecentLeague[];
+    if (!Array.isArray(parsed)) return [];
+    // Sort by timestamp descending (most recent first)
+    return parsed.sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecentLeague(
+  leagueId: string,
+  leagueName?: string,
+  season?: string,
+  startWeek?: number,
+  endWeek?: number
+): void {
+  try {
+    const recent = getRecentLeagues();
+    // Remove existing entry for this leagueId/startWeek/endWeek combo
+    const filtered = recent.filter(
+      (r) =>
+        !(
+          r.leagueId === leagueId &&
+          r.startWeek === (startWeek ?? 1) &&
+          r.endWeek === (endWeek ?? 17)
+        )
+    );
+    // Add new entry at the beginning
+    const newEntry: RecentLeague = {
+      leagueId,
+      leagueName,
+      season,
+      startWeek: startWeek ?? 1,
+      endWeek: endWeek ?? 17,
+      timestamp: Date.now(),
+    };
+    const updated = [newEntry, ...filtered].slice(0, MAX_RECENT_LEAGUES);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (err) {
+    // Silently fail if localStorage quota exceeded or other error
+    console.warn("Failed to save recent league:", err);
+  }
+}
+
 /** Display name for badges. SMALL SAMPLE → "TOO CLOSE TO CALL" */
 export function getBadgeDisplayName(badge: Badge): string {
   return badge === "SMALL SAMPLE" ? "TOO CLOSE TO CALL" : badge;

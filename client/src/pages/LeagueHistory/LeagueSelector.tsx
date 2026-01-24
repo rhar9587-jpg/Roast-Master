@@ -7,7 +7,16 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { getRecentLeagues, type RecentLeague } from "./utils";
 
 type Props = {
   leagueId: string;
@@ -41,6 +50,35 @@ export function LeagueSelector({
   season,
 }: Props) {
   const hasResult = Boolean(leagueName ?? season);
+  const [recentLeagues, setRecentLeagues] = useState<RecentLeague[]>([]);
+  const [selectedRecentValue, setSelectedRecentValue] = useState<string>("");
+
+  useEffect(() => {
+    setRecentLeagues(getRecentLeagues());
+  }, []);
+
+  function formatRecentLeagueLabel(r: RecentLeague): string {
+    const name = r.leagueName ?? "League";
+    const seasonStr = r.season ? `Season ${r.season}` : "";
+    const weeksStr = `Weeks ${r.startWeek}–${r.endWeek}`;
+    return [name, seasonStr, weeksStr].filter(Boolean).join(" • ");
+  }
+
+  function handleRecentLeagueSelect(value: string) {
+    if (!value.startsWith("recent-")) return;
+    const idx = Number(value.replace("recent-", ""));
+    if (isNaN(idx) || idx < 0 || idx >= recentLeagues.length) return;
+    const r = recentLeagues[idx];
+    onLeagueIdChange(r.leagueId);
+    onStartWeekChange(r.startWeek);
+    onEndWeekChange(r.endWeek);
+    // Reset selection
+    setSelectedRecentValue("");
+    // Trigger analysis after a brief delay to ensure state updates
+    setTimeout(() => {
+      onAnalyze();
+    }, 50);
+  }
 
   return (
     <Card className="p-4">
@@ -82,6 +120,31 @@ export function LeagueSelector({
 
         <CollapsibleContent>
           <div className="grid gap-3 md:grid-cols-4 mt-4">
+            {recentLeagues.length > 0 && (
+              <div className="md:col-span-4 space-y-1">
+                <Label>Recent leagues</Label>
+                <Select
+                  value={selectedRecentValue}
+                  onValueChange={handleRecentLeagueSelect}
+                  disabled={isFetching}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a recent league..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {recentLeagues.map((r, idx) => {
+                      const key = `recent-${idx}`;
+                      return (
+                        <SelectItem key={key} value={key}>
+                          {formatRecentLeagueLabel(r)}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="space-y-1">
               <Label>League ID</Label>
               <Input

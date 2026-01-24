@@ -8,6 +8,7 @@ import { DominanceGrid } from "./DominanceGrid";
 import { MatchupDetailModal } from "./MatchupDetailModal";
 import { GridTable } from "./DominanceGrid/GridTable";
 import { fmtRecord } from "./utils";
+import { saveRecentLeague } from "./utils";
 import type {
   Badge,
   DominanceApiResponse,
@@ -32,6 +33,8 @@ export default function LeagueHistoryPage() {
 
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
   const gridExportRef = useRef<HTMLDivElement | null>(null);
+  const hasInitializedFromUrl = useRef(false);
+  const shouldAutoTrigger = useRef(false);
 
   const { data, isFetching, error, refetch } = useQuery({
     queryKey: ["league-history-dominance", leagueId, startWeek, endWeek],
@@ -54,11 +57,75 @@ export default function LeagueHistoryPage() {
   const hasData = Boolean(data?.grid?.length);
   const prevFetching = useRef(false);
 
+  // Read URL params on mount
+  useEffect(() => {
+    if (hasInitializedFromUrl.current) return;
+    hasInitializedFromUrl.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    const urlLeagueId = params.get("league_id");
+    const urlStartWeek = params.get("start_week");
+    const urlEndWeek = params.get("end_week");
+
+    if (urlLeagueId && urlLeagueId.trim()) {
+      setLeagueId(urlLeagueId.trim());
+      shouldAutoTrigger.current = true;
+    }
+    if (urlStartWeek) {
+      const week = Number(urlStartWeek);
+      if (!isNaN(week) && week >= 1) {
+        setStartWeek(week);
+      }
+    }
+    if (urlEndWeek) {
+      const week = Number(urlEndWeek);
+      if (!isNaN(week) && week >= 1) {
+        setEndWeek(week);
+      }
+    }
+  }, []);
+
+  // Auto-trigger after URL params are loaded
+  useEffect(() => {
+    if (shouldAutoTrigger.current && leagueId.trim()) {
+      shouldAutoTrigger.current = false;
+      refetch();
+    }
+  }, [leagueId, startWeek, endWeek, refetch]);
+
+  // Sync state changes to URL
+  useEffect(() => {
+    if (!hasInitializedFromUrl.current) return;
+
+    const params = new URLSearchParams();
+    if (leagueId.trim()) {
+      params.set("league_id", leagueId.trim());
+    }
+    params.set("start_week", String(startWeek));
+    params.set("end_week", String(endWeek));
+
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, "", newUrl);
+  }, [leagueId, startWeek, endWeek]);
+
   useEffect(() => {
     const justFetched = prevFetching.current && !isFetching && hasData;
     prevFetching.current = isFetching;
     if (justFetched && !isSelectorCollapsed) setIsSelectorCollapsed(true);
   }, [isFetching, hasData, isSelectorCollapsed]);
+
+  // Save to recent leagues after successful fetch
+  useEffect(() => {
+    if (hasData && data?.league && leagueId.trim()) {
+      saveRecentLeague(
+        leagueId.trim(),
+        data.league.name ?? undefined,
+        data.league.season ? String(data.league.season) : undefined,
+        startWeek,
+        endWeek
+      );
+    }
+  }, [hasData, data?.league, leagueId, startWeek, endWeek]);
 
   const filename = useMemo(() => {
     const leagueName = data?.league?.name
