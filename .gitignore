@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.cache/
+attached_assets/
+*.zip
+project.zip
+ziJIX1mB
+.env
+.env.*
+*.log

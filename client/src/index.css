@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Vibrant, Sporty Palette */
+  --background: 220 20% 97%;
+  --foreground: 222 47% 11%;
+  
+  --primary: 142 76% 36%; /* Football Field Green */
+  --primary-foreground: 0 0% 100%;
+  
+  --secondary: 217 33% 17%; /* Dark Jersey Blue */
+  --secondary-foreground: 210 40% 98%;
+  
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  
+  --accent: 32 95% 44%; /* Football Brown/Orange */
+  --accent-foreground: 0 0% 100%;
+  
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 142 76% 36%;
+  
+  --radius: 1rem;
+  
+  /* Typography Variables */
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Bangers', cursive;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
+    font-family: var(--font-sans);
+    background-image: radial-gradient(hsl(214 32% 91% / 0.5) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply tracking-wide;
+  }
+}
+
+/* Custom Card Utilities */
+@layer components {
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-xl;
+  }
+}
+
+/* Team/Manager name in card footer - ensures proper wrapping */
+.teamName {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
