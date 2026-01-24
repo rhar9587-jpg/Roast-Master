@@ -423,7 +423,7 @@ export default function Home() {
               <h2 className="text-lg font-bold tracking-tight">League History</h2>
               <p className="text-sm text-gray-500">Dominance grid and matchup analytics</p>
             </div>
-            <Link href="/league-history/dominance">
+            <Link href={leagueId ? `/league-history/dominance?league_id=${encodeURIComponent(leagueId)}` : "/league-history/dominance"}>
               <button className="w-full rounded-xl bg-purple-600 px-4 py-3 text-white font-extrabold">
                 View League History
               </button>

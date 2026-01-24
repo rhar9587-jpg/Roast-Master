@@ -8,7 +8,7 @@ import { DominanceGrid } from "./DominanceGrid";
 import { MatchupDetailModal } from "./MatchupDetailModal";
 import { GridTable } from "./DominanceGrid/GridTable";
 import { fmtRecord } from "./utils";
-import { saveRecentLeague } from "./utils";
+import { saveRecentLeague, getRecentLeagues } from "./utils";
 import type {
   Badge,
   DominanceApiResponse,
@@ -22,7 +22,7 @@ function isCountable(c: DominanceCellDTO) {
 }
 
 export default function LeagueHistoryPage() {
-  const [leagueId, setLeagueId] = useState("1204010682635255808");
+  const [leagueId, setLeagueId] = useState("");
   const [startWeek, setStartWeek] = useState(1);
   const [endWeek, setEndWeek] = useState(17);
   const [selected, setSelected] = useState<DominanceCellDTO | null>(null);
@@ -67,22 +67,38 @@ export default function LeagueHistoryPage() {
     const urlStartWeek = params.get("start_week");
     const urlEndWeek = params.get("end_week");
 
+    // Priority 1: URL params (shareable links, Home navigation)
     if (urlLeagueId && urlLeagueId.trim()) {
       setLeagueId(urlLeagueId.trim());
       shouldAutoTrigger.current = true;
-    }
-    if (urlStartWeek) {
-      const week = Number(urlStartWeek);
-      if (!isNaN(week) && week >= 1) {
-        setStartWeek(week);
+      if (urlStartWeek) {
+        const week = Number(urlStartWeek);
+        if (!isNaN(week) && week >= 1) {
+          setStartWeek(week);
+        }
       }
-    }
-    if (urlEndWeek) {
-      const week = Number(urlEndWeek);
-      if (!isNaN(week) && week >= 1) {
-        setEndWeek(week);
+      if (urlEndWeek) {
+        const week = Number(urlEndWeek);
+        if (!isNaN(week) && week >= 1) {
+          setEndWeek(week);
+        }
       }
+      return; // URL params take precedence, exit early
     }
+
+    // Priority 2: Recent leagues (most recent entry)
+    const recent = getRecentLeagues();
+    if (recent.length > 0) {
+      const mostRecent = recent[0];
+      setLeagueId(mostRecent.leagueId);
+      setStartWeek(mostRecent.startWeek);
+      setEndWeek(mostRecent.endWeek);
+      // Don't auto-trigger for recent leagues (user should click Analyze)
+      return;
+    }
+
+    // Priority 3: Empty state (user must enter league)
+    // leagueId already defaults to "" from useState
   }, []);
 
   // Auto-trigger after URL params are loaded
