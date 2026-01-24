@@ -243,14 +243,7 @@ export default function LeagueHistoryPage() {
             : games
               ? (w - l) / games
               : 0;
-        const badge = (o.record?.badge ??
-          (games < 3
-            ? "SMALL SAMPLE"
-            : score > 0.25
-              ? "OWNED"
-              : score < -0.25
-                ? "NEMESIS"
-                : "EDGE")) as Badge;
+        const badge = (o.record?.badge ?? "EDGE") as Badge;
         m.set(`${row.key}-${o.opponent_key}`, {
           a: row.key,
           b: o.opponent_key,

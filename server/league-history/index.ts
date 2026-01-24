@@ -70,11 +70,11 @@ function round2(n: number) {
 
 /**
  * Badge logic:
- * - SMALL SAMPLE: < 3 games
+ * - SMALL SAMPLE: < 4 games
  * - OWNED / NEMESIS: clean sweep of 3+ games (3–0, 4–0, etc), ties must be 0
- * - RIVAL: >= 6 games and close score (abs <= 0.15)
+ * - RIVAL: >= 5 games and close score (abs <= 0.20)
  * - OWNED / NEMESIS: >= 10 games and score threshold (>= 0.35 / <= -0.35)
- * - OWNED / NEMESIS: >= 6 games and stronger threshold (>= 0.50 / <= -0.50)
+ * - OWNED / NEMESIS: >= 6 games and threshold (>= 0.40 / <= -0.40)
  * - Otherwise EDGE
  */
 function computeDominanceExtras(base: {
@@ -92,7 +92,7 @@ function computeDominanceExtras(base: {
   let badge: Badge = "EDGE";
 
   // 1) Small sample
-  if (games < 3) {
+  if (games < 4) {
     badge = "SMALL SAMPLE";
   } else {
     // 2) Clean sweep rule (3–0, 4–0, etc). Ties break the sweep.
@@ -102,7 +102,7 @@ function computeDominanceExtras(base: {
       badge = "NEMESIS";
     } else {
       // 3) Rivalry (only when sample is decent)
-      if (games >= 6 && Math.abs(score) <= 0.15) {
+      if (games >= 5 && Math.abs(score) <= 0.20) {
         badge = "RIVAL";
       }
       // 4) Strong signals
@@ -111,8 +111,8 @@ function computeDominanceExtras(base: {
         else if (score <= -0.35) badge = "NEMESIS";
         else badge = "EDGE";
       } else if (games >= 6) {
-        if (score >= 0.5) badge = "OWNED";
-        else if (score <= -0.5) badge = "NEMESIS";
+        if (score >= 0.40) badge = "OWNED";
+        else if (score <= -0.40) badge = "NEMESIS";
         else badge = "EDGE";
       } else {
         badge = "EDGE";

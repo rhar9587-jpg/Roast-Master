@@ -37,7 +37,7 @@ export function badgeForCell(cell: Omit<Cell, "badge">): Badge {
   const losses = cell.losses ?? 0;
 
   // small sample
-  if (games < 3) return "SMALL SAMPLE";
+  if (games < 4) return "SMALL SAMPLE";
 
   // (wins-losses)/games (use computed if already present)
   const score =
@@ -47,16 +47,16 @@ export function badgeForCell(cell: Omit<Cell, "badge">): Badge {
   if (losses === 0 && wins >= 3) return "OWNED";
   if (wins === 0 && losses >= 3) return "NEMESIS";
 
-  // ✅ Rival: only once enough games
-  if (games >= 6 && Math.abs(score) <= 0.15) return "RIVAL";
+  // ✅ Rival: games >= 5 and close score
+  if (games >= 5 && Math.abs(score) <= 0.20) return "RIVAL";
 
   // ✅ Dominance thresholds scale with sample size
   if (games >= 10) {
     if (score >= 0.35) return "OWNED";
     if (score <= -0.35) return "NEMESIS";
   } else if (games >= 6) {
-    if (score >= 0.5) return "OWNED";
-    if (score <= -0.5) return "NEMESIS";
+    if (score >= 0.40) return "OWNED";
+    if (score <= -0.40) return "NEMESIS";
   }
 
   return "EDGE";

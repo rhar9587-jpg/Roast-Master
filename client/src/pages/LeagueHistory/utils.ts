@@ -78,7 +78,7 @@ export function clamp(n: number, min: number, max: number) {
 }
 
 export function scoreToBg(score: number, games: number): string {
-  if (games < 3) return "bg-slate-200/60 dark:bg-slate-700/40";
+  if (games < 4) return "bg-slate-200/60 dark:bg-slate-700/40";
 
   const s = clamp(score, -1, 1);
   const abs = Math.abs(s);
