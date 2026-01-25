@@ -66,7 +66,7 @@ export function GridToolbar({
         disabled={isCopying || isDownloading || isSharing}
       >
         <LinkIcon className="h-4 w-4 mr-2" />
-        {isCopying ? "Copying…" : "Copy Receipt Link"}
+        {isCopying ? "Copying…" : "Copy Roast Link"}
       </Button>
       <Button
         variant="secondary"
@@ -74,7 +74,7 @@ export function GridToolbar({
         onClick={onDownloadPng}
         disabled={!hasData || isDownloading || isSharing}
       >
-        {isDownloading ? "Saving…" : "Save Receipt"}
+        {isDownloading ? "Saving…" : "Save Roast"}
       </Button>
       <Button
         variant="secondary"

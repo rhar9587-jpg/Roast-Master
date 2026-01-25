@@ -181,7 +181,7 @@ export function LeagueSelector({
                 onClick={onAnalyze}
                 disabled={isFetching || !leagueId.trim()}
               >
-                {isFetching ? "Finding receipts…" : "Show Me The Receipts"}
+                {isFetching ? "Finding roasts…" : "Show Me The Roasts"}
               </Button>
             </div>
           </div>

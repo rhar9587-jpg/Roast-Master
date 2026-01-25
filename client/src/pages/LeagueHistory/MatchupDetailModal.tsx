@@ -113,7 +113,7 @@ export function MatchupDetailModal({
                 onClick={handleShareMatchup}
               >
                 <Share2 className="h-4 w-4 mr-2" />
-                Send This Receipt
+                Send This Roast
               </Button>
             </div>
           </>

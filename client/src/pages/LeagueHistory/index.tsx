@@ -57,7 +57,7 @@ export default function LeagueHistoryPage() {
       const res = await fetch(`/api/league-history/dominance?${qs.toString()}`);
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        const errorMsg = j?.error || "Failed to load dominance grid";
+        const errorMsg = j?.error || "Failed to load roasts";
         
         // Map errors to helpful messages
         if (res.status === 404 || errorMsg.toLowerCase().includes("not found")) {
@@ -545,10 +545,10 @@ export default function LeagueHistoryPage() {
       const res = await fetch(dataUrl);
       const blob = await res.blob();
       const file = new File([blob], filename, { type: "image/png" });
-      const shareText = "Fantasy Roast — Dominance Grid";
+      const shareText = "Fantasy Roast — Roasts";
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({
-          title: "Dominance Grid",
+          title: "Roasts",
           text: shareText,
           files: [file],
         });
@@ -591,7 +591,7 @@ export default function LeagueHistoryPage() {
               Who Owns Your League?
             </h1>
             <p className="text-base md:text-lg text-muted-foreground max-w-2xl">
-              Shareable receipts for your league chat.
+              Shareable roasts for your league chat.
             </p>
           </div>
           
@@ -616,7 +616,7 @@ export default function LeagueHistoryPage() {
                   <div>
                     <h3 className="font-semibold mb-1">What is dominance?</h3>
                     <p className="text-muted-foreground">
-                      How much you own another manager (or get owned). A positive score means you've won more head-to-head; negative means they've got the receipts on you.
+                      How much you own another manager (or get owned). A positive score means you've won more head-to-head; negative means they've got the roasts on you.
                     </p>
                   </div>
                   <div>
@@ -626,7 +626,7 @@ export default function LeagueHistoryPage() {
                       <li><strong className="text-foreground">NEMESIS</strong> — They own you.</li>
                       <li><strong className="text-foreground">RIVAL</strong> — This one's personal.</li>
                       <li><strong className="text-foreground">EDGE</strong> — Slight edge.</li>
-                      <li><strong className="text-foreground">TOO CLOSE TO CALL</strong> — Not enough receipts yet.</li>
+                      <li><strong className="text-foreground">TOO CLOSE TO CALL</strong> — Too close to roast.</li>
                     </ul>
                   </div>
                   <div>
@@ -646,7 +646,7 @@ export default function LeagueHistoryPage() {
       {hasData && (
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold">
-            League History – Dominance Grid
+            League History
           </h1>
           {data?.league ? (
             <p className="text-sm text-muted-foreground">
@@ -704,7 +704,7 @@ export default function LeagueHistoryPage() {
 
       <section>
         <h2 className="text-sm font-medium text-muted-foreground mb-2">
-          The Receipts
+          The Scoreboard
         </h2>
         <DominanceGrid
           managers={managers}

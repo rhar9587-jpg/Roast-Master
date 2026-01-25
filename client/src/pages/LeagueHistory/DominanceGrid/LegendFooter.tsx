@@ -6,7 +6,7 @@ const BADGE_EXPLANATIONS: Record<Badge, string> = {
   NEMESIS: "They own you.",
   RIVAL: "This one's personal.",
   EDGE: "Slight edge.",
-  "SMALL SAMPLE": "Not enough receipts yet.",
+  "SMALL SAMPLE": "Too close to roast.",
 };
 
 type Props = {
@@ -23,7 +23,7 @@ export function LegendFooter({
   return (
     <footer className="mt-4 space-y-2 rounded-lg border bg-muted/30 px-4 py-3">
       <div className="text-xs font-medium text-muted-foreground">
-        Find my receipts
+        Find my roasts
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {BADGES.map((b) => (
