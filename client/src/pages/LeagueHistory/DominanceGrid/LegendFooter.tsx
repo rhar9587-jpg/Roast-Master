@@ -2,11 +2,11 @@ import { BADGES, badgePill, getBadgeDisplayName } from "../utils";
 import type { Badge } from "../types";
 
 const BADGE_EXPLANATIONS: Record<Badge, string> = {
-  OWNED: "You dominate this matchup",
-  NEMESIS: "They dominate you",
-  RIVAL: "Close rivalry",
-  EDGE: "Slight edge one way",
-  "SMALL SAMPLE": "Not enough games to be sure",
+  OWNED: "You own them.",
+  NEMESIS: "They own you.",
+  RIVAL: "This one's personal.",
+  EDGE: "Slight edge.",
+  "SMALL SAMPLE": "Not enough receipts yet.",
 };
 
 type Props = {
@@ -23,7 +23,7 @@ export function LegendFooter({
   return (
     <footer className="mt-4 space-y-2 rounded-lg border bg-muted/30 px-4 py-3">
       <div className="text-xs font-medium text-muted-foreground">
-        Filter by matchup type
+        Storylines
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {BADGES.map((b) => (

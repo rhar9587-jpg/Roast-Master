@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toPng } from "html-to-image";
+import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
 
 import { LeagueSelector } from "./LeagueSelector";
 import { InsightsDashboard } from "./InsightsDashboard";
@@ -30,6 +37,8 @@ export default function LeagueHistoryPage() {
   const [isSelectorCollapsed, setIsSelectorCollapsed] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [lastAnalyzedAt, setLastAnalyzedAt] = useState<Date | null>(null);
 
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
   const gridExportRef = useRef<HTMLDivElement | null>(null);
@@ -48,8 +57,21 @@ export default function LeagueHistoryPage() {
       const res = await fetch(`/api/league-history/dominance?${qs.toString()}`);
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error || "Failed to load dominance grid");
+        const errorMsg = j?.error || "Failed to load dominance grid";
+        
+        // Map errors to helpful messages
+        if (res.status === 404 || errorMsg.toLowerCase().includes("not found")) {
+          throw new Error("LEAGUE_NOT_FOUND");
+        }
+        if (errorMsg.toLowerCase().includes("timeout")) {
+          throw new Error("TIMEOUT");
+        }
+        if (errorMsg.toLowerCase().includes("network") || errorMsg.toLowerCase().includes("fetch")) {
+          throw new Error("NETWORK_ERROR");
+        }
+        throw new Error(errorMsg);
       }
+      setLastAnalyzedAt(new Date());
       return res.json();
     },
   });
@@ -539,22 +561,104 @@ export default function LeagueHistoryPage() {
     }
   }
 
+  function handleTryExampleLeague() {
+    const exampleLeagueId = "1204010682635255808";
+    setLeagueId(exampleLeagueId);
+    setStartWeek(1);
+    setEndWeek(17);
+    shouldAutoTrigger.current = true;
+    // Ensure URL sync happens
+    hasInitializedFromUrl.current = true;
+    // Trigger will happen via useEffect, but we can also trigger immediately
+    setTimeout(() => {
+      refetch();
+    }, 100);
+  }
+
+  const hasEnoughData = useMemo(() => {
+    if (!data?.grid?.length) return false;
+    const totalGames = allCells.reduce((sum, c) => sum + (c?.games ?? 0), 0);
+    return totalGames > 0;
+  }, [data, allCells]);
+
   return (
     <div className="mx-auto max-w-6xl p-4 md:p-6 space-y-4">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold">
-          League History – Dominance Grid
-        </h1>
-        {data?.league ? (
-          <p className="text-sm text-muted-foreground">
-            {data.league.name} • Season {data.league.season}
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Analyze head-to-head dominance for any Sleeper league.
-          </p>
-        )}
-      </div>
+      {/* Hero Section */}
+      {!hasData && (
+        <div className="rounded-lg border bg-gradient-to-br from-background to-muted/20 p-6 md:p-8 space-y-4">
+          <div className="space-y-2">
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+              Who Owns Your League?
+            </h1>
+            <p className="text-base md:text-lg text-muted-foreground max-w-2xl">
+              Shareable receipts for your league chat.
+            </p>
+          </div>
+          
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={handleTryExampleLeague} size="lg" className="font-semibold">
+              Try Example League
+            </Button>
+            <Collapsible open={showHowItWorks} onOpenChange={setShowHowItWorks}>
+              <CollapsibleTrigger asChild>
+                <Button variant="outline" size="lg">
+                  <HelpCircle className="h-4 w-4 mr-2" />
+                  How it works
+                  {showHowItWorks ? (
+                    <ChevronUp className="h-4 w-4 ml-2" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 ml-2" />
+                  )}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-4">
+                <div className="rounded-lg border bg-background p-4 space-y-4 text-sm">
+                  <div>
+                    <h3 className="font-semibold mb-1">What is dominance?</h3>
+                    <p className="text-muted-foreground">
+                      Dominance measures head-to-head performance between managers. A positive score means you've won more matchups; negative means you've lost more.
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-1">What do the badges mean?</h3>
+                    <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
+                      <li><strong className="text-foreground">OWNED</strong> — You consistently beat this manager</li>
+                      <li><strong className="text-foreground">NEMESIS</strong> — This manager consistently beats you</li>
+                      <li><strong className="text-foreground">RIVAL</strong> — Very close matchups, true rivalry</li>
+                      <li><strong className="text-foreground">EDGE</strong> — Slight advantage one way or the other</li>
+                      <li><strong className="text-foreground">TOO CLOSE TO CALL</strong> — Not enough games to determine dominance</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-1">What does the score represent?</h3>
+                    <p className="text-muted-foreground">
+                      Score = (Wins - Losses) / Total Games. A score of +0.50 means you've won 75% of matchups; -0.50 means you've lost 75%.
+                    </p>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+        </div>
+      )}
+
+      {/* Standard Header (when data exists) */}
+      {hasData && (
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold">
+            League History – Dominance Grid
+          </h1>
+          {data?.league ? (
+            <p className="text-sm text-muted-foreground">
+              {data.league.name} • Season {data.league.season}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Analyze head-to-head dominance for any Sleeper league.
+            </p>
+          )}
+        </div>
+      )}
 
       <LeagueSelector
         leagueId={leagueId}
@@ -572,10 +676,10 @@ export default function LeagueHistoryPage() {
         season={data?.league?.season}
       />
 
-      {hasData && (
+      {hasData && hasEnoughData && (
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-2">
-            Insights
+            The Headlines
           </h2>
           <InsightsDashboard
             landlord={landlord}
@@ -587,9 +691,20 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
+      {hasData && !hasEnoughData && (
+        <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-center">
+          <p className="text-sm text-muted-foreground mb-1">
+            Not enough data yet.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Analyze more weeks to see dominance patterns and insights.
+          </p>
+        </div>
+      )}
+
       <section>
         <h2 className="text-sm font-medium text-muted-foreground mb-2">
-          Dominance grid
+          The Receipts
         </h2>
         <DominanceGrid
           managers={managers}
@@ -608,6 +723,18 @@ export default function LeagueHistoryPage() {
           isFetching={isFetching}
           gridVisibleRef={gridVisibleRef}
         />
+        
+        {/* Trust Signals */}
+        {hasData && (
+          <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+            <span>Data source: Sleeper API</span>
+            {lastAnalyzedAt && (
+              <span>
+                Last analyzed: {lastAnalyzedAt.toLocaleString()}
+              </span>
+            )}
+          </div>
+        )}
       </section>
 
       {hasData && (

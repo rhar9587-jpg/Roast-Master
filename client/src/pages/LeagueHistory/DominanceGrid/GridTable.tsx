@@ -19,7 +19,7 @@ type Props = {
   onSelectCell: (cell: DominanceCellDTO) => void;
 };
 
-const SCORE_TOOLTIP = "Win rate differential (-1 to +1)";
+const SCORE_TOOLTIP = "Ownership score: +1 = you own them, -1 = they own you.";
 const LEAGUE_VS_TEAM_TOOLTIP =
   "Combined record of all managers vs this team";
 const GRAND_TOOLTIP = "Total matchups (each appears twice)";

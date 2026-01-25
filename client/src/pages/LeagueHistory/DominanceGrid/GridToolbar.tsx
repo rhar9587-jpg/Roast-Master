@@ -66,7 +66,7 @@ export function GridToolbar({
         disabled={isCopying || isDownloading || isSharing}
       >
         <LinkIcon className="h-4 w-4 mr-2" />
-        {isCopying ? "Copying…" : "Copy Link"}
+        {isCopying ? "Copying…" : "Copy Receipt Link"}
       </Button>
       <Button
         variant="secondary"
@@ -74,7 +74,7 @@ export function GridToolbar({
         onClick={onDownloadPng}
         disabled={!hasData || isDownloading || isSharing}
       >
-        {isDownloading ? "Exporting…" : "Download PNG"}
+        {isDownloading ? "Saving…" : "Save Receipt"}
       </Button>
       <Button
         variant="secondary"
@@ -82,7 +82,7 @@ export function GridToolbar({
         onClick={onSharePng}
         disabled={!hasData || isDownloading || isSharing}
       >
-        {isSharing ? "Exporting…" : "Share"}
+        {isSharing ? "Sending…" : "Send to Group Chat"}
       </Button>
     </div>
   );

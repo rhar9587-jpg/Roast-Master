@@ -181,13 +181,47 @@ export function LeagueSelector({
                 onClick={onAnalyze}
                 disabled={isFetching || !leagueId.trim()}
               >
-                {isFetching ? "Analyzing…" : "Analyze League"}
+                {isFetching ? "Finding receipts…" : "Show Me The Receipts"}
               </Button>
             </div>
           </div>
 
           {error ? (
-            <p className="mt-3 text-sm text-rose-600">{error.message}</p>
+            <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 dark:bg-rose-950/20 p-3 space-y-2">
+              <p className="text-sm font-medium text-rose-700 dark:text-rose-300">
+                {error.message === "LEAGUE_NOT_FOUND"
+                  ? "Can't find that league — we can't roast what we can't see."
+                  : error.message === "TIMEOUT"
+                  ? "The analysis took too long. Try again."
+                  : error.message === "NETWORK_ERROR"
+                  ? "Can't reach Sleeper right now. Please try later."
+                  : error.message}
+              </p>
+              {(error.message === "LEAGUE_NOT_FOUND" ||
+                error.message === "TIMEOUT" ||
+                error.message === "NETWORK_ERROR") && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onAnalyze}
+                    disabled={isFetching || !leagueId.trim()}
+                  >
+                    Retry
+                  </Button>
+                  {error.message === "LEAGUE_NOT_FOUND" && (
+                    <a
+                      href="https://support.sleeper.app/en/articles/4127178-how-to-find-your-league-id"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-rose-600 dark:text-rose-400 hover:underline inline-flex items-center"
+                    >
+                      Get help finding your league ID →
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
           ) : null}
         </CollapsibleContent>
       </Collapsible>

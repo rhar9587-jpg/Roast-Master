@@ -75,7 +75,7 @@ export function GridCell({
         {cell.aName} vs {cell.bName}
       </div>
       <div>
-        {getBadgeDisplayName(cell.badge)} • {cell.record} • Score{" "}
+        {cell.record} • {getBadgeDisplayName(cell.badge)} • Score{" "}
         {fmtScore(cell.score)}
       </div>
       <div className="text-muted-foreground">

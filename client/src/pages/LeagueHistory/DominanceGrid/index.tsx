@@ -73,7 +73,7 @@ export function DominanceGrid({
       {isFetching ? (
         <div className="rounded-lg border bg-background p-4">
           <p className="mb-3 text-sm text-muted-foreground">
-            Loading dominance data…
+            Finding receipts…
           </p>
           <GridSkeleton />
         </div>
@@ -112,9 +112,11 @@ export function DominanceGrid({
         </>
       ) : (
         <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            Select a league and week range, then choose &ldquo;Analyze
-            League&rdquo; to see head-to-head dominance here.
+          <p className="text-sm font-medium text-muted-foreground mb-1">
+            No receipts found — try another week range.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Choose &ldquo;Show Me The Receipts&rdquo; to see head-to-head dominance here.
           </p>
         </div>
       )}

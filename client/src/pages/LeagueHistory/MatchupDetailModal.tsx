@@ -5,6 +5,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { Share2 } from "lucide-react";
 import { badgePill, getBadgeDisplayName } from "./utils";
 import type { DominanceCellDTO } from "./types";
 
@@ -19,6 +21,47 @@ export function MatchupDetailModal({
   open,
   onOpenChange,
 }: Props) {
+  const { toast } = useToast();
+
+  async function handleShareMatchup() {
+    if (!selected) return;
+    
+    try {
+      // Build URL with matchup anchor
+      const currentUrl = new URL(window.location.href);
+      currentUrl.hash = `matchup-${selected.a}-${selected.b}`;
+      const shareUrl = currentUrl.toString();
+      
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        toast({
+          title: "Link copied!",
+          description: "Share this matchup link with your league",
+        });
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement("textarea");
+        textArea.value = shareUrl;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+        toast({
+          title: "Link copied!",
+          description: "Share this matchup link with your league",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Failed to copy",
+        description: "Please copy the URL manually",
+        variant: "destructive",
+      });
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-full sm:max-w-md">
@@ -64,8 +107,13 @@ export function MatchupDetailModal({
                 </div>
               </div>
 
-              <Button className="w-full" variant="secondary" disabled>
-                Coming soon: Rivalry Pack
+              <Button
+                className="w-full"
+                variant="secondary"
+                onClick={handleShareMatchup}
+              >
+                <Share2 className="h-4 w-4 mr-2" />
+                Send This Receipt
               </Button>
             </div>
           </>
