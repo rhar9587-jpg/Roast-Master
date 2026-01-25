@@ -131,7 +131,7 @@ export function LeagueSelector({
                   <SelectTrigger>
                     <SelectValue placeholder="Select a recent league..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="!bg-background">
                     {recentLeagues.map((r, idx) => {
                       const key = `recent-${idx}`;
                       return (
