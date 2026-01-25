@@ -21,8 +21,8 @@ type Props = {
 
 const SCORE_TOOLTIP = "Ownership score: +1 = you own them, -1 = they own you.";
 const LEAGUE_VS_TEAM_TOOLTIP =
-  "Combined record of all managers vs this team";
-const GRAND_TOOLTIP = "Total matchups (each appears twice)";
+  "Everyone's combined record vs this manager";
+const GRAND_TOOLTIP = "Total head-to-head matchups (each pair counted twice)";
 
 export function GridTable({
   managers,
@@ -45,7 +45,7 @@ export function GridTable({
       }}
     >
       <div className="sticky top-0 left-0 z-40 bg-background border-b border-r border-muted/30 p-2 text-xs font-medium shadow-sm" style={{ transform: 'translateZ(0)' }}>
-        Team
+        Manager
       </div>
 
       {managers.map((m) => (
@@ -60,7 +60,7 @@ export function GridTable({
       ))}
 
       <div className="sticky top-0 z-30 bg-background border-b border-l border-muted/30 p-2 text-xs font-medium text-center shadow-sm" style={{ transform: 'translateZ(0)' }}>
-        Total
+        Overall
       </div>
 
       {managers.map((row) => {

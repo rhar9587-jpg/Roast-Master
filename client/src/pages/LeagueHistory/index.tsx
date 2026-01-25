@@ -616,23 +616,23 @@ export default function LeagueHistoryPage() {
                   <div>
                     <h3 className="font-semibold mb-1">What is dominance?</h3>
                     <p className="text-muted-foreground">
-                      Dominance measures head-to-head performance between managers. A positive score means you've won more matchups; negative means you've lost more.
+                      How much you own another manager (or get owned). A positive score means you've won more head-to-head; negative means they've got the receipts on you.
                     </p>
                   </div>
                   <div>
                     <h3 className="font-semibold mb-1">What do the badges mean?</h3>
                     <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
-                      <li><strong className="text-foreground">OWNED</strong> — You consistently beat this manager</li>
-                      <li><strong className="text-foreground">NEMESIS</strong> — This manager consistently beats you</li>
-                      <li><strong className="text-foreground">RIVAL</strong> — Very close matchups, true rivalry</li>
-                      <li><strong className="text-foreground">EDGE</strong> — Slight advantage one way or the other</li>
-                      <li><strong className="text-foreground">TOO CLOSE TO CALL</strong> — Not enough games to determine dominance</li>
+                      <li><strong className="text-foreground">OWNED</strong> — You own them.</li>
+                      <li><strong className="text-foreground">NEMESIS</strong> — They own you.</li>
+                      <li><strong className="text-foreground">RIVAL</strong> — This one's personal.</li>
+                      <li><strong className="text-foreground">EDGE</strong> — Slight edge.</li>
+                      <li><strong className="text-foreground">TOO CLOSE TO CALL</strong> — Not enough receipts yet.</li>
                     </ul>
                   </div>
                   <div>
                     <h3 className="font-semibold mb-1">What does the score represent?</h3>
                     <p className="text-muted-foreground">
-                      Score = (Wins - Losses) / Total Games. A score of +0.50 means you've won 75% of matchups; -0.50 means you've lost 75%.
+                      Ownership score from -1 to +1. Plus means you're winning the matchup; minus means they are. +0.50 is roughly "you've won 75% of your games against them."
                     </p>
                   </div>
                 </div>

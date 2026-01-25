@@ -192,9 +192,9 @@ export function LeagueSelector({
                 {error.message === "LEAGUE_NOT_FOUND"
                   ? "Can't find that league — we can't roast what we can't see."
                   : error.message === "TIMEOUT"
-                  ? "The analysis took too long. Try again."
+                  ? "This is taking forever. Try again."
                   : error.message === "NETWORK_ERROR"
-                  ? "Can't reach Sleeper right now. Please try later."
+                  ? "Sleeper's having a moment. Try again soon."
                   : error.message}
               </p>
               {(error.message === "LEAGUE_NOT_FOUND" ||

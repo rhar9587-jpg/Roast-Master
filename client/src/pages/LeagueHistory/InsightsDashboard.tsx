@@ -46,7 +46,7 @@ export function InsightsDashboard({
     <RoastDeckCarousel>
       <BaseballCard
         badge="OWNED"
-        title="LEAGUE LANDLORD"
+        title="THE LANDLORD 👑"
         name={landlord?.landlordName ?? "—"}
         avatarUrl={
           landlord ? (avatarByKey[landlord.landlordKey] ?? null) : null
@@ -57,13 +57,13 @@ export function InsightsDashboard({
         }}
         punchline={
           landlord
-            ? `Owns ${landlord.victimCount} managers overall`
+            ? `Owns ${landlord.victimCount} managers. Rent is due.`
             : "No landlord yet"
         }
         lines={[
-          { label: "Victims", value: landlord ? String(landlord.victimCount) : "—" },
+          { label: "Tenants", value: landlord ? String(landlord.victimCount) : "—" },
           {
-            label: "Top victim",
+            label: "Favorite Tenant",
             value: landlord?.bestVictim
               ? `${landlord.bestVictim.victimName} (${landlord.bestVictim.record})`
               : "—",
@@ -77,7 +77,7 @@ export function InsightsDashboard({
 
       <BaseballCard
         badge="NEMESIS"
-        title="MOST OWNED"
+        title="BIGGEST VICTIM 😭"
         name={mostOwned?.victimName ?? "—"}
         avatarUrl={
           mostOwned ? (avatarByKey[mostOwned.victimKey] ?? null) : null
@@ -88,11 +88,11 @@ export function InsightsDashboard({
         }}
         punchline={
           mostOwned
-            ? `Owned by ${mostOwned.timesOwned} different managers`
+            ? `Owned by ${mostOwned.timesOwned} managers. It's rough.`
             : "No victims yet"
         }
         lines={[
-          { label: "Worst nemesis", value: mostOwned?.worstNemesisName ?? "—" },
+          { label: "Kryptonite", value: mostOwned?.worstNemesisName ?? "—" },
           { label: "Games", value: mostOwned ? String(mostOwned.totalGames) : "—" },
         ]}
         season="2024–25"
@@ -101,7 +101,7 @@ export function InsightsDashboard({
 
       <BaseballCard
         badge="RIVAL"
-        title="BIGGEST RIVALRY"
+        title="BIGGEST RIVALRY ⚔️"
         name={
           biggestRivalry
             ? `${biggestRivalry.aName} vs ${biggestRivalry.bName}`
@@ -118,7 +118,7 @@ export function InsightsDashboard({
         }}
         punchline={
           biggestRivalry
-            ? "Closest matchup with actual heat"
+            ? "These two hate each other."
             : "No rivalry yet"
         }
         lines={[

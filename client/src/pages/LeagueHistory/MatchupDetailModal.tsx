@@ -69,7 +69,7 @@ export function MatchupDetailModal({
           <>
             <DialogHeader>
               <DialogTitle>
-                {selected.aName} vs {selected.bName}
+                {selected.aName} vs {selected.bName} ⚔️
               </DialogTitle>
             </DialogHeader>
 
@@ -93,16 +93,16 @@ export function MatchupDetailModal({
                   {selected.record}
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Score:</span>{" "}
+                  <span className="text-muted-foreground">Ownership score:</span>{" "}
                   {selected.score >= 0 ? "+" : ""}
                   {selected.score.toFixed(2)}
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Points For:</span>{" "}
+                  <span className="text-muted-foreground">You scored:</span>{" "}
                   {selected.pf.toFixed(2)}
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Points Against:</span>{" "}
+                  <span className="text-muted-foreground">They scored:</span>{" "}
                   {selected.pa.toFixed(2)}
                 </div>
               </div>
