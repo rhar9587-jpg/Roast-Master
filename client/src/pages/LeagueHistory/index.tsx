@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toPng } from "html-to-image";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -14,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, HelpCircle, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Tooltip,
@@ -33,7 +34,7 @@ import { PostAnalysisToast } from "./PostAnalysisToast";
 import { StickyUpgradeBar } from "./StickyUpgradeBar";
 import { UnlockReceiptsModal } from "./UnlockReceiptsModal";
 import { isPremium, setPremium } from "./premium";
-import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues } from "./utils";
+import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername } from "./utils";
 import { computeLeagueStorylines, computeYourRoast } from "./storylines";
 import type {
   Badge,
@@ -41,6 +42,7 @@ import type {
   DominanceCellDTO,
   VictimRow,
   LandlordSummary,
+  ManagerRow,
 } from "./types";
 
 function isCountable(c: DominanceCellDTO) {
@@ -61,6 +63,7 @@ export default function LeagueHistoryPage() {
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<Date | null>(null);
   const [viewerKey, setViewerKey] = useState<string>("");
+  const [username, setUsername] = useState<string>("");
   const [highlightedManagerKey, setHighlightedManagerKey] = useState<string | null>(null);
   const [showPostAnalysisToast, setShowPostAnalysisToast] = useState(false);
   const [isPremiumState, setIsPremiumState] = useState(isPremium());
@@ -117,6 +120,38 @@ export default function LeagueHistoryPage() {
   const hasData = Boolean(data?.grid?.length);
   const prevFetching = useRef(false);
   const prevHasData = useRef(false);
+
+  // Load stored username on mount
+  useEffect(() => {
+    const stored = getStoredUsername();
+    if (stored) setUsername(stored);
+  }, []);
+
+  // Manager matching function
+  function findManagerKeyByUsername(
+    username: string,
+    managers: ManagerRow[]
+  ): string | null {
+    if (!username.trim() || managers.length === 0) return null;
+    
+    const needle = username.trim().toLowerCase();
+    
+    // Try exact match first
+    for (const m of managers) {
+      const nameLower = m.name.toLowerCase();
+      if (nameLower === needle) return m.key;
+    }
+    
+    // Try partial match
+    for (const m of managers) {
+      const nameLower = m.name.toLowerCase();
+      if (nameLower.includes(needle) || needle.includes(nameLower)) {
+        return m.key;
+      }
+    }
+    
+    return null;
+  }
 
   // Read URL params on mount
   useEffect(() => {
@@ -557,14 +592,34 @@ export default function LeagueHistoryPage() {
       data.league.league_id !== leagueId.trim()
     )
       return;
+    
+    // Priority: persisted > username match > empty
     const saved = getViewerByLeague(leagueId.trim());
     const keys = new Set(managers.map((m) => m.key));
+    
     if (saved && keys.has(saved)) {
       setViewerKey(saved);
     } else if (saved) {
       setViewerByLeague(leagueId.trim(), "");
+      // After clearing invalid persisted, try username match
+      if (username.trim()) {
+        const matchedKey = findManagerKeyByUsername(username, managers);
+        if (matchedKey) {
+          setViewerKey(matchedKey);
+          setViewerByLeague(leagueId.trim(), matchedKey);
+        }
+      }
+    } else {
+      // No persisted selection, try username match
+      if (username.trim()) {
+        const matchedKey = findManagerKeyByUsername(username, managers);
+        if (matchedKey) {
+          setViewerKey(matchedKey);
+          setViewerByLeague(leagueId.trim(), matchedKey);
+        }
+      }
     }
-  }, [hasData, managers, leagueId, data?.league]);
+  }, [hasData, managers, leagueId, data?.league, username]);
 
   function openCell(cellKey: string | null) {
     if (!cellKey) return;
@@ -763,13 +818,24 @@ export default function LeagueHistoryPage() {
       {/* Hero Section */}
       {!hasData && (
         <div className="rounded-lg border bg-gradient-to-br from-background to-muted/20 p-6 md:p-8 space-y-4">
-          <div className="space-y-2">
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-              Who Owns Your League?
-            </h1>
-            <p className="text-base md:text-lg text-muted-foreground max-w-2xl">
-              Turn your Sleeper league into shareable roasts. Find receipts. Tag your nemesis. Own the group chat.
-            </p>
+          <div className="flex items-start justify-between">
+            <div className="space-y-2 flex-1">
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+                Who Owns Your League?
+              </h1>
+              <p className="text-base md:text-lg text-muted-foreground max-w-2xl">
+                Turn your Sleeper league into shareable roasts. Find receipts. Tag your nemesis. Own the group chat.
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Built for group chats and league banter.
+              </p>
+            </div>
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="shrink-0">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Home
+              </Button>
+            </Link>
           </div>
           
           <div className="flex flex-wrap gap-3">
@@ -816,6 +882,29 @@ export default function LeagueHistoryPage() {
               </CollapsibleContent>
             </Collapsible>
           </div>
+          
+          {/* Preview Placeholders */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+            <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-center">
+              <h3 className="text-sm font-semibold mb-1">The Scoreboard</h3>
+              <p className="text-xs text-muted-foreground">
+                See every matchup, find your nemesis
+              </p>
+            </div>
+            <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-center">
+              <h3 className="text-sm font-semibold mb-1">The Headlines</h3>
+              <p className="text-xs text-muted-foreground">
+                Who owns the league (Premium)
+              </p>
+            </div>
+            <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-center">
+              <h3 className="text-sm font-semibold mb-1">Your Roast</h3>
+              <p className="text-xs text-muted-foreground">
+                Your personal receipts
+              </p>
+            </div>
+          </div>
+          
           <p className="text-xs text-muted-foreground mt-2">
             Powered by Sleeper API • Built for sharing
           </p>
@@ -825,10 +914,18 @@ export default function LeagueHistoryPage() {
       {/* Standard Header (when data exists) */}
       {hasData && (
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold">
-              League History
-            </h1>
+          <div className="space-y-1 flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold">
+                League History
+              </h1>
+              <Link href="/">
+                <Button variant="ghost" size="sm" className="h-8 text-xs">
+                  <ArrowLeft className="h-3 w-3 mr-1" />
+                  Home
+                </Button>
+              </Link>
+            </div>
             {data?.league ? (
               <p className="text-sm text-muted-foreground">
                 {data.league.name} • Season {data.league.season}
@@ -920,6 +1017,13 @@ export default function LeagueHistoryPage() {
               Found your nemesis? Send this roast.
             </p>
           )}
+        </section>
+      )}
+
+      {/* Conversion Banner - moved up to appear after Headlines */}
+      {hasData && hasEnoughData && (
+        <section>
+          <ConversionBanner onUpgrade={handleUpgrade} />
         </section>
       )}
 
@@ -1032,13 +1136,6 @@ export default function LeagueHistoryPage() {
             />
           </section>
         )}
-
-      {/* Conversion Banner */}
-      {hasData && hasEnoughData && (
-        <section>
-          <ConversionBanner onUpgrade={handleUpgrade} />
-        </section>
-      )}
 
       {/* Post-Analysis Toast */}
       {showPostAnalysisToast && hasData && (

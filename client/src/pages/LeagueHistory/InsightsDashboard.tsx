@@ -4,6 +4,7 @@ import { fmtScore } from "./utils";
 import type { LandlordSummary } from "./types";
 import { Button } from "@/components/ui/button";
 import { Lock } from "lucide-react";
+import { useState } from "react";
 
 type MostOwned = {
   victimName: string;
@@ -48,6 +49,8 @@ export function InsightsDashboard({
   isPremium,
   onUnlock,
 }: Props) {
+  const [isHovered, setIsHovered] = useState(false);
+  
   const cards = (
     <RoastDeckCarousel>
       <BaseballCard
@@ -155,17 +158,30 @@ export function InsightsDashboard({
         {cards}
       </div>
       <div
-        className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center cursor-pointer"
+        className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.02]"
         onClick={onUnlock}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
         <div className="text-center space-y-3 p-6">
           <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
-          <div>
-            <p className="font-semibold">Unlock to reveal the headlines</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              See who owns the league
-            </p>
-          </div>
+          {isHovered ? (
+            <>
+              <div>
+                <p className="font-semibold">🔒 3 Headlines: Landlord, Biggest Victim, Biggest Rivalry</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Unlock to reveal
+                </p>
+              </div>
+            </>
+          ) : (
+            <div>
+              <p className="font-semibold">Unlock to reveal the headlines</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                See who owns the league
+              </p>
+            </div>
+          )}
           <Button onClick={onUnlock} size="sm">
             Unlock the Receipts
           </Button>

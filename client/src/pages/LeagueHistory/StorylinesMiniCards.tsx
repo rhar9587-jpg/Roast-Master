@@ -1,6 +1,7 @@
 import type { MiniCard } from "./storylines";
 import { Button } from "@/components/ui/button";
 import { Lock } from "lucide-react";
+import { useState } from "react";
 
 type MiniCardProps = {
   card: MiniCard;
@@ -116,6 +117,7 @@ export function StorylinesMiniCards({
   onUnlock,
 }: Props) {
   const ts = exportTimestamp ?? new Date().toLocaleString();
+  const [isHovered, setIsHovered] = useState(false);
 
   return (
     <div className="space-y-8">
@@ -136,17 +138,30 @@ export function StorylinesMiniCards({
           </div>
           {!isPremium && (
             <div
-              className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center cursor-pointer"
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.02]"
               onClick={onUnlock}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
             >
               <div className="text-center space-y-3 p-6">
                 <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
-                <div>
-                  <p className="font-semibold">Unlock the league receipts</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Export and share the chaos
-                  </p>
-                </div>
+                {isHovered ? (
+                  <>
+                    <div>
+                      <p className="font-semibold">🔒 League Storylines</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Unlock to see the receipts everyone's talking about
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <p className="font-semibold">Unlock the league receipts</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Export and share the chaos
+                    </p>
+                  </div>
+                )}
                 <Button onClick={onUnlock} size="sm">
                   Unlock the Receipts
                 </Button>

@@ -6,6 +6,7 @@ import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
 import { FplRoastCard } from "@/components/FplRoastCard";
 import type { RoastResponse, WrappedResponse, LeagueAutopsyResponse, FplRoastResponse } from "@shared/schema";
 import { ChevronDown, ChevronRight, HelpCircle } from "lucide-react";
+import { setStoredUsername } from "./LeagueHistory/utils";
 
 type Sport = "nfl" | "fpl";
 type TeamOption = { roster_id: number; name: string };
@@ -13,7 +14,7 @@ type LeagueOption = { league_id: string; name: string; season: string };
 type View = "none" | "roast" | "wrapped" | "autopsy" | "fpl";
 
 export default function Home() {
-  const [sport, setSport] = useState<Sport>("fpl");
+  const [sport, setSport] = useState<Sport>("nfl");
   
   const [leagueId, setLeagueId] = useState("");
   const [week, setWeek] = useState<number>(1);
@@ -301,7 +302,12 @@ export default function Home() {
                 <label className="block text-sm font-semibold text-gray-700">Sleeper Username</label>
                 <input
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) => {
+                    setUsername(e.target.value);
+                    if (e.target.value.trim()) {
+                      setStoredUsername(e.target.value);
+                    }
+                  }}
                   placeholder="Enter your username..."
                   className="mt-1 w-full rounded-lg border px-3 py-2"
                   data-testid="input-sleeper-username"
@@ -428,6 +434,10 @@ export default function Home() {
                 View League History
               </button>
             </Link>
+            <p className="text-xs text-muted-foreground mt-1">
+              See dominance, find your nemesis, export receipts.
+              <span className="ml-1">Free to explore • Premium to share</span>
+            </p>
           </div>
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">

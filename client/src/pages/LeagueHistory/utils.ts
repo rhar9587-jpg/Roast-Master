@@ -19,6 +19,7 @@ export type RecentLeague = {
 
 const STORAGE_KEY = "fantasy-roast-recent-leagues";
 const VIEWER_STORAGE_KEY = "fantasy-roast-viewerByLeague";
+const USERNAME_STORAGE_KEY = "fantasy-roast-username";
 const MAX_RECENT_LEAGUES = 10;
 
 export function getRecentLeagues(): RecentLeague[] {
@@ -97,6 +98,27 @@ export function setViewerByLeague(leagueId: string, viewerKey: string): void {
     localStorage.setItem(VIEWER_STORAGE_KEY, JSON.stringify(parsed));
   } catch (err) {
     console.warn("Failed to save viewer by league:", err);
+  }
+}
+
+export function getStoredUsername(): string | null {
+  try {
+    const stored = localStorage.getItem(USERNAME_STORAGE_KEY);
+    return stored && stored.length > 0 ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredUsername(username: string): void {
+  try {
+    if (username.trim()) {
+      localStorage.setItem(USERNAME_STORAGE_KEY, username.trim());
+    } else {
+      localStorage.removeItem(USERNAME_STORAGE_KEY);
+    }
+  } catch (err) {
+    console.warn("Failed to save username:", err);
   }
 }
 
