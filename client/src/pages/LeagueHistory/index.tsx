@@ -8,6 +8,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 import { LeagueSelector } from "./LeagueSelector";
 import { InsightsDashboard } from "./InsightsDashboard";
@@ -39,6 +40,7 @@ export default function LeagueHistoryPage() {
   const [isSharing, setIsSharing] = useState(false);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<Date | null>(null);
+  const { toast } = useToast();
 
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
   const gridExportRef = useRef<HTMLDivElement | null>(null);
@@ -49,30 +51,39 @@ export default function LeagueHistoryPage() {
     queryKey: ["league-history-dominance", leagueId, startWeek, endWeek],
     enabled: false,
     queryFn: async (): Promise<DominanceApiResponse> => {
-      const qs = new URLSearchParams({
-        league_id: leagueId.trim(),
-        start_week: String(startWeek),
-        end_week: String(endWeek),
-      });
-      const res = await fetch(`/api/league-history/dominance?${qs.toString()}`);
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        const errorMsg = j?.error || "Failed to load roasts";
-        
-        // Map errors to helpful messages
-        if (res.status === 404 || errorMsg.toLowerCase().includes("not found")) {
-          throw new Error("LEAGUE_NOT_FOUND");
+      try {
+        const qs = new URLSearchParams({
+          league_id: leagueId.trim(),
+          start_week: String(startWeek),
+          end_week: String(endWeek),
+        });
+        const res = await fetch(`/api/league-history/dominance?${qs.toString()}`);
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          const errorMsg = j?.error || "Failed to load roasts";
+
+          // Map errors to helpful messages
+          if (res.status === 404 || errorMsg.toLowerCase().includes("not found")) {
+            throw new Error("LEAGUE_NOT_FOUND");
+          }
+          if (errorMsg.toLowerCase().includes("timeout")) {
+            throw new Error("TIMEOUT");
+          }
+          if (errorMsg.toLowerCase().includes("network") || errorMsg.toLowerCase().includes("fetch")) {
+            throw new Error("NETWORK_ERROR");
+          }
+          throw new Error(errorMsg);
         }
-        if (errorMsg.toLowerCase().includes("timeout")) {
-          throw new Error("TIMEOUT");
-        }
-        if (errorMsg.toLowerCase().includes("network") || errorMsg.toLowerCase().includes("fetch")) {
+        setLastAnalyzedAt(new Date());
+        return res.json();
+      } catch (e) {
+        // fetch() threw (e.g. "Failed to fetch") — server down, network unreachable, CORS
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network") || msg.toLowerCase().includes("failed")) {
           throw new Error("NETWORK_ERROR");
         }
-        throw new Error(errorMsg);
+        throw e;
       }
-      setLastAnalyzedAt(new Date());
-      return res.json();
     },
   });
 
@@ -532,6 +543,10 @@ export default function LeagueHistoryPage() {
       a.href = dataUrl;
       a.download = filename;
       a.click();
+      toast({
+        title: "Receipt saved",
+        description: "Receipt saved. Share it.",
+      });
     } finally {
       setIsDownloading(false);
     }
@@ -688,16 +703,21 @@ export default function LeagueHistoryPage() {
             avatarByKey={avatarByKey}
             onOpenCell={openCell}
           />
+          {hasData && hasEnoughData && (
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Found your nemesis? Send this receipt.
+            </p>
+          )}
         </section>
       )}
 
       {hasData && !hasEnoughData && (
         <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-center">
           <p className="text-sm text-muted-foreground mb-1">
-            Not enough data yet.
+            Not enough receipts yet.
           </p>
           <p className="text-xs text-muted-foreground">
-            Analyze more weeks to see dominance patterns and insights.
+            Add more weeks to see who owns who.
           </p>
         </div>
       )}
@@ -727,10 +747,10 @@ export default function LeagueHistoryPage() {
         {/* Trust Signals */}
         {hasData && (
           <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-            <span>Data source: Sleeper API</span>
+            <span>Powered by Sleeper API</span>
             {lastAnalyzedAt && (
               <span>
-                Last analyzed: {lastAnalyzedAt.toLocaleString()}
+                Last updated: {lastAnalyzedAt.toLocaleString()}
               </span>
             )}
           </div>

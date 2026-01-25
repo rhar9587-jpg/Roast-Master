@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -27,6 +28,9 @@ export function GridCell({
   filterBadge,
   onSelect,
 }: Props) {
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [hasInteracted, setHasInteracted] = useState(false);
+  
   let bg = scoreToBg(cell.score, cell.games);
   // Remove shadows for export (may not render well in PNG)
   if (forExport) {
@@ -69,11 +73,38 @@ export function GridCell({
         ? "ring-2 ring-inset ring-rose-400/40"
         : "";
 
+  const isHeroBadge = cell.badge === "OWNED" || cell.badge === "NEMESIS";
+  
+  function handleInteraction() {
+    if (!forExport && isHeroBadge && !hasInteracted) {
+      setHasInteracted(true);
+      setIsAnimating(true);
+      setTimeout(() => setIsAnimating(false), 600);
+    }
+  }
+
+  const tooltipFirstLine = isHeroBadge
+    ? cell.badge === "OWNED"
+      ? "You OWN them 👑"
+      : "They OWN you 💀"
+    : null;
+
   const tooltipContent = (
     <div className="text-xs space-y-1">
-      <div className="font-medium">
-        {cell.aName} vs {cell.bName}
-      </div>
+      {tooltipFirstLine ? (
+        <>
+          <div className="font-medium">
+            {tooltipFirstLine}
+          </div>
+          <div className="text-muted-foreground">
+            {cell.aName} vs {cell.bName}
+          </div>
+        </>
+      ) : (
+        <div className="font-medium">
+          {cell.aName} vs {cell.bName}
+        </div>
+      )}
       <div>
         {cell.record} • {getBadgeDisplayName(cell.badge)} • Score{" "}
         {fmtScore(cell.score)}
@@ -89,8 +120,13 @@ export function GridCell({
       <TooltipTrigger asChild>
         <button
             type="button"
-            className={`p-2 text-left transition-all duration-200 hover:opacity-90 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${bg} ${filterClasses} ${heroRing}`}
-            onClick={onSelect}
+            className={`p-2 text-left transition-all duration-200 hover:opacity-90 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${bg} ${filterClasses} ${heroRing} ${!forExport && isAnimating ? "animate-pulse" : ""}`}
+            onClick={() => {
+              handleInteraction();
+              onSelect();
+            }}
+            onMouseEnter={handleInteraction}
+            onTouchStart={handleInteraction}
           >
             <div className="mb-1 overflow-hidden">
               <span className={`${badgePill(cell.badge)} inline-block max-w-full truncate`}>

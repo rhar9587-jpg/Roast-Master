@@ -44,7 +44,7 @@ export function GridToolbar({
 
       toast({
         title: "Link copied!",
-        description: "Shareable link copied to clipboard",
+        description: "Receipt copied. Send it to the group chat 💀",
       });
     } catch (err) {
       toast({
@@ -58,32 +58,40 @@ export function GridToolbar({
   }
 
   return (
-    <div className="sticky top-0 z-20 flex flex-wrap items-center justify-end gap-2 border-b bg-background px-4 py-3">
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={handleCopyLink}
-        disabled={isCopying || isDownloading || isSharing}
-      >
-        <LinkIcon className="h-4 w-4 mr-2" />
-        {isCopying ? "Copying…" : "Copy Roast Link"}
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={onDownloadPng}
-        disabled={!hasData || isDownloading || isSharing}
-      >
-        {isDownloading ? "Saving…" : "Save Roast"}
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={onSharePng}
-        disabled={!hasData || isDownloading || isSharing}
-      >
-        {isSharing ? "Sending…" : "Send to Group Chat"}
-      </Button>
+    <div className="sticky top-0 z-20 border-b bg-background px-4 py-3">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleCopyLink}
+          disabled={isCopying || isDownloading || isSharing}
+        >
+          <LinkIcon className="h-4 w-4 mr-2" />
+          {isCopying ? "Copying…" : "Copy Roast Link"}
+        </Button>
+        <div className="flex flex-col items-end">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onDownloadPng}
+            disabled={!hasData || isDownloading || isSharing}
+          >
+            {isDownloading ? "Saving…" : "Save Roast"}
+          </Button>
+          <p className="text-xs text-muted-foreground mt-1">Perfect for the league chat</p>
+        </div>
+        <div className="flex flex-col items-end">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onSharePng}
+            disabled={!hasData || isDownloading || isSharing}
+          >
+            {isSharing ? "Sending…" : "Send to Group Chat"}
+          </Button>
+          <p className="text-xs text-muted-foreground mt-1">Tag your nemesis 💀</p>
+        </div>
+      </div>
     </div>
   );
 }
