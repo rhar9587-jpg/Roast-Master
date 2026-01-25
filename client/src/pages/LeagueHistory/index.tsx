@@ -7,16 +7,24 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { LeagueSelector } from "./LeagueSelector";
 import { InsightsDashboard } from "./InsightsDashboard";
 import { DominanceGrid } from "./DominanceGrid";
+import { StorylinesMiniCards } from "./StorylinesMiniCards";
 import { MatchupDetailModal } from "./MatchupDetailModal";
 import { GridTable } from "./DominanceGrid/GridTable";
-import { fmtRecord } from "./utils";
-import { saveRecentLeague, getRecentLeagues } from "./utils";
+import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues } from "./utils";
+import { computeLeagueStorylines, computeYourRoast } from "./storylines";
 import type {
   Badge,
   DominanceApiResponse,
@@ -38,12 +46,17 @@ export default function LeagueHistoryPage() {
   const [isSelectorCollapsed, setIsSelectorCollapsed] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [isExportingStorylines, setIsExportingStorylines] = useState(false);
+  const [isExportingYourRoast, setIsExportingYourRoast] = useState(false);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<Date | null>(null);
+  const [viewerKey, setViewerKey] = useState<string>("");
   const { toast } = useToast();
 
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
   const gridExportRef = useRef<HTMLDivElement | null>(null);
+  const storylinesExportRef = useRef<HTMLDivElement | null>(null);
+  const yourRoastExportRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedFromUrl = useRef(false);
   const shouldAutoTrigger = useRef(false);
 
@@ -176,17 +189,28 @@ export default function LeagueHistoryPage() {
     }
   }, [hasData, data?.league, leagueId, startWeek, endWeek]);
 
-  const filename = useMemo(() => {
+  const filenameBase = useMemo(() => {
     const leagueName = data?.league?.name
       ? data.league.name.replace(/[^\w\s-]/g, "").trim()
       : "league";
     const season = data?.league?.season
       ? String(data.league.season).replace(/[^\w-]/g, "")
       : "history";
-    return `fantasy-roast-dominance-${leagueName}-${season}.png`
-      .replace(/\s+/g, "-")
-      .toLowerCase();
+    return `fantasy-roast-${leagueName}-${season}`.replace(/\s+/g, "-").toLowerCase();
   }, [data?.league]);
+
+  const filename = useMemo(
+    () => `${filenameBase}-dominance.png`,
+    [filenameBase]
+  );
+  const filenameStorylines = useMemo(
+    () => `${filenameBase}-storylines.png`,
+    [filenameBase]
+  );
+  const filenameYourRoast = useMemo(
+    () => `${filenameBase}-your-roast.png`,
+    [filenameBase]
+  );
 
   const avatarByKey = useMemo(() => {
     const m: Record<string, string | null> = {};
@@ -481,6 +505,52 @@ export default function LeagueHistoryPage() {
     };
   }, [allCells]);
 
+  const totalsByManager = useMemo(() => {
+    return data?.totalsByManager ?? null;
+  }, [data?.totalsByManager]);
+
+  const leagueStorylines = useMemo(
+    () =>
+      computeLeagueStorylines(
+        allCells,
+        managers,
+        rowTotals,
+        totalsByManager,
+        grandTotals.games
+      ),
+    [allCells, managers, rowTotals, totalsByManager, grandTotals.games]
+  );
+
+  const yourRoastCards = useMemo(
+    () =>
+      viewerKey
+        ? computeYourRoast(viewerKey, allCells, managers)
+        : [],
+    [viewerKey, allCells, managers]
+  );
+
+  useEffect(() => {
+    setViewerKey("");
+  }, [leagueId]);
+
+  useEffect(() => {
+    if (
+      !hasData ||
+      !managers.length ||
+      !leagueId.trim() ||
+      !data?.league ||
+      data.league.league_id !== leagueId.trim()
+    )
+      return;
+    const saved = getViewerByLeague(leagueId.trim());
+    const keys = new Set(managers.map((m) => m.key));
+    if (saved && keys.has(saved)) {
+      setViewerKey(saved);
+    } else if (saved) {
+      setViewerByLeague(leagueId.trim(), "");
+    }
+  }, [hasData, managers, leagueId, data?.league]);
+
   function openCell(cellKey: string | null) {
     if (!cellKey) return;
     const c = cellMap.get(cellKey);
@@ -496,9 +566,8 @@ export default function LeagueHistoryPage() {
     );
   }
 
-  async function exportPngDataUrl() {
-    if (!gridExportRef.current) throw new Error("Export grid not ready");
-    const el = gridExportRef.current;
+  async function exportElementToPng(el: HTMLDivElement | null): Promise<string> {
+    if (!el) throw new Error("Export element not ready");
     const originalStyle = el.style.cssText;
     el.style.cssText = `
       position: fixed; left: 0; top: 0; z-index: 9999;
@@ -532,6 +601,10 @@ export default function LeagueHistoryPage() {
     } finally {
       el.style.cssText = originalStyle;
     }
+  }
+
+  async function exportPngDataUrl() {
+    return exportElementToPng(gridExportRef.current);
   }
 
   async function downloadPng() {
@@ -573,6 +646,42 @@ export default function LeagueHistoryPage() {
       window.open(dataUrl, "_blank");
     } finally {
       setIsSharing(false);
+    }
+  }
+
+  async function saveStorylinesPng() {
+    if (!storylinesExportRef.current) return;
+    setIsExportingStorylines(true);
+    try {
+      const dataUrl = await exportElementToPng(storylinesExportRef.current);
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = filenameStorylines;
+      a.click();
+      toast({
+        title: "Storylines saved",
+        description: "Share it.",
+      });
+    } finally {
+      setIsExportingStorylines(false);
+    }
+  }
+
+  async function saveYourRoastPng() {
+    if (!yourRoastExportRef.current) return;
+    setIsExportingYourRoast(true);
+    try {
+      const dataUrl = await exportElementToPng(yourRoastExportRef.current);
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = filenameYourRoast;
+      a.click();
+      toast({
+        title: "Your Roast saved",
+        description: "Share it.",
+      });
+    } finally {
+      setIsExportingYourRoast(false);
     }
   }
 
@@ -659,18 +768,51 @@ export default function LeagueHistoryPage() {
 
       {/* Standard Header (when data exists) */}
       {hasData && (
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">
-            League History
-          </h1>
-          {data?.league ? (
-            <p className="text-sm text-muted-foreground">
-              {data.league.name} • Season {data.league.season}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Analyze head-to-head dominance for any Sleeper league.
-            </p>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold">
+              League History
+            </h1>
+            {data?.league ? (
+              <p className="text-sm text-muted-foreground">
+                {data.league.name} • Season {data.league.season}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Analyze head-to-head dominance for any Sleeper league.
+              </p>
+            )}
+          </div>
+          {managers.length > 0 && (
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-sm text-muted-foreground">View as:</span>
+              <Select
+                value={viewerKey || "__none__"}
+                onValueChange={(v) => {
+                  if (v === "__none__") {
+                    setViewerKey("");
+                    if (leagueId.trim()) setViewerByLeague(leagueId.trim(), "");
+                  } else {
+                    setViewerKey(v);
+                    if (leagueId.trim()) setViewerByLeague(leagueId.trim(), v);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Pick your manager" />
+                </SelectTrigger>
+                <SelectContent className="!bg-background">
+                  <SelectItem value="__none__">
+                    Pick your manager
+                  </SelectItem>
+                  {managers.map((m) => (
+                    <SelectItem key={m.key} value={m.key}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
         </div>
       )}
@@ -756,6 +898,47 @@ export default function LeagueHistoryPage() {
           </div>
         )}
       </section>
+
+      {hasData &&
+        hasEnoughData &&
+        (leagueStorylines.length > 0 || !!viewerKey) && (
+          <section>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {leagueStorylines.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={saveStorylinesPng}
+                  disabled={isExportingStorylines}
+                >
+                  {isExportingStorylines ? "Saving…" : "Save Storylines"}
+                </Button>
+              )}
+              {!!viewerKey && yourRoastCards.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={saveYourRoastPng}
+                  disabled={isExportingYourRoast}
+                >
+                  {isExportingYourRoast ? "Saving…" : "Save Your Roast"}
+                </Button>
+              )}
+            </div>
+            <StorylinesMiniCards
+              leagueCards={leagueStorylines}
+              yourRoastCards={yourRoastCards}
+              viewerChosen={!!viewerKey}
+              onOpenCell={(key) => openCell(key)}
+              storylinesExportRef={storylinesExportRef}
+              yourRoastExportRef={yourRoastExportRef}
+              exportTimestamp={
+                lastAnalyzedAt?.toLocaleString() ??
+                new Date().toLocaleString()
+              }
+            />
+          </section>
+        )}
 
       {hasData && (
         <div

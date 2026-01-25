@@ -18,6 +18,7 @@ export type RecentLeague = {
 };
 
 const STORAGE_KEY = "fantasy-roast-recent-leagues";
+const VIEWER_STORAGE_KEY = "fantasy-roast-viewerByLeague";
 const MAX_RECENT_LEAGUES = 10;
 
 export function getRecentLeagues(): RecentLeague[] {
@@ -65,6 +66,37 @@ export function saveRecentLeague(
   } catch (err) {
     // Silently fail if localStorage quota exceeded or other error
     console.warn("Failed to save recent league:", err);
+  }
+}
+
+export function getViewerByLeague(leagueId: string): string | null {
+  try {
+    const stored = localStorage.getItem(VIEWER_STORAGE_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored) as Record<string, string>;
+    if (!parsed || typeof parsed !== "object") return null;
+    const v = parsed[leagueId];
+    return typeof v === "string" && v.length > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setViewerByLeague(leagueId: string, viewerKey: string): void {
+  try {
+    const stored = localStorage.getItem(VIEWER_STORAGE_KEY);
+    const parsed: Record<string, string> = stored
+      ? (JSON.parse(stored) as Record<string, string>)
+      : {};
+    if (!parsed || typeof parsed !== "object") return;
+    if (viewerKey) {
+      parsed[leagueId] = viewerKey;
+    } else {
+      delete parsed[leagueId];
+    }
+    localStorage.setItem(VIEWER_STORAGE_KEY, JSON.stringify(parsed));
+  } catch (err) {
+    console.warn("Failed to save viewer by league:", err);
   }
 }
 
