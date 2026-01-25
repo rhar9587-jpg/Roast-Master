@@ -59,7 +59,7 @@ export function GridToolbar({
 
   return (
     <div className="sticky top-0 z-20 border-b bg-background px-4 py-3">
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="flex flex-wrap items-start justify-end gap-2">
         <Button
           variant="secondary"
           size="sm"
@@ -69,7 +69,7 @@ export function GridToolbar({
           <LinkIcon className="h-4 w-4 mr-2" />
           {isCopying ? "Copying…" : "Copy Roast Link"}
         </Button>
-        <div className="flex flex-col items-end">
+        <div className="flex flex-col items-center">
           <Button
             variant="secondary"
             size="sm"
@@ -78,9 +78,9 @@ export function GridToolbar({
           >
             {isDownloading ? "Saving…" : "Save Roast"}
           </Button>
-          <p className="text-xs text-muted-foreground mt-1">Perfect for the league chat</p>
+          <p className="text-xs text-muted-foreground mt-1 text-center whitespace-nowrap">Perfect for the league chat</p>
         </div>
-        <div className="flex flex-col items-end">
+        <div className="flex flex-col items-center">
           <Button
             variant="secondary"
             size="sm"
@@ -89,7 +89,7 @@ export function GridToolbar({
           >
             {isSharing ? "Sending…" : "Send to Group Chat"}
           </Button>
-          <p className="text-xs text-muted-foreground mt-1">Tag your nemesis 💀</p>
+          <p className="text-xs text-muted-foreground mt-1 text-center whitespace-nowrap">Tag your nemesis 💀</p>
         </div>
       </div>
     </div>
