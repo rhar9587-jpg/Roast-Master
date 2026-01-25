@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 import { RoastCard } from "@/components/RoastCard";
 import { SeasonWrappedCard } from "@/components/SeasonWrappedCard";
 import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
@@ -250,13 +251,33 @@ export default function Home() {
     }
   }
 
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">Fantasy Roast 🔥</h1>
-        <p className="mt-1 text-gray-600">Roast your league. Roast yourself. Share the burn.</p>
-      </div>
+  function handleRoastMyLeague() {
+    const usernameInput = document.getElementById("username-input") as HTMLInputElement;
+    const findLeaguesButton = document.getElementById("button-find-leagues") as HTMLButtonElement;
+    
+    if (usernameInput) {
+      if (!username.trim()) {
+        // Username is empty, scroll to and focus username input
+        usernameInput.scrollIntoView({ behavior: "smooth", block: "center" });
+        setTimeout(() => usernameInput.focus(), 300);
+      } else if (findLeaguesButton) {
+        // Username is filled, scroll to find leagues button
+        findLeaguesButton.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }
 
+  function handleExampleLeague() {
+    window.location.href = `/league-history/dominance?league_id=1204010682635255808&start_week=1&end_week=17`;
+  }
+
+  function handleValueCardClick() {
+    handleRoastMyLeague();
+  }
+
+  return (
+    <div className="mx-auto max-w-4xl px-4 py-8 space-y-8 md:space-y-12">
+      {/* Sport Selector */}
       <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
         <button
           onClick={() => { 
@@ -296,11 +317,73 @@ export default function Home() {
 
       {sport === "nfl" && (
         <>
-          <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
+          {/* Hero Section */}
+          <section className="text-center py-12 md:py-16 space-y-6">
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+              Who owns your league?
+            </h1>
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
+              Turn your Sleeper league into shareable roasts. Find receipts. Tag your nemesis. Own the group chat.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button size="lg" onClick={handleRoastMyLeague} className="font-semibold">
+                Roast My League
+              </Button>
+              <Button variant="outline" size="lg" onClick={handleExampleLeague} className="font-semibold">
+                See an Example League
+              </Button>
+            </div>
+          </section>
+
+          {/* Social Proof Strip */}
+          <div className="flex flex-wrap justify-center gap-6 md:gap-8 text-sm text-muted-foreground py-6">
+            <span>🔥 Built for competitive leagues</span>
+            <span>💬 Designed for group chats</span>
+            <span>🏆 Made for receipts</span>
+          </div>
+
+          {/* Value Preview Section */}
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 py-8">
+            <div 
+              onClick={handleValueCardClick}
+              className="rounded-lg border border-muted/50 bg-muted/30 p-6 text-center cursor-pointer hover:bg-muted/40 transition-colors"
+            >
+              <h3 className="text-lg font-semibold mb-2">The Scoreboard</h3>
+              <p className="text-sm text-muted-foreground">See who dominates who</p>
+              <Link href="/league-history/dominance?league_id=1204010682635255808&start_week=1&end_week=17" className="text-xs text-primary hover:underline mt-2 inline-block">
+                See example →
+              </Link>
+            </div>
+            <div 
+              onClick={handleValueCardClick}
+              className="rounded-lg border border-muted/50 bg-muted/30 p-6 text-center cursor-pointer hover:bg-muted/40 transition-colors"
+            >
+              <h3 className="text-lg font-semibold mb-2">The Headlines</h3>
+              <p className="text-sm text-muted-foreground">Landlords. Victims. Rivalries.</p>
+              <Link href="/league-history/dominance?league_id=1204010682635255808&start_week=1&end_week=17" className="text-xs text-primary hover:underline mt-2 inline-block">
+                See example →
+              </Link>
+            </div>
+            <div 
+              onClick={handleValueCardClick}
+              className="rounded-lg border border-muted/50 bg-muted/30 p-6 text-center cursor-pointer hover:bg-muted/40 transition-colors"
+            >
+              <h3 className="text-lg font-semibold mb-2">Your Roast</h3>
+              <p className="text-sm text-muted-foreground">Your personal receipts</p>
+              <Link href="/league-history/dominance?league_id=1204010682635255808&start_week=1&end_week=17" className="text-xs text-primary hover:underline mt-2 inline-block">
+                See example →
+              </Link>
+            </div>
+          </section>
+
+          {/* Form Section */}
+          <section className="rounded-lg border border-muted/50 bg-muted/20 p-6 space-y-4">
+            <h2 className="text-lg font-semibold mb-4">Get started</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700">Sleeper Username</label>
                 <input
+                  id="username-input"
                   value={username}
                   onChange={(e) => {
                     setUsername(e.target.value);
@@ -329,6 +412,7 @@ export default function Home() {
               </div>
 
               <button
+                id="button-find-leagues"
                 onClick={findLeagues}
                 disabled={!username || loading}
                 className="w-full rounded-lg bg-black px-4 py-2 text-white font-semibold disabled:opacity-40"
@@ -411,7 +495,7 @@ export default function Home() {
                 data-testid="input-week"
               />
             </div>
-          </div>
+          </section>
 
           <div className="flex gap-3">
             <button
@@ -424,20 +508,20 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
+          {/* League History Card - Upgraded */}
+          <div className="rounded-2xl border bg-gradient-to-br from-purple-50 to-purple-100/50 p-6 md:p-8 shadow-lg space-y-4">
             <div>
-              <h2 className="text-lg font-bold tracking-tight">League History</h2>
-              <p className="text-sm text-gray-500">Dominance grid and matchup analytics</p>
+              <h2 className="text-xl md:text-2xl font-bold tracking-tight">League History</h2>
+              <p className="text-base font-medium text-purple-900/80 mt-1">Your league's full receipts engine</p>
             </div>
+            <p className="text-sm text-gray-700">
+              See dominance, find your nemesis, export receipts. Free to explore • Premium to share
+            </p>
             <Link href={leagueId ? `/league-history/dominance?league_id=${encodeURIComponent(leagueId)}` : "/league-history/dominance"}>
-              <button className="w-full rounded-xl bg-purple-600 px-4 py-3 text-white font-extrabold">
+              <button className="w-full rounded-xl bg-purple-600 px-4 py-3 text-white font-extrabold hover:bg-purple-700 transition-colors">
                 View League History
               </button>
             </Link>
-            <p className="text-xs text-muted-foreground mt-1">
-              See dominance, find your nemesis, export receipts.
-              <span className="ml-1">Free to explore • Premium to share</span>
-            </p>
           </div>
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
