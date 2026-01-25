@@ -6,9 +6,11 @@ const PRICE_ONE_TIME = 29;
 
 type Props = {
   onUpgrade?: () => void;
+  ownedCount?: number;
+  rivalryExists?: boolean;
 };
 
-export function ConversionBanner({ onUpgrade }: Props) {
+export function ConversionBanner({ onUpgrade, ownedCount, rivalryExists }: Props) {
   const handleUpgrade = () => {
     if (onUpgrade) {
       onUpgrade();
@@ -17,6 +19,13 @@ export function ConversionBanner({ onUpgrade }: Props) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
+
+  // Contextual copy logic
+  const contextualCopy = ownedCount && ownedCount > 0
+    ? `You own ${ownedCount} manager${ownedCount === 1 ? '' : 's'}. Want the receipts to prove it?`
+    : rivalryExists
+      ? "Your league has a real rivalry. See the full story."
+      : "Your league has stories worth sharing. Unlock the receipts.";
 
   return (
     <Card
@@ -28,7 +37,7 @@ export function ConversionBanner({ onUpgrade }: Props) {
           Unlock the Receipts
         </CardTitle>
         <p className="text-sm text-muted-foreground mt-2 max-w-2xl mx-auto">
-          See the truth for free. Share the truth with Premium.
+          {contextualCopy}
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -106,7 +115,7 @@ export function ConversionBanner({ onUpgrade }: Props) {
             Built for group chats and league banter.
           </p>
           <p className="text-xs text-muted-foreground">
-            30-day money-back guarantee • Secure checkout (coming next)
+            30-day money-back guarantee • Secure checkout
           </p>
         </div>
       </CardContent>

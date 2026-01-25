@@ -333,7 +333,7 @@ export default function Home() {
                 <img
                   src="/previews/grid.png"
                   alt="Dominance Grid Preview"
-                  className="w-full h-auto opacity-85 blur-sm transition-transform group-hover:scale-[1.02]"
+                  className="w-full h-auto transition-transform group-hover:scale-[1.02]"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
@@ -345,42 +345,6 @@ export default function Home() {
                   <span className="text-muted-foreground text-sm">Grid Preview</span>
                 </div>
               </div>
-
-              {/* Baseball Card - absolute positioned */}
-              <div className="absolute top-1/2 right-0 -translate-y-1/2 w-64 rounded-xl shadow-lg z-10 min-h-[200px]">
-                <img
-                  src="/previews/card.png"
-                  alt="Baseball Card Preview"
-                  className="w-full h-auto rounded-xl"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const placeholder = target.parentElement?.querySelector('.card-placeholder') as HTMLElement;
-                    if (placeholder) placeholder.style.display = 'flex';
-                  }}
-                />
-                <div className="card-placeholder absolute inset-0 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex items-center justify-center" style={{ display: 'none' }}>
-                  <span className="text-muted-foreground text-xs">Baseball Card</span>
-                </div>
-              </div>
-
-              {/* Mini Storyline - absolute positioned */}
-              <div className="absolute bottom-0 left-1/4 w-48 rounded-xl shadow-lg z-20 min-h-[150px]">
-                <img
-                  src="/previews/mini.png"
-                  alt="Mini Storyline Preview"
-                  className="w-full h-auto rounded-xl"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const placeholder = target.parentElement?.querySelector('.mini-placeholder') as HTMLElement;
-                    if (placeholder) placeholder.style.display = 'flex';
-                  }}
-                />
-                <div className="mini-placeholder absolute inset-0 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center" style={{ display: 'none' }}>
-                  <span className="text-muted-foreground text-xs">Mini Card</span>
-                </div>
-              </div>
             </div>
 
             {/* Mobile Layout: Stack vertically */}
@@ -389,7 +353,7 @@ export default function Home() {
                 <img
                   src="/previews/grid.png"
                   alt="Dominance Grid Preview"
-                  className="w-full h-auto opacity-85 blur-sm"
+                  className="w-full h-auto"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
@@ -399,38 +363,6 @@ export default function Home() {
                 />
                 <div className="grid-placeholder bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center min-h-[200px]" style={{ display: 'none' }}>
                   <span className="text-muted-foreground text-sm">Grid Preview</span>
-                </div>
-              </div>
-              <div className="w-full rounded-xl shadow-lg overflow-hidden min-h-[150px]">
-                <img
-                  src="/previews/card.png"
-                  alt="Baseball Card Preview"
-                  className="w-full h-auto rounded-xl"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const placeholder = target.parentElement?.querySelector('.card-placeholder') as HTMLElement;
-                    if (placeholder) placeholder.style.display = 'flex';
-                  }}
-                />
-                <div className="card-placeholder bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex items-center justify-center min-h-[150px]" style={{ display: 'none' }}>
-                  <span className="text-muted-foreground text-sm">Baseball Card</span>
-                </div>
-              </div>
-              <div className="w-full rounded-xl shadow-lg overflow-hidden min-h-[120px]">
-                <img
-                  src="/previews/mini.png"
-                  alt="Mini Storyline Preview"
-                  className="w-full h-auto rounded-xl"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const placeholder = target.parentElement?.querySelector('.mini-placeholder') as HTMLElement;
-                    if (placeholder) placeholder.style.display = 'flex';
-                  }}
-                />
-                <div className="mini-placeholder bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center min-h-[120px]" style={{ display: 'none' }}>
-                  <span className="text-muted-foreground text-sm">Mini Card</span>
                 </div>
               </div>
             </div>

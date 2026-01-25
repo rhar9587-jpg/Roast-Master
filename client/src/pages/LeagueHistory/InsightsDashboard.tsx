@@ -2,9 +2,9 @@ import { RoastDeckCarousel } from "@/components/roast/RoastDeckCarousel";
 import { BaseballCard } from "@/components/roast/BaseballCard";
 import { fmtScore } from "./utils";
 import type { LandlordSummary } from "./types";
-import { Button } from "@/components/ui/button";
 import { Lock } from "lucide-react";
 import { useState } from "react";
+import * as React from "react";
 
 type MostOwned = {
   victimName: string;
@@ -40,6 +40,40 @@ type Props = {
   onUnlock?: () => void;
 };
 
+// Helper component to wrap blurred cards
+function BlurredCardWrapper({ 
+  children, 
+  onUnlock 
+}: { 
+  children: React.ReactNode; 
+  onUnlock?: () => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  
+  return (
+    <div className="relative">
+      <div className="blur-sm opacity-60 pointer-events-none">
+        {children}
+      </div>
+      <div
+        className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.01] rounded-2xl"
+        onClick={onUnlock}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className="text-center">
+          <Lock className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
+          {isHovered && (
+            <p className="text-xs font-medium text-muted-foreground">
+              🔒 2 more headlines waiting
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function InsightsDashboard({
   landlord,
   mostOwned,
@@ -49,144 +83,129 @@ export function InsightsDashboard({
   isPremium,
   onUnlock,
 }: Props) {
-  const [isHovered, setIsHovered] = useState(false);
-  
-  const cards = (
-    <RoastDeckCarousel>
-      <BaseballCard
-        badge="OWNED"
-        title="THE LANDLORD 👑"
-        name={landlord?.landlordName ?? "—"}
-        avatarUrl={
-          landlord ? (avatarByKey[landlord.landlordKey] ?? null) : null
-        }
-        primaryStat={{
-          value: landlord ? String(landlord.totalOwnedGames) : "—",
-          label: "OWNED GAMES",
-        }}
-        punchline={
-          landlord
-            ? `Owns ${landlord.victimCount} managers. Rent is due.`
-            : "No landlord yet"
-        }
-        lines={[
-          { label: "Tenants", value: landlord ? String(landlord.victimCount) : "—" },
-          {
-            label: "Favorite Tenant",
-            value: landlord?.bestVictim
-              ? `${landlord.bestVictim.victimName} (${landlord.bestVictim.record})`
-              : "—",
-          },
-        ]}
-        season="2024–25"
-        onClick={() =>
-          onOpenCell(landlord?.bestVictim?.cellKey ?? null)
-        }
-      />
+  const landlordCard = (
+    <BaseballCard
+      badge="OWNED"
+      title="THE LANDLORD 👑"
+      name={landlord?.landlordName ?? "—"}
+      avatarUrl={
+        landlord ? (avatarByKey[landlord.landlordKey] ?? null) : null
+      }
+      primaryStat={{
+        value: landlord ? String(landlord.totalOwnedGames) : "—",
+        label: "OWNED GAMES",
+      }}
+      punchline={
+        landlord
+          ? `Owns ${landlord.victimCount} managers. Rent is due.`
+          : "No landlord yet"
+      }
+      lines={[
+        { label: "Tenants", value: landlord ? String(landlord.victimCount) : "—" },
+        {
+          label: "Favorite Tenant",
+          value: landlord?.bestVictim
+            ? `${landlord.bestVictim.victimName} (${landlord.bestVictim.record})`
+            : "—",
+        },
+      ]}
+      season="2024–25"
+      onClick={() =>
+        onOpenCell(landlord?.bestVictim?.cellKey ?? null)
+      }
+    />
+  );
 
-      <BaseballCard
-        badge="NEMESIS"
-        title="BIGGEST VICTIM 😭"
-        name={mostOwned?.victimName ?? "—"}
-        avatarUrl={
-          mostOwned ? (avatarByKey[mostOwned.victimKey] ?? null) : null
-        }
-        primaryStat={{
-          value: mostOwned ? String(mostOwned.timesOwned) : "—",
-          label: "TIMES OWNED",
-        }}
-        punchline={
-          mostOwned
-            ? `Owned by ${mostOwned.timesOwned} managers. It's rough.`
-            : "No victims yet"
-        }
-        lines={[
-          { label: "Kryptonite", value: mostOwned?.worstNemesisName ?? "—" },
-          { label: "Games", value: mostOwned ? String(mostOwned.totalGames) : "—" },
-        ]}
-        season="2024–25"
-        onClick={() => onOpenCell(mostOwned?.cellKey ?? null)}
-      />
+  const mostOwnedCard = (
+    <BaseballCard
+      badge="NEMESIS"
+      title="BIGGEST VICTIM 😭"
+      name={mostOwned?.victimName ?? "—"}
+      avatarUrl={
+        mostOwned ? (avatarByKey[mostOwned.victimKey] ?? null) : null
+      }
+      primaryStat={{
+        value: mostOwned ? String(mostOwned.timesOwned) : "—",
+        label: "TIMES OWNED",
+      }}
+      punchline={
+        mostOwned
+          ? `Owned by ${mostOwned.timesOwned} managers. It's rough.`
+          : "No victims yet"
+      }
+      lines={[
+        { label: "Kryptonite", value: mostOwned?.worstNemesisName ?? "—" },
+        { label: "Games", value: mostOwned ? String(mostOwned.totalGames) : "—" },
+      ]}
+      season="2024–25"
+      onClick={() => onOpenCell(mostOwned?.cellKey ?? null)}
+    />
+  );
 
-      <BaseballCard
-        badge="RIVAL"
-        title="BIGGEST RIVALRY ⚔️"
-        name={
-          biggestRivalry
-            ? `${biggestRivalry.aName} vs ${biggestRivalry.bName}`
-            : "—"
-        }
-        avatarUrl={
-          biggestRivalry
-            ? (avatarByKey[biggestRivalry.aKey] ?? null)
-            : null
-        }
-        primaryStat={{
-          value: biggestRivalry?.record ?? "—",
-          label: "RECORD",
-        }}
-        punchline={
-          biggestRivalry
-            ? "These two hate each other."
-            : "No rivalry yet"
-        }
-        lines={[
-          {
-            label: "Games",
-            value: biggestRivalry ? String(biggestRivalry.games) : "—",
-          },
-          {
-            label: "Score",
-            value: biggestRivalry ? fmtScore(biggestRivalry.score) : "—",
-          },
-        ]}
-        season="2024–25"
-        onClick={() =>
-          onOpenCell(biggestRivalry?.cellKey ?? null)
-        }
-      />
-    </RoastDeckCarousel>
+  const biggestRivalryCard = (
+    <BaseballCard
+      badge="RIVAL"
+      title="BIGGEST RIVALRY ⚔️"
+      name={
+        biggestRivalry
+          ? `${biggestRivalry.aName} vs ${biggestRivalry.bName}`
+          : "—"
+      }
+      avatarUrl={
+        biggestRivalry
+          ? (avatarByKey[biggestRivalry.aKey] ?? null)
+          : null
+      }
+      primaryStat={{
+        value: biggestRivalry?.record ?? "—",
+        label: "RECORD",
+      }}
+      punchline={
+        biggestRivalry
+          ? "These two hate each other."
+          : "No rivalry yet"
+      }
+      lines={[
+        {
+          label: "Games",
+          value: biggestRivalry ? String(biggestRivalry.games) : "—",
+        },
+        {
+          label: "Score",
+          value: biggestRivalry ? fmtScore(biggestRivalry.score) : "—",
+        },
+      ]}
+      season="2024–25"
+      onClick={() =>
+        onOpenCell(biggestRivalry?.cellKey ?? null)
+      }
+    />
   );
 
   if (isPremium) {
-    return cards;
+    return (
+      <RoastDeckCarousel>
+        {landlordCard}
+        {mostOwnedCard}
+        {biggestRivalryCard}
+      </RoastDeckCarousel>
+    );
   }
 
   return (
-    <div className="relative">
-      <div className="blur-sm pointer-events-none">
-        {cards}
-      </div>
-      <div
-        className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.02]"
-        onClick={onUnlock}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <div className="text-center space-y-3 p-6">
-          <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
-          {isHovered ? (
-            <>
-              <div>
-                <p className="font-semibold">🔒 3 Headlines: Landlord, Biggest Victim, Biggest Rivalry</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Unlock to reveal
-                </p>
-              </div>
-            </>
-          ) : (
-            <div>
-              <p className="font-semibold">Unlock to reveal the headlines</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                See who owns the league
-              </p>
-            </div>
-          )}
-          <Button onClick={onUnlock} size="sm">
-            Unlock the Receipts
-          </Button>
-        </div>
-      </div>
+    <div>
+      <RoastDeckCarousel>
+        {landlordCard}
+        <BlurredCardWrapper onUnlock={onUnlock}>
+          {mostOwnedCard}
+        </BlurredCardWrapper>
+        <BlurredCardWrapper onUnlock={onUnlock}>
+          {biggestRivalryCard}
+        </BlurredCardWrapper>
+      </RoastDeckCarousel>
+      <p className="text-xs text-muted-foreground text-center mt-2">
+        This is just one of your league's headlines. Unlock to reveal the rest.
+      </p>
     </div>
   );
 }

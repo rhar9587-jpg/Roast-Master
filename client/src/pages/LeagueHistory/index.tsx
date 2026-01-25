@@ -579,6 +579,19 @@ export default function LeagueHistoryPage() {
     [viewerKey, allCells, managers]
   );
 
+  // Compute ownedCount for contextual copy
+  const ownedCount = useMemo(() => {
+    if (!viewerKey || !allCells.length) return 0;
+    return allCells.filter(
+      c => c.badge === "OWNED" && c.a === viewerKey && isCountable(c)
+    ).length;
+  }, [viewerKey, allCells]);
+
+  // Compute rivalryExists for contextual copy
+  const rivalryExists = useMemo(() => {
+    return biggestRivalry?.badge === "RIVAL";
+  }, [biggestRivalry]);
+
   useEffect(() => {
     setViewerKey("");
   }, [leagueId]);
@@ -1023,7 +1036,11 @@ export default function LeagueHistoryPage() {
       {/* Conversion Banner - moved up to appear after Headlines */}
       {hasData && hasEnoughData && (
         <section>
-          <ConversionBanner onUpgrade={handleUpgrade} />
+          <ConversionBanner 
+            onUpgrade={handleUpgrade}
+            ownedCount={ownedCount}
+            rivalryExists={rivalryExists}
+          />
         </section>
       )}
 
@@ -1159,6 +1176,8 @@ export default function LeagueHistoryPage() {
         open={showUnlockModal}
         onOpenChange={setShowUnlockModal}
         onUnlock={handleUnlock}
+        ownedCount={ownedCount}
+        rivalryExists={rivalryExists}
       />
 
       {hasData && (

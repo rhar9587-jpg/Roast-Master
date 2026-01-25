@@ -1,7 +1,7 @@
 import type { MiniCard } from "./storylines";
-import { Button } from "@/components/ui/button";
 import { Lock } from "lucide-react";
 import { useState } from "react";
+import * as React from "react";
 
 type MiniCardProps = {
   card: MiniCard;
@@ -104,6 +104,42 @@ type Props = {
 const YOUR_ROAST_EMPTY_MESSAGE =
   "Pick a wider range to find real receipts.";
 
+// Helper component for blurred mini cards
+function BlurredMiniCardWrapper({
+  children,
+  onUnlock,
+  hoverText,
+}: {
+  children: React.ReactNode;
+  onUnlock?: () => void;
+  hoverText: string;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <div className="relative">
+      <div className="blur-sm opacity-60 pointer-events-none">
+        {children}
+      </div>
+      <div
+        className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.01] rounded-2xl"
+        onClick={onUnlock}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className="text-center">
+          <Lock className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
+          {isHovered && (
+            <p className="text-xs font-medium text-muted-foreground">
+              {hoverText}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function StorylinesMiniCards({
   leagueCards,
   yourRoastCards,
@@ -117,56 +153,45 @@ export function StorylinesMiniCards({
   onUnlock,
 }: Props) {
   const ts = exportTimestamp ?? new Date().toLocaleString();
-  const [isHovered, setIsHovered] = useState(false);
 
   return (
     <div className="space-y-8">
       {leagueCards.length > 0 && (
-        <section className="relative">
+        <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-3">
             The receipts everyone's talking about
           </h2>
-          <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 ${!isPremium ? "opacity-60 blur-sm pointer-events-none" : ""}`}>
-            {leagueCards.map((c) => (
-              <MiniCardItem
-                key={c.id}
-                card={c}
-                onOpenCell={onOpenCell}
-                onHighlightManager={onHighlightManager}
-              />
-            ))}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {leagueCards.map((c, index) => {
+              const card = (
+                <MiniCardItem
+                  key={c.id}
+                  card={c}
+                  onOpenCell={onOpenCell}
+                  onHighlightManager={onHighlightManager}
+                />
+              );
+
+              if (isPremium || index === 0) {
+                return card;
+              }
+
+              const remainingCount = leagueCards.length - 1;
+              return (
+                <BlurredMiniCardWrapper
+                  key={c.id}
+                  onUnlock={onUnlock}
+                  hoverText={`🔒 ${remainingCount} more league stories`}
+                >
+                  {card}
+                </BlurredMiniCardWrapper>
+              );
+            })}
           </div>
           {!isPremium && (
-            <div
-              className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.02]"
-              onClick={onUnlock}
-              onMouseEnter={() => setIsHovered(true)}
-              onMouseLeave={() => setIsHovered(false)}
-            >
-              <div className="text-center space-y-3 p-6">
-                <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
-                {isHovered ? (
-                  <>
-                    <div>
-                      <p className="font-semibold">🔒 League Storylines</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Unlock to see the receipts everyone's talking about
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <p className="font-semibold">Unlock the league receipts</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Export and share the chaos
-                    </p>
-                  </div>
-                )}
-                <Button onClick={onUnlock} size="sm">
-                  Unlock the Receipts
-                </Button>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground text-center mt-2 mb-3">
+              There are more receipts like this. Unlock to see them all.
+            </p>
           )}
         </section>
       )}

@@ -15,12 +15,16 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUnlock?: () => void;
+  ownedCount?: number;
+  rivalryExists?: boolean;
 };
 
 export function UnlockReceiptsModal({
   open,
   onOpenChange,
   onUnlock,
+  ownedCount,
+  rivalryExists,
 }: Props) {
   const handleUnlock = () => {
     if (onUnlock) {
@@ -28,6 +32,13 @@ export function UnlockReceiptsModal({
     }
     onOpenChange(false);
   };
+
+  // Contextual copy logic
+  const contextualCopy = ownedCount && ownedCount > 0
+    ? `You own ${ownedCount} manager${ownedCount === 1 ? '' : 's'}. Want the receipts to prove it?`
+    : rivalryExists
+      ? "Your league has a real rivalry. See the full story."
+      : "Your league has stories worth sharing. Unlock the receipts.";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -37,7 +48,7 @@ export function UnlockReceiptsModal({
             Unlock the Receipts
           </DialogTitle>
           <DialogDescription className="pt-2">
-            See the truth for free. Share the truth with Premium.
+            {contextualCopy}
           </DialogDescription>
         </DialogHeader>
 
@@ -74,6 +85,19 @@ export function UnlockReceiptsModal({
           </div>
         </div>
 
+        {/* Trust Signals */}
+        <div className="space-y-1 pt-2 border-t text-center">
+          <p className="text-xs text-muted-foreground">
+            One-time purchase • No subscription
+          </p>
+          <p className="text-xs text-muted-foreground">
+            30-day money-back guarantee
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Join 500+ leagues already roasting
+          </p>
+        </div>
+
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button
             variant="outline"
@@ -86,7 +110,7 @@ export function UnlockReceiptsModal({
             onClick={handleUnlock}
             className="w-full sm:w-auto font-semibold"
           >
-            Unlock (demo)
+            Try Premium
           </Button>
         </DialogFooter>
       </DialogContent>
