@@ -252,19 +252,8 @@ export default function Home() {
   }
 
   function handleRoastMyLeague() {
-    const usernameInput = document.getElementById("username-input") as HTMLInputElement;
-    const findLeaguesButton = document.getElementById("button-find-leagues") as HTMLButtonElement;
-    
-    if (usernameInput) {
-      if (!username.trim()) {
-        // Username is empty, scroll to and focus username input
-        usernameInput.scrollIntoView({ behavior: "smooth", block: "center" });
-        setTimeout(() => usernameInput.focus(), 300);
-      } else if (findLeaguesButton) {
-        // Username is filled, scroll to find leagues button
-        findLeaguesButton.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }
+    document.getElementById("username-input")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById("username-input")?.focus();
   }
 
   function handleExampleLeague() {
@@ -276,7 +265,7 @@ export default function Home() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 space-y-8 md:space-y-12">
+    <div className="mx-auto max-w-5xl px-4 py-8 space-y-10 md:space-y-14">
       {/* Sport Selector */}
       <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
         <button
@@ -335,6 +324,118 @@ export default function Home() {
             </div>
           </section>
 
+          {/* Visual Product Preview */}
+          <section className="relative max-w-4xl mx-auto py-8 group">
+            {/* Desktop Layout: Overlapping */}
+            <div className="hidden md:block relative">
+              {/* Grid Preview - blurred background */}
+              <div className="relative w-full rounded-xl shadow-lg overflow-hidden min-h-[300px]">
+                <img
+                  src="/previews/grid.png"
+                  alt="Dominance Grid Preview"
+                  className="w-full h-auto opacity-85 blur-sm transition-transform group-hover:scale-[1.02]"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const placeholder = target.parentElement?.querySelector('.grid-placeholder') as HTMLElement;
+                    if (placeholder) placeholder.style.display = 'flex';
+                  }}
+                />
+                <div className="grid-placeholder absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center" style={{ display: 'none' }}>
+                  <span className="text-muted-foreground text-sm">Grid Preview</span>
+                </div>
+              </div>
+
+              {/* Baseball Card - absolute positioned */}
+              <div className="absolute top-1/2 right-0 -translate-y-1/2 w-64 rounded-xl shadow-lg z-10 min-h-[200px]">
+                <img
+                  src="/previews/card.png"
+                  alt="Baseball Card Preview"
+                  className="w-full h-auto rounded-xl"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const placeholder = target.parentElement?.querySelector('.card-placeholder') as HTMLElement;
+                    if (placeholder) placeholder.style.display = 'flex';
+                  }}
+                />
+                <div className="card-placeholder absolute inset-0 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex items-center justify-center" style={{ display: 'none' }}>
+                  <span className="text-muted-foreground text-xs">Baseball Card</span>
+                </div>
+              </div>
+
+              {/* Mini Storyline - absolute positioned */}
+              <div className="absolute bottom-0 left-1/4 w-48 rounded-xl shadow-lg z-20 min-h-[150px]">
+                <img
+                  src="/previews/mini.png"
+                  alt="Mini Storyline Preview"
+                  className="w-full h-auto rounded-xl"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const placeholder = target.parentElement?.querySelector('.mini-placeholder') as HTMLElement;
+                    if (placeholder) placeholder.style.display = 'flex';
+                  }}
+                />
+                <div className="mini-placeholder absolute inset-0 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center" style={{ display: 'none' }}>
+                  <span className="text-muted-foreground text-xs">Mini Card</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile Layout: Stack vertically */}
+            <div className="flex flex-col gap-4 md:hidden">
+              <div className="w-full rounded-xl shadow-lg overflow-hidden min-h-[200px]">
+                <img
+                  src="/previews/grid.png"
+                  alt="Dominance Grid Preview"
+                  className="w-full h-auto opacity-85 blur-sm"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const placeholder = target.parentElement?.querySelector('.grid-placeholder') as HTMLElement;
+                    if (placeholder) placeholder.style.display = 'flex';
+                  }}
+                />
+                <div className="grid-placeholder bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center min-h-[200px]" style={{ display: 'none' }}>
+                  <span className="text-muted-foreground text-sm">Grid Preview</span>
+                </div>
+              </div>
+              <div className="w-full rounded-xl shadow-lg overflow-hidden min-h-[150px]">
+                <img
+                  src="/previews/card.png"
+                  alt="Baseball Card Preview"
+                  className="w-full h-auto rounded-xl"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const placeholder = target.parentElement?.querySelector('.card-placeholder') as HTMLElement;
+                    if (placeholder) placeholder.style.display = 'flex';
+                  }}
+                />
+                <div className="card-placeholder bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex items-center justify-center min-h-[150px]" style={{ display: 'none' }}>
+                  <span className="text-muted-foreground text-sm">Baseball Card</span>
+                </div>
+              </div>
+              <div className="w-full rounded-xl shadow-lg overflow-hidden min-h-[120px]">
+                <img
+                  src="/previews/mini.png"
+                  alt="Mini Storyline Preview"
+                  className="w-full h-auto rounded-xl"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const placeholder = target.parentElement?.querySelector('.mini-placeholder') as HTMLElement;
+                    if (placeholder) placeholder.style.display = 'flex';
+                  }}
+                />
+                <div className="mini-placeholder bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center min-h-[120px]" style={{ display: 'none' }}>
+                  <span className="text-muted-foreground text-sm">Mini Card</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Social Proof Strip */}
           <div className="flex flex-wrap justify-center gap-6 md:gap-8 text-sm text-muted-foreground py-6">
             <span>🔥 Built for competitive leagues</span>
@@ -378,7 +479,10 @@ export default function Home() {
 
           {/* Form Section */}
           <section className="rounded-lg border border-muted/50 bg-muted/20 p-6 space-y-4">
-            <h2 className="text-lg font-semibold mb-4">Get started</h2>
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold">Get Started</h2>
+              <p className="text-sm text-muted-foreground mt-1">Enter your league to generate your roasts</p>
+            </div>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700">Sleeper Username</label>
@@ -509,7 +613,7 @@ export default function Home() {
           </div>
 
           {/* League History Card - Upgraded */}
-          <div className="rounded-2xl border bg-gradient-to-br from-purple-50 to-purple-100/50 p-6 md:p-8 shadow-lg space-y-4">
+          <div className="rounded-2xl border bg-gradient-to-br from-purple-50 to-purple-100/50 p-8 shadow-lg space-y-4">
             <div>
               <h2 className="text-xl md:text-2xl font-bold tracking-tight">League History</h2>
               <p className="text-base font-medium text-purple-900/80 mt-1">Your league's full receipts engine</p>
