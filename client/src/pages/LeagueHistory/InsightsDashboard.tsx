@@ -2,6 +2,8 @@ import { RoastDeckCarousel } from "@/components/roast/RoastDeckCarousel";
 import { BaseballCard } from "@/components/roast/BaseballCard";
 import { fmtScore } from "./utils";
 import type { LandlordSummary } from "./types";
+import { Button } from "@/components/ui/button";
+import { Lock } from "lucide-react";
 
 type MostOwned = {
   victimName: string;
@@ -33,6 +35,8 @@ type Props = {
   biggestRivalry: BiggestRivalry | null;
   avatarByKey: Record<string, string | null>;
   onOpenCell: (cellKey: string | null) => void;
+  isPremium: boolean;
+  onUnlock?: () => void;
 };
 
 export function InsightsDashboard({
@@ -41,8 +45,10 @@ export function InsightsDashboard({
   biggestRivalry,
   avatarByKey,
   onOpenCell,
+  isPremium,
+  onUnlock,
 }: Props) {
-  return (
+  const cards = (
     <RoastDeckCarousel>
       <BaseballCard
         badge="OWNED"
@@ -137,5 +143,34 @@ export function InsightsDashboard({
         }
       />
     </RoastDeckCarousel>
+  );
+
+  if (isPremium) {
+    return cards;
+  }
+
+  return (
+    <div className="relative">
+      <div className="blur-sm pointer-events-none">
+        {cards}
+      </div>
+      <div
+        className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center cursor-pointer"
+        onClick={onUnlock}
+      >
+        <div className="text-center space-y-3 p-6">
+          <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
+          <div>
+            <p className="font-semibold">Unlock to reveal the headlines</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              See who owns the league
+            </p>
+          </div>
+          <Button onClick={onUnlock} size="sm">
+            Unlock the Receipts
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

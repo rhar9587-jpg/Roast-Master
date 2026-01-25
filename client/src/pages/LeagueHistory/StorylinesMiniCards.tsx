@@ -1,4 +1,6 @@
 import type { MiniCard } from "./storylines";
+import { Button } from "@/components/ui/button";
+import { Lock } from "lucide-react";
 
 type MiniCardProps = {
   card: MiniCard;
@@ -94,6 +96,8 @@ type Props = {
   storylinesExportRef?: React.RefObject<HTMLDivElement | null>;
   yourRoastExportRef?: React.RefObject<HTMLDivElement | null>;
   exportTimestamp?: string;
+  isPremium: boolean;
+  onUnlock?: () => void;
 };
 
 const YOUR_ROAST_EMPTY_MESSAGE =
@@ -108,17 +112,19 @@ export function StorylinesMiniCards({
   storylinesExportRef,
   yourRoastExportRef,
   exportTimestamp,
+  isPremium,
+  onUnlock,
 }: Props) {
   const ts = exportTimestamp ?? new Date().toLocaleString();
 
   return (
     <div className="space-y-8">
       {leagueCards.length > 0 && (
-        <section>
+        <section className="relative">
           <h2 className="text-sm font-medium text-muted-foreground mb-3">
-            League Storylines
+            The receipts everyone's talking about
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 ${!isPremium ? "opacity-60 blur-sm pointer-events-none" : ""}`}>
             {leagueCards.map((c) => (
               <MiniCardItem
                 key={c.id}
@@ -128,13 +134,32 @@ export function StorylinesMiniCards({
               />
             ))}
           </div>
+          {!isPremium && (
+            <div
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center cursor-pointer"
+              onClick={onUnlock}
+            >
+              <div className="text-center space-y-3 p-6">
+                <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
+                <div>
+                  <p className="font-semibold">Unlock the league receipts</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Export and share the chaos
+                  </p>
+                </div>
+                <Button onClick={onUnlock} size="sm">
+                  Unlock the Receipts
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
       )}
 
       {viewerChosen && (
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-3">
-            Your Roast
+            Your personal receipts
           </h2>
           {yourRoastCards.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

@@ -28,6 +28,8 @@ type Props = {
   isFetching: boolean;
   gridVisibleRef: React.RefObject<HTMLDivElement | null>;
   highlightedManagerKey?: string | null;
+  isPremium: boolean;
+  onUnlock?: () => void;
 };
 
 function computeBadgeCounts(cells: DominanceCellDTO[]): Record<Badge, number> {
@@ -56,6 +58,8 @@ export function DominanceGrid({
   isFetching,
   gridVisibleRef,
   highlightedManagerKey,
+  isPremium,
+  onUnlock,
 }: Props) {
   const hasData = managers.length > 0;
   const badgeCounts = computeBadgeCounts(allCells);
@@ -69,6 +73,8 @@ export function DominanceGrid({
           isDownloading={isDownloading}
           isSharing={isSharing}
           hasData={hasData}
+          isPremium={isPremium}
+          onUnlock={onUnlock}
         />
       )}
 

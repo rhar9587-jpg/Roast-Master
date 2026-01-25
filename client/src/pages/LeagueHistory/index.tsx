@@ -16,6 +16,11 @@ import {
 } from "@/components/ui/select";
 import { ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { LeagueSelector } from "./LeagueSelector";
 import { InsightsDashboard } from "./InsightsDashboard";
@@ -23,6 +28,11 @@ import { DominanceGrid } from "./DominanceGrid";
 import { StorylinesMiniCards } from "./StorylinesMiniCards";
 import { MatchupDetailModal } from "./MatchupDetailModal";
 import { GridTable } from "./DominanceGrid/GridTable";
+import { ConversionBanner } from "./ConversionBanner";
+import { PostAnalysisToast } from "./PostAnalysisToast";
+import { StickyUpgradeBar } from "./StickyUpgradeBar";
+import { UnlockReceiptsModal } from "./UnlockReceiptsModal";
+import { isPremium, setPremium } from "./premium";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues } from "./utils";
 import { computeLeagueStorylines, computeYourRoast } from "./storylines";
 import type {
@@ -52,6 +62,9 @@ export default function LeagueHistoryPage() {
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<Date | null>(null);
   const [viewerKey, setViewerKey] = useState<string>("");
   const [highlightedManagerKey, setHighlightedManagerKey] = useState<string | null>(null);
+  const [showPostAnalysisToast, setShowPostAnalysisToast] = useState(false);
+  const [isPremiumState, setIsPremiumState] = useState(isPremium());
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
   const { toast } = useToast();
 
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
@@ -103,6 +116,7 @@ export default function LeagueHistoryPage() {
 
   const hasData = Boolean(data?.grid?.length);
   const prevFetching = useRef(false);
+  const prevHasData = useRef(false);
 
   // Read URL params on mount
   useEffect(() => {
@@ -713,6 +727,37 @@ export default function LeagueHistoryPage() {
     return totalGames > 0;
   }, [data, allCells]);
 
+  // Show post-analysis toast when analysis completes
+  useEffect(() => {
+    if (hasData && !prevHasData.current && !isFetching) {
+      setShowPostAnalysisToast(true);
+    }
+    prevHasData.current = hasData;
+  }, [hasData, isFetching]);
+
+  // Compute stats for toast
+  const matchupCount = allCells.length;
+  const managerCount = managers.length;
+
+  // Sync premium state on mount
+  useEffect(() => {
+    setIsPremiumState(isPremium());
+  }, []);
+
+  function handleUnlock() {
+    setPremium(true);
+    setIsPremiumState(true);
+    setShowUnlockModal(false);
+    toast({
+      title: "Receipts unlocked!",
+      description: "Share the chaos with your league.",
+    });
+  }
+
+  function handleUpgrade() {
+    setShowUnlockModal(true);
+  }
+
   return (
     <div className="mx-auto max-w-6xl p-4 md:p-6 space-y-4">
       {/* Hero Section */}
@@ -723,7 +768,7 @@ export default function LeagueHistoryPage() {
               Who Owns Your League?
             </h1>
             <p className="text-base md:text-lg text-muted-foreground max-w-2xl">
-              Shareable roasts for your league chat.
+              Turn your Sleeper league into shareable roasts. Find receipts. Tag your nemesis. Own the group chat.
             </p>
           </div>
           
@@ -771,6 +816,9 @@ export default function LeagueHistoryPage() {
               </CollapsibleContent>
             </Collapsible>
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Powered by Sleeper API • Built for sharing
+          </p>
         </div>
       )}
 
@@ -793,6 +841,18 @@ export default function LeagueHistoryPage() {
           </div>
           {managers.length > 0 && (
             <div className="flex items-center gap-2 shrink-0">
+              {process.env.NODE_ENV === "development" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPremium(!isPremiumState);
+                    setIsPremiumState(!isPremiumState);
+                  }}
+                >
+                  {isPremiumState ? "Premium: ON" : "Premium: OFF"}
+                </Button>
+              )}
               <span className="text-sm text-muted-foreground">View as:</span>
               <Select
                 value={viewerKey || "__none__"}
@@ -844,7 +904,7 @@ export default function LeagueHistoryPage() {
       {hasData && hasEnoughData && (
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-2">
-            The Headlines
+            Your league's biggest moments
           </h2>
           <InsightsDashboard
             landlord={landlord}
@@ -852,6 +912,8 @@ export default function LeagueHistoryPage() {
             biggestRivalry={biggestRivalry}
             avatarByKey={avatarByKey}
             onOpenCell={openCell}
+            isPremium={isPremiumState}
+            onUnlock={handleUpgrade}
           />
           {hasData && hasEnoughData && (
             <p className="text-xs text-muted-foreground text-center mt-2">
@@ -874,7 +936,7 @@ export default function LeagueHistoryPage() {
 
       <section>
         <h2 className="text-sm font-medium text-muted-foreground mb-2">
-          The Scoreboard
+          Every matchup, every roast
         </h2>
         <DominanceGrid
           managers={managers}
@@ -893,6 +955,8 @@ export default function LeagueHistoryPage() {
           isFetching={isFetching}
           gridVisibleRef={gridVisibleRef}
           highlightedManagerKey={highlightedManagerKey}
+          isPremium={isPremiumState}
+          onUnlock={handleUpgrade}
         />
         
         {/* Trust Signals */}
@@ -914,14 +978,31 @@ export default function LeagueHistoryPage() {
           <section>
             <div className="flex flex-wrap gap-2 mb-3">
               {leagueStorylines.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={saveStorylinesPng}
-                  disabled={isExportingStorylines}
-                >
-                  {isExportingStorylines ? "Saving…" : "Save Storylines"}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (isPremiumState) {
+                            saveStorylinesPng();
+                          } else {
+                            handleUpgrade();
+                          }
+                        }}
+                        disabled={isExportingStorylines}
+                      >
+                        {isExportingStorylines ? "Saving…" : "Save Storylines"}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {!isPremiumState && (
+                    <TooltipContent>
+                      <p>Unlock to export League Storylines</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               )}
               {!!viewerKey && yourRoastCards.length > 0 && (
                 <Button
@@ -946,9 +1027,42 @@ export default function LeagueHistoryPage() {
                 lastAnalyzedAt?.toLocaleString() ??
                 new Date().toLocaleString()
               }
+              isPremium={isPremiumState}
+              onUnlock={handleUpgrade}
             />
           </section>
         )}
+
+      {/* Conversion Banner */}
+      {hasData && hasEnoughData && (
+        <section>
+          <ConversionBanner onUpgrade={handleUpgrade} />
+        </section>
+      )}
+
+      {/* Post-Analysis Toast */}
+      {showPostAnalysisToast && hasData && (
+        <PostAnalysisToast
+          matchupCount={matchupCount}
+          managerCount={managerCount}
+          minWeek={startWeek}
+          maxWeek={endWeek}
+          onDismiss={() => setShowPostAnalysisToast(false)}
+          isPremium={isPremiumState}
+        />
+      )}
+
+      {/* Sticky Upgrade Bar */}
+      {hasData && hasEnoughData && (
+        <StickyUpgradeBar onUpgrade={handleUpgrade} />
+      )}
+
+      {/* Unlock Modal */}
+      <UnlockReceiptsModal
+        open={showUnlockModal}
+        onOpenChange={setShowUnlockModal}
+        onUnlock={handleUnlock}
+      />
 
       {hasData && (
         <div

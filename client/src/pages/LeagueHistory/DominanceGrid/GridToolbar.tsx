@@ -2,6 +2,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link as LinkIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { Badge } from "../types";
 
 type Props = {
@@ -10,6 +15,8 @@ type Props = {
   isDownloading: boolean;
   isSharing: boolean;
   hasData: boolean;
+  isPremium: boolean;
+  onUnlock?: () => void;
 };
 
 export function GridToolbar({
@@ -18,6 +25,8 @@ export function GridToolbar({
   isDownloading,
   isSharing,
   hasData,
+  isPremium,
+  onUnlock,
 }: Props) {
   const { toast } = useToast();
   const [isCopying, setIsCopying] = useState(false);
@@ -57,6 +66,22 @@ export function GridToolbar({
     }
   }
 
+  function handleDownloadClick() {
+    if (!isPremium && onUnlock) {
+      onUnlock();
+    } else {
+      onDownloadPng();
+    }
+  }
+
+  function handleShareClick() {
+    if (!isPremium && onUnlock) {
+      onUnlock();
+    } else {
+      onSharePng();
+    }
+  }
+
   return (
     <div className="sticky top-0 z-20 border-b bg-background px-4 py-3">
       <div className="flex flex-wrap items-start justify-end gap-2">
@@ -73,25 +98,47 @@ export function GridToolbar({
           <p className="text-xs text-muted-foreground mt-1 text-center whitespace-nowrap">Share this page with your league</p>
         </div>
         <div className="flex flex-col items-center">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onDownloadPng}
-            disabled={!hasData || isDownloading || isSharing}
-          >
-            {isDownloading ? "Saving…" : "Save Roast"}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleDownloadClick}
+                  disabled={!hasData || isDownloading || isSharing}
+                >
+                  {isDownloading ? "Saving…" : "Save Roast"}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {!isPremium && (
+              <TooltipContent>
+                <p>Unlock to share the receipts</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
           <p className="text-xs text-muted-foreground mt-1 text-center whitespace-nowrap">Perfect for the league chat</p>
         </div>
         <div className="flex flex-col items-center">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onSharePng}
-            disabled={!hasData || isDownloading || isSharing}
-          >
-            {isSharing ? "Sending…" : "Send to Group Chat"}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleShareClick}
+                  disabled={!hasData || isDownloading || isSharing}
+                >
+                  {isSharing ? "Sending…" : "Send to Group Chat"}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {!isPremium && (
+              <TooltipContent>
+                <p>Unlock to share the receipts</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
           <p className="text-xs text-muted-foreground mt-1 text-center whitespace-nowrap">Tag your nemesis 💀</p>
         </div>
       </div>
