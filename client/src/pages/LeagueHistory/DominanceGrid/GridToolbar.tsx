@@ -44,7 +44,7 @@ export function GridToolbar({
 
       toast({
         title: "Link copied!",
-        description: "Receipt copied. Send it to the group chat 💀",
+        description: "Roast copied. Send it to the group chat 💀",
       });
     } catch (err) {
       toast({

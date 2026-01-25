@@ -544,8 +544,8 @@ export default function LeagueHistoryPage() {
       a.download = filename;
       a.click();
       toast({
-        title: "Receipt saved",
-        description: "Receipt saved. Share it.",
+        title: "Roast saved",
+        description: "Roast saved. Share it.",
       });
     } finally {
       setIsDownloading(false);
@@ -705,7 +705,7 @@ export default function LeagueHistoryPage() {
           />
           {hasData && hasEnoughData && (
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Found your nemesis? Send this receipt.
+              Found your nemesis? Send this roast.
             </p>
           )}
         </section>
@@ -714,7 +714,7 @@ export default function LeagueHistoryPage() {
       {hasData && !hasEnoughData && (
         <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-center">
           <p className="text-sm text-muted-foreground mb-1">
-            Not enough receipts yet.
+            Not enough roasts yet.
           </p>
           <p className="text-xs text-muted-foreground">
             Add more weeks to see who owns who.
