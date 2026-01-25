@@ -51,6 +51,7 @@ export default function LeagueHistoryPage() {
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<Date | null>(null);
   const [viewerKey, setViewerKey] = useState<string>("");
+  const [highlightedManagerKey, setHighlightedManagerKey] = useState<string | null>(null);
   const { toast } = useToast();
 
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
@@ -557,6 +558,13 @@ export default function LeagueHistoryPage() {
     if (c) setSelected(c);
   }
 
+  function onHighlightManager(managerKey: string) {
+    setHighlightedManagerKey(managerKey);
+    setTimeout(() => {
+      setHighlightedManagerKey(null);
+    }, 3000);
+  }
+
   async function waitForPaint() {
     if (typeof document !== "undefined" && (document as any).fonts?.ready) {
       await (document as any).fonts.ready;
@@ -884,6 +892,7 @@ export default function LeagueHistoryPage() {
           isSharing={isSharing}
           isFetching={isFetching}
           gridVisibleRef={gridVisibleRef}
+          highlightedManagerKey={highlightedManagerKey}
         />
         
         {/* Trust Signals */}
@@ -930,6 +939,7 @@ export default function LeagueHistoryPage() {
               yourRoastCards={yourRoastCards}
               viewerChosen={!!viewerKey}
               onOpenCell={(key) => openCell(key)}
+              onHighlightManager={onHighlightManager}
               storylinesExportRef={storylinesExportRef}
               yourRoastExportRef={yourRoastExportRef}
               exportTimestamp={

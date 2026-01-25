@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useEffect } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -17,6 +17,7 @@ type Props = {
   forExport: boolean;
   activeBadge: Badge | null;
   onSelectCell: (cell: DominanceCellDTO) => void;
+  highlightedManagerKey?: string | null;
 };
 
 const SCORE_TOOLTIP = "Ownership score: +1 = you own them, -1 = they own you.";
@@ -33,9 +34,24 @@ export function GridTable({
   forExport,
   activeBadge,
   onSelectCell,
+  highlightedManagerKey,
 }: Props) {
   const applyFilter = !forExport && activeBadge != null;
   const suffix = forExport ? "x" : "v";
+
+  useEffect(() => {
+    if (!forExport && highlightedManagerKey) {
+      const rowElement = document.querySelector(
+        `[data-manager-key="${highlightedManagerKey}"]`
+      );
+      if (rowElement) {
+        rowElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }
+  }, [highlightedManagerKey, forExport]);
 
   return (
     <div
@@ -65,13 +81,23 @@ export function GridTable({
 
       {managers.map((row) => {
         const rt = rowTotals.get(row.key);
+        const isHighlighted = !forExport && highlightedManagerKey === row.key;
+        const rowHeaderClass = isHighlighted
+          ? "sticky left-0 z-20 bg-primary/10 ring-2 ring-primary ring-offset-1 border-r border-muted/30 p-2 shadow-sm"
+          : "sticky left-0 z-20 bg-background border-r border-muted/30 p-2 shadow-sm";
 
         return (
           <Fragment key={`r-${row.key}-${suffix}`}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="sticky left-0 z-20 bg-background border-r border-muted/30 p-2 shadow-sm" style={{ transform: 'translateZ(0)' }}>
-                  <div className="text-xs font-medium truncate">{abbrev(row.name)}</div>
+                <div
+                  className={rowHeaderClass}
+                  style={{ transform: "translateZ(0)" }}
+                  data-manager-key={row.key}
+                >
+                  <div className="text-xs font-medium truncate">
+                    {abbrev(row.name)}
+                  </div>
                   {rt ? (
                     <div className="text-[11px] text-muted-foreground">
                       {fmtRecord(rt.w, rt.l, rt.t)} • {fmtScore(rt.score)}
@@ -79,7 +105,9 @@ export function GridTable({
                   ) : null}
                 </div>
               </TooltipTrigger>
-              <TooltipContent className="!bg-background">{row.name}</TooltipContent>
+              <TooltipContent className="!bg-background">
+                {row.name}
+              </TooltipContent>
             </Tooltip>
 
             {managers.map((col) => {
@@ -87,7 +115,7 @@ export function GridTable({
                 return (
                   <div
                     key={`cell-${row.key}-${col.key}-${suffix}`}
-                    className="p-2 bg-muted/10"
+                    className={`p-2 ${isHighlighted ? "bg-primary/5" : "bg-muted/10"}`}
                   />
                 );
               }
@@ -97,7 +125,7 @@ export function GridTable({
                 return (
                   <div
                     key={`cell-${row.key}-${col.key}-${suffix}`}
-                    className="p-2 text-xs text-muted-foreground"
+                    className={`p-2 text-xs text-muted-foreground ${isHighlighted ? "bg-primary/5" : ""}`}
                   >
                     —
                   </div>
@@ -116,7 +144,9 @@ export function GridTable({
               );
             })}
 
-            <div className="border-l border-muted/30 p-2 bg-muted/20">
+            <div
+              className={`border-l border-muted/30 p-2 ${isHighlighted ? "bg-primary/5" : "bg-muted/20"}`}
+            >
               {rt ? (
                 <div className="space-y-1">
                   <div className="text-xs font-medium">Overall</div>
@@ -129,7 +159,9 @@ export function GridTable({
                         {fmtScore(rt.score)}
                       </div>
                     </TooltipTrigger>
-                    <TooltipContent className="!bg-background">{SCORE_TOOLTIP}</TooltipContent>
+                    <TooltipContent className="!bg-background">
+                      {SCORE_TOOLTIP}
+                    </TooltipContent>
                   </Tooltip>
                   <div className="text-[10px] text-muted-foreground">
                     {rt.games} games

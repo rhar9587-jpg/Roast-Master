@@ -3,39 +3,55 @@ import type { MiniCard } from "./storylines";
 type MiniCardProps = {
   card: MiniCard;
   onOpenCell?: (cellKey: string) => void;
+  onHighlightManager?: (managerKey: string) => void;
   forExport?: boolean;
 };
 
-function MiniCardItem({ card, onOpenCell, forExport }: MiniCardProps) {
-  const isClickable = !forExport && Boolean(card.cellKey && onOpenCell);
+function MiniCardItem({
+  card,
+  onOpenCell,
+  onHighlightManager,
+  forExport,
+}: MiniCardProps) {
+  const hasClickAction =
+    !forExport && (Boolean(card.cellKey) || Boolean(card.managerKey));
   const base =
-    "w-full text-left rounded-2xl border border-border bg-card text-card-foreground shadow-sm p-4";
+    "w-full text-left rounded-2xl border border-border bg-card text-card-foreground shadow-sm p-4 flex flex-col h-full";
   const interactive =
-    "hover:shadow-md transition-shadow focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
+    "hover:shadow-md transition-shadow focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer";
 
   const detailClass = forExport
-    ? "text-xs text-muted-foreground mt-1 break-words overflow-visible"
-    : "text-xs text-muted-foreground mt-1 truncate";
+    ? "text-xs text-muted-foreground mt-auto break-words overflow-visible"
+    : "text-xs text-muted-foreground mt-auto truncate";
+
+  const handleClick = () => {
+    if (forExport) return;
+    if (card.cellKey && onOpenCell) {
+      onOpenCell(card.cellKey);
+    } else if (card.managerKey && onHighlightManager) {
+      onHighlightManager(card.managerKey);
+    }
+  };
+
+  const secondaryMetaLine =
+    card.statSecondary && card.meta
+      ? `${card.statSecondary} · ${card.meta}`
+      : card.statSecondary || card.meta || null;
 
   const body = (
     <>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
         {card.title}
       </p>
-      <p className="text-xl md:text-2xl font-bold tracking-tight leading-tight">
+      <p className="text-xl md:text-2xl font-bold tracking-tight leading-tight mb-1">
         {card.statPrimary}
       </p>
-      {card.statSecondary ? (
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {card.statSecondary}
+      {secondaryMetaLine ? (
+        <p className="text-xs text-muted-foreground mb-1.5">
+          {secondaryMetaLine}
         </p>
       ) : null}
-      {card.meta ? (
-        <p className="text-[11px] text-muted-foreground mt-0.5">
-          {card.meta}
-        </p>
-      ) : null}
-      <p className="text-sm text-muted-foreground mt-1.5">{card.line}</p>
+      <p className="text-sm text-muted-foreground mb-1.5">{card.line}</p>
       {card.detail ? (
         <p className={detailClass} title={forExport ? undefined : card.detail}>
           {card.detail}
@@ -44,12 +60,12 @@ function MiniCardItem({ card, onOpenCell, forExport }: MiniCardProps) {
     </>
   );
 
-  if (isClickable) {
+  if (hasClickAction) {
     return (
       <button
         type="button"
         className={`${base} ${interactive}`}
-        onClick={() => card.cellKey && onOpenCell?.(card.cellKey)}
+        onClick={handleClick}
       >
         {body}
       </button>
@@ -74,6 +90,7 @@ type Props = {
   yourRoastCards: MiniCard[];
   viewerChosen: boolean;
   onOpenCell?: (cellKey: string) => void;
+  onHighlightManager?: (managerKey: string) => void;
   storylinesExportRef?: React.RefObject<HTMLDivElement | null>;
   yourRoastExportRef?: React.RefObject<HTMLDivElement | null>;
   exportTimestamp?: string;
@@ -87,6 +104,7 @@ export function StorylinesMiniCards({
   yourRoastCards,
   viewerChosen,
   onOpenCell,
+  onHighlightManager,
   storylinesExportRef,
   yourRoastExportRef,
   exportTimestamp,
@@ -102,7 +120,12 @@ export function StorylinesMiniCards({
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {leagueCards.map((c) => (
-              <MiniCardItem key={c.id} card={c} onOpenCell={onOpenCell} />
+              <MiniCardItem
+                key={c.id}
+                card={c}
+                onOpenCell={onOpenCell}
+                onHighlightManager={onHighlightManager}
+              />
             ))}
           </div>
         </section>
@@ -116,7 +139,12 @@ export function StorylinesMiniCards({
           {yourRoastCards.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {yourRoastCards.map((c) => (
-                <MiniCardItem key={c.id} card={c} onOpenCell={onOpenCell} />
+                <MiniCardItem
+                  key={c.id}
+                  card={c}
+                  onOpenCell={onOpenCell}
+                  onHighlightManager={onHighlightManager}
+                />
               ))}
             </div>
           ) : (

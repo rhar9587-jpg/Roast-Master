@@ -10,6 +10,7 @@ export type MiniCard = {
   line: string;
   detail?: string;
   cellKey?: string;
+  managerKey?: string;
 };
 
 type TotalsByManagerEntry = {
@@ -117,10 +118,10 @@ export function computeLeagueStorylines(
 
   // 2. Point Differential King — max (totalPF - totalPA), sign + rounded int
   if (totalsByManager && totalsByManager.length > 0) {
-    let best: { name: string; diff: number } | null = null;
+    let best: { key: string; name: string; diff: number } | null = null;
     for (const t of totalsByManager) {
       const diff = t.totalPF - t.totalPA;
-      if (!best || diff > best.diff) best = { name: t.name, diff };
+      if (!best || diff > best.diff) best = { key: t.key, name: t.name, diff };
     }
     if (best) {
       const sign = best.diff >= 0 ? "+" : "";
@@ -130,6 +131,7 @@ export function computeLeagueStorylines(
         statPrimary: `${sign}${Math.round(best.diff)} pts`,
         line: "Biggest flex in the league.",
         detail: best.name,
+        managerKey: best.key,
       });
     }
   }
@@ -151,6 +153,7 @@ export function computeLeagueStorylines(
         statPrimary: String(punchingBag.losses),
         line: "Took more L's than anyone.",
         detail: punchingBag.name,
+        managerKey: punchingBag.key,
       });
     }
   }
@@ -323,6 +326,87 @@ export function computeYourRoast(
       detail: other,
       cellKey: `${longestRival.a}-${longestRival.b}`,
     });
+  }
+
+  // Fallback cards: if no real receipts qualify, show 2-3 fallback cards
+  if (cards.length === 0) {
+    // a) Most Played Opponent — max games vs anyone (viewer as a or b)
+    const myMatchups = allCells.filter(
+      (c) =>
+        c &&
+        (c.a === viewerKey || c.b === viewerKey) &&
+        (c.games ?? 0) >= 3
+    );
+    const mostPlayed = [...myMatchups].sort(
+      (a, b) => (b?.games ?? 0) - (a?.games ?? 0)
+    )[0];
+    if (mostPlayed) {
+      const other =
+        mostPlayed.a === viewerKey ? mostPlayed.bName : mostPlayed.aName;
+      cards.push({
+        id: "most-played-opponent",
+        title: "MOST PLAYED OPPONENT",
+        statPrimary: mostPlayed.record,
+        statSecondary: `Ownership score ${fmtScore(mostPlayed.score)}`,
+        meta: `${mostPlayed.games} games`,
+        line: "You've faced them the most.",
+        detail: other,
+        cellKey: `${mostPlayed.a}-${mostPlayed.b}`,
+      });
+    }
+
+    // b) Closest Matchup — EDGE or SMALL SAMPLE with most games (min 3)
+    const closeMatchups = allCells.filter(
+      (c) =>
+        c &&
+        (c.a === viewerKey || c.b === viewerKey) &&
+        (c.games ?? 0) >= 3 &&
+        (c.badge === "EDGE" || c.badge === "SMALL SAMPLE")
+    );
+    const closest = [...closeMatchups].sort(
+      (a, b) => (b?.games ?? 0) - (a?.games ?? 0)
+    )[0];
+    if (closest && closest !== mostPlayed) {
+      const other = closest.a === viewerKey ? closest.bName : closest.aName;
+      cards.push({
+        id: "closest-matchup",
+        title: "CLOSEST MATCHUP",
+        statPrimary: closest.record,
+        statSecondary: `Ownership score ${fmtScore(closest.score)}`,
+        meta: `${closest.games} games`,
+        line: "Too close to call.",
+        detail: other,
+        cellKey: `${closest.a}-${closest.b}`,
+      });
+    }
+
+    // c) Most Even Rival — min abs(score) with games >= 3
+    const evenMatchups = allCells.filter(
+      (c) =>
+        c &&
+        (c.a === viewerKey || c.b === viewerKey) &&
+        (c.games ?? 0) >= 3
+    );
+    const mostEven = [...evenMatchups].sort(
+      (a, b) => Math.abs(a?.score ?? 0) - Math.abs(b?.score ?? 0)
+    )[0];
+    if (
+      mostEven &&
+      mostEven !== mostPlayed &&
+      mostEven !== closest
+    ) {
+      const other = mostEven.a === viewerKey ? mostEven.bName : mostEven.aName;
+      cards.push({
+        id: "most-even-rival",
+        title: "MOST EVEN RIVAL",
+        statPrimary: mostEven.record,
+        statSecondary: `Ownership score ${fmtScore(mostEven.score)}`,
+        meta: `${mostEven.games} games`,
+        line: "This one's dead even.",
+        detail: other,
+        cellKey: `${mostEven.a}-${mostEven.b}`,
+      });
+    }
   }
 
   return cards;
