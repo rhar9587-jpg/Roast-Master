@@ -71,11 +71,16 @@ function round2(n: number) {
 /**
  * Badge logic:
  * - SMALL SAMPLE: < 4 games
- * - OWNED / NEMESIS: clean sweep of 3+ games (3–0, 4–0, etc), ties must be 0
  * - RIVAL: >= 5 games and close score (abs <= 0.20)
- * - OWNED / NEMESIS: >= 10 games and score threshold (>= 0.35 / <= -0.35)
- * - OWNED / NEMESIS: >= 6 games and threshold (>= 0.40 / <= -0.40)
- * - Otherwise EDGE
+ * - Record-first:
+ *   - OWNED: wins >= 3 && losses == 0
+ *   - NEMESIS: wins == 0 && losses >= 3
+ *   - EDGE: 3–1, 2–0, 1–2
+ *   - TOO CLOSE (SMALL SAMPLE): 2–1, 2–2, 1–1
+ * - Margin modifier (record.score only):
+ *   - SMALL SAMPLE -> EDGE when score >= +1.0
+ *   - EDGE -> OWNED when score >= +1.0
+ *   - EDGE -> SMALL SAMPLE when score <= -1.0
  */
 function computeDominanceExtras(base: {
   wins: number;
@@ -91,32 +96,37 @@ function computeDominanceExtras(base: {
 
   let badge: Badge = "EDGE";
 
-  // 1) Small sample
   if (games < 4) {
     badge = "SMALL SAMPLE";
+  } else if (games >= 5 && Math.abs(score) <= 0.20) {
+    badge = "RIVAL";
   } else {
-    // 2) Clean sweep rule (3–0, 4–0, etc). Ties break the sweep.
-    if (ties === 0 && losses === 0 && wins >= 3) {
+    if (wins >= 3 && losses === 0) {
       badge = "OWNED";
-    } else if (ties === 0 && wins === 0 && losses >= 3) {
+    } else if (wins === 0 && losses >= 3) {
       badge = "NEMESIS";
+    } else if (wins === 3 && losses === 1) {
+      badge = "EDGE";
+    } else if (wins === 2 && losses === 0) {
+      badge = "EDGE";
+    } else if (wins === 2 && losses === 1) {
+      badge = "SMALL SAMPLE";
+    } else if (wins === 2 && losses === 2) {
+      badge = "SMALL SAMPLE";
+    } else if (wins === 1 && losses === 1) {
+      badge = "SMALL SAMPLE";
+    } else if (wins === 1 && losses === 2) {
+      badge = "EDGE";
     } else {
-      // 3) Rivalry (only when sample is decent)
-      if (games >= 5 && Math.abs(score) <= 0.20) {
-        badge = "RIVAL";
-      }
-      // 4) Strong signals
-      else if (games >= 10) {
-        if (score >= 0.35) badge = "OWNED";
-        else if (score <= -0.35) badge = "NEMESIS";
-        else badge = "EDGE";
-      } else if (games >= 6) {
-        if (score >= 0.40) badge = "OWNED";
-        else if (score <= -0.40) badge = "NEMESIS";
-        else badge = "EDGE";
-      } else {
-        badge = "EDGE";
-      }
+      badge = "EDGE";
+    }
+
+    if (badge === "SMALL SAMPLE" && score >= 1.0) {
+      badge = "EDGE";
+    } else if (badge === "EDGE" && score >= 1.0) {
+      badge = "OWNED";
+    } else if (badge === "EDGE" && score <= -1.0) {
+      badge = "SMALL SAMPLE";
     }
   }
 

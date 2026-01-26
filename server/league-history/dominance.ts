@@ -35,7 +35,6 @@ export function badgeForCell(cell: Omit<Cell, "badge">): Badge {
   const games = cell.games ?? 0;
   const wins = cell.wins ?? 0;
   const losses = cell.losses ?? 0;
-
   // small sample
   if (games < 4) return "SMALL SAMPLE";
 
@@ -43,23 +42,38 @@ export function badgeForCell(cell: Omit<Cell, "badge">): Badge {
   const score =
     typeof cell.score === "number" ? cell.score : games ? (wins - losses) / games : 0;
 
-  // ✅ Clean sweep rule: 3–0 / 4–0 etc.
-  if (losses === 0 && wins >= 3) return "OWNED";
-  if (wins === 0 && losses >= 3) return "NEMESIS";
-
   // ✅ Rival: games >= 5 and close score
   if (games >= 5 && Math.abs(score) <= 0.20) return "RIVAL";
 
-  // ✅ Dominance thresholds scale with sample size
-  if (games >= 10) {
-    if (score >= 0.35) return "OWNED";
-    if (score <= -0.35) return "NEMESIS";
-  } else if (games >= 6) {
-    if (score >= 0.40) return "OWNED";
-    if (score <= -0.40) return "NEMESIS";
+  let badge: Badge = "EDGE";
+
+  if (wins >= 3 && losses === 0) {
+    badge = "OWNED";
+  } else if (wins === 0 && losses >= 3) {
+    badge = "NEMESIS";
+  } else if (wins === 3 && losses === 1) {
+    badge = "EDGE";
+  } else if (wins === 2 && losses === 0) {
+    badge = "EDGE";
+  } else if (wins === 2 && losses === 1) {
+    badge = "SMALL SAMPLE";
+  } else if (wins === 2 && losses === 2) {
+    badge = "SMALL SAMPLE";
+  } else if (wins === 1 && losses === 1) {
+    badge = "SMALL SAMPLE";
+  } else if (wins === 1 && losses === 2) {
+    badge = "EDGE";
   }
 
-  return "EDGE";
+  if (badge === "SMALL SAMPLE" && score >= 1.0) {
+    badge = "EDGE";
+  } else if (badge === "EDGE" && score >= 1.0) {
+    badge = "OWNED";
+  } else if (badge === "EDGE" && score <= -1.0) {
+    badge = "SMALL SAMPLE";
+  }
+
+  return badge;
 }
 
 export function emptyCell(a: number, b: number): Cell {
