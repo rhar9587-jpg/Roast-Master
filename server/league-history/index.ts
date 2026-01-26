@@ -422,6 +422,9 @@ export async function handleLeagueHistoryDominance(params: {
     // Get playoff_teams from league settings
     const playoffTeams = league?.settings?.playoff_teams;
     const playoffQualifiedInferred = playoffTeams === undefined;
+    if (playoffQualifiedInferred) {
+      console.warn(`[LeagueHistory] playoff_teams missing for season ${season}; using inferred playoff qualification`);
+    }
 
     // Compute totalPF per manager from matchups for this season
     const totalPFByManager = new Map<string, number>();

@@ -48,10 +48,20 @@ function BlurredCardWrapper({
 export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
   if (heroReceipts.length === 0) return null;
 
+  const badgeTextById: Record<string, string> = {
+    "biggest-blowout": "BLOWN OUT",
+    "stole-one": "LUCKBOX",
+    "wooden-spoon": "WOODEN",
+    "all-gas": "SOLD OUT",
+    "missed-it": "ROBBED",
+    "biggest-fall-off": "COLLAPSE",
+  };
+
   const cards = heroReceipts.map((receipt) => (
     <BaseballCard
       key={receipt.id}
       badge={receipt.badge}
+      badgeText={badgeTextById[receipt.id]}
       title={receipt.title}
       name={receipt.name}
       avatarUrl={receipt.avatarUrl ?? null}
@@ -66,7 +76,12 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
   if (isPremium) {
     return (
       <div>
-        <h2 className="text-2xl font-bold mb-4">Hero Receipts</h2>
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold">League Receipts</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            The moments your league will never forget.
+          </p>
+        </div>
         <RoastDeckCarousel>{cards}</RoastDeckCarousel>
       </div>
     );
@@ -74,7 +89,12 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-4">Hero Receipts</h2>
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold">League Receipts</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          The moments your league will never forget.
+        </p>
+      </div>
       <RoastDeckCarousel>
         {cards.map((card, idx) => (
           <BlurredCardWrapper key={heroReceipts[idx].id} onUnlock={onUnlock}>

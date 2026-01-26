@@ -1042,6 +1042,8 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         grid: payload.grid,
         cells: payload.cells,
         totalsByManager: payload.totalsByManager,
+        seasonStats: payload.seasonStats,
+        weeklyMatchups: payload.weeklyMatchups,
       });
     } catch (err: any) {
       return res.status(400).json({ error: err?.message || "Failed to build dominance grid" });

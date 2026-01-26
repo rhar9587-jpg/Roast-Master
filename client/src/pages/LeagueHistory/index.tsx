@@ -107,8 +107,17 @@ export default function LeagueHistoryPage() {
           }
           throw new Error(errorMsg);
         }
+        const json = await res.json();
+        if (
+          import.meta.env?.DEV &&
+          typeof window !== "undefined" &&
+          window.localStorage.getItem("debugLeagueHistory") === "1"
+        ) {
+          console.log("[LeagueHistory] seasonStats:", json?.seasonStats?.length ?? 0);
+          console.log("[LeagueHistory] weeklyMatchups:", json?.weeklyMatchups?.length ?? 0);
+        }
         setLastAnalyzedAt(new Date());
-        return res.json();
+        return json;
       } catch (e) {
         // fetch() threw (e.g. "Failed to fetch") — server down, network unreachable, CORS
         const msg = e instanceof Error ? e.message : String(e);
@@ -1060,6 +1069,18 @@ export default function LeagueHistoryPage() {
             </p>
           )}
         </section>
+      )}
+
+      {hasData && hasEnoughData && heroReceipts.length > 0 && (
+        <p className="text-xs text-muted-foreground text-center">
+          You’ve seen who owns the league. Now here’s how it broke.
+        </p>
+      )}
+
+      {import.meta.env.DEV && hasData && (
+        <p className="text-xs text-muted-foreground mb-2">
+          seasonStats: {data?.seasonStats?.length ?? 0}, weeklyMatchups: {data?.weeklyMatchups?.length ?? 0}, heroReceipts: {heroReceipts.length}
+        </p>
       )}
 
       {hasData && hasEnoughData && heroReceipts.length > 0 && (

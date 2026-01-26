@@ -18,6 +18,7 @@ type LegacyProps = {
 
 type V2Props = {
   badge: Badge;
+  badgeText?: string;
   title: string;
   name: string;
   avatarUrl?: string | null;
@@ -126,6 +127,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
   // ✅ V2 mode: collectible trading-card layout (FLIPPABLE)
   const {
     badge,
+    badgeText,
     title,
     name,
     avatarUrl,
@@ -254,7 +256,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
             ].join(" ")}
           >
             <span aria-hidden>{badgeIcon}</span>
-            <span>{badge}</span>
+            <span>{badgeText ?? badge}</span>
           </div>
 
           {rarity ? (
