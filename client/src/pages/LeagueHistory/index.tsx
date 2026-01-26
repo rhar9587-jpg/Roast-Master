@@ -77,8 +77,10 @@ export default function LeagueHistoryPage() {
   const gridExportRef = useRef<HTMLDivElement | null>(null);
   const storylinesExportRef = useRef<HTMLDivElement | null>(null);
   const yourRoastExportRef = useRef<HTMLDivElement | null>(null);
+  const viewAsPickerRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedFromUrl = useRef(false);
   const shouldAutoTrigger = useRef(false);
+  const hasScrolledToPicker = useRef(false);
 
   const { data, isFetching, error, refetch } = useQuery({
     queryKey: ["league-history-dominance", leagueId, startWeek, endWeek],
@@ -247,8 +249,24 @@ export default function LeagueHistoryPage() {
     // Always collapse form after successful data fetch to focus on content
     if (justFetched) {
       setIsSelectorCollapsed(true);
+      
+      // Auto-scroll to "View as" picker after a short delay to let UI render
+      // Check data?.grid?.length inside effect (managers is defined later via useMemo)
+      if (!hasScrolledToPicker.current && viewAsPickerRef.current) {
+        // Use data?.grid?.length as proxy for managers.length since managers depends on it
+        const hasManagers = data?.grid?.length > 0;
+        if (hasManagers) {
+          setTimeout(() => {
+            viewAsPickerRef.current?.scrollIntoView({ 
+              behavior: "smooth", 
+              block: "center" 
+            });
+            hasScrolledToPicker.current = true;
+          }, 500);
+        }
+      }
     }
-  }, [isFetching, hasData]);
+  }, [isFetching, hasData, data?.grid?.length]);
 
   // Save to recent leagues after successful fetch
   useEffect(() => {
@@ -1066,7 +1084,7 @@ export default function LeagueHistoryPage() {
 
       {/* View as picker - moved here for better visibility */}
       {hasData && hasEnoughData && managers.length > 0 && (
-        <section className="flex items-center justify-center gap-3 py-2">
+        <section ref={viewAsPickerRef} className="flex items-center justify-center gap-3 py-2">
           <span className="text-sm font-medium text-foreground">View as:</span>
           <Select
             value={viewerKey || "__none__"}

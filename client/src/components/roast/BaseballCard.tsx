@@ -295,8 +295,11 @@ export function BaseballCard(props: LegacyProps | V2Props) {
             text: caption,
             title: title,
           });
-          // Show tag nemesis modal after share
-          setShowTagModal(true);
+          // Native share complete - no modal needed, user already shared
+          toast({
+            title: "Card shared!",
+            description: "Tag your nemesis in the group chat.",
+          });
           if (onShare) onShare();
           return;
         }
@@ -392,17 +395,24 @@ export function BaseballCard(props: LegacyProps | V2Props) {
             <div className="mt-0.5 text-[10px] uppercase tracking-wider opacity-70">{setCode}</div>
           </div>
           {enableShare && (
-            <Button
-              data-no-flip="true"
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 shrink-0"
-              onClick={handleShare}
-              disabled={isSharing}
-              title="Share this card"
-            >
-              <Share2 className="h-3.5 w-3.5" />
-            </Button>
+            <div className="group relative">
+              <Button
+                data-no-flip="true"
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 shrink-0 transition-all duration-300 hover:scale-110 hover:bg-primary/10"
+                onClick={handleShare}
+                disabled={isSharing}
+                title="Share this card"
+              >
+                <Share2 className="h-3.5 w-3.5 transition-transform group-hover:scale-110" />
+              </Button>
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                <div className="bg-foreground text-background text-[10px] px-2 py-1 rounded shadow-lg">
+                  Share
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

@@ -55,6 +55,9 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
     "all-gas": "SOLD OUT",
     "missed-it": "ROBBED",
     "biggest-fall-off": "COLLAPSE",
+    "playoff-choker": "CHOKED",
+    "monday-night-miracle": "MIRACLE",
+    "paper-champion": "PAPER",
   };
 
   const cards = heroReceipts.map((receipt) => (
@@ -97,11 +100,17 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
         </p>
       </div>
       <RoastDeckCarousel>
-        {cards.map((card, idx) => (
-          <BlurredCardWrapper key={heroReceipts[idx].id} onUnlock={onUnlock}>
-            {card}
-          </BlurredCardWrapper>
-        ))}
+        {cards.map((card, idx) => {
+          // Show first 2 cards free, blur the rest
+          if (idx < 2) {
+            return <React.Fragment key={heroReceipts[idx].id}>{card}</React.Fragment>;
+          }
+          return (
+            <BlurredCardWrapper key={heroReceipts[idx].id} onUnlock={onUnlock}>
+              {card}
+            </BlurredCardWrapper>
+          );
+        })}
       </RoastDeckCarousel>
       <p className="text-xs text-muted-foreground text-center mt-2">
         Unlock to reveal the full receipts and share the truth.

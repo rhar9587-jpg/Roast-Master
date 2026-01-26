@@ -49,6 +49,18 @@ export function computeHeroReceipts(
   if (allGas) receipts.push(allGas);
   else logHeroReceiptSkip("All Gas, No Playoffs", "no non-playoff high scorer found");
 
+  const playoffChoker = computePlayoffChoker(seasonStats, weeklyMatchups, managers, avatarByKey);
+  if (playoffChoker) receipts.push(playoffChoker);
+  else logHeroReceiptSkip("Playoff Choker", "no qualifying playoff choker found");
+
+  const mondayNightMiracle = computeMondayNightMiracle(weeklyMatchups, managers, avatarByKey);
+  if (mondayNightMiracle) receipts.push(mondayNightMiracle);
+  else logHeroReceiptSkip("Monday Night Miracle", "no qualifying comeback found");
+
+  const paperChampion = computePaperChampion(seasonStats, managers, avatarByKey);
+  if (paperChampion) receipts.push(paperChampion);
+  else logHeroReceiptSkip("Paper Champion", "no qualifying paper champion found");
+
   return receipts;
 }
 
@@ -376,4 +388,199 @@ function getRankLabel(rank: number): string {
   if (rank === 2) return "2nd";
   if (rank === 3) return "3rd";
   return `${rank}${getOrdinalSuffix(rank)}`;
+}
+
+function computePlayoffChoker(
+  seasonStats: SeasonStat[],
+  weeklyMatchups: WeeklyMatchupDetail[],
+  managers: ManagerRow[],
+  avatarByKey: Record<string, string | null>,
+): HeroReceiptCard | null {
+  if (seasonStats.length === 0 || weeklyMatchups.length === 0) return null;
+
+  // Find managers who made playoffs (playoffQualified) but had most losses in playoff weeks
+  // Playoff weeks are typically weeks 14-17, but we'll use weeks after regular season
+  // For simplicity, we'll look for managers who made playoffs but had poor playoff performance
+  // We'll identify playoff weeks as weeks where only playoff teams play (heuristic: weeks 14+)
+  
+  const playoffWeekStart = 14;
+  const playoffLossesByManager = new Map<string, { losses: number; season: string; rank: number }>();
+  
+  // Count playoff losses (weeks 14+) for playoff-qualified teams
+  for (const matchup of weeklyMatchups) {
+    if (matchup.week >= playoffWeekStart && !matchup.won) {
+      const stat = seasonStats.find(s => s.managerKey === matchup.managerKey && s.season === matchup.season);
+      if (stat && stat.playoffQualified) {
+        const current = playoffLossesByManager.get(matchup.managerKey) || { losses: 0, season: matchup.season, rank: stat.rank };
+        current.losses++;
+        playoffLossesByManager.set(matchup.managerKey, current);
+      }
+    }
+  }
+
+  if (playoffLossesByManager.size === 0) return null;
+
+  // Find manager with most playoff losses who had a bye (top 2-4 seeds typically get byes)
+  let maxLosses = 0;
+  let worst: { managerKey: string; losses: number; season: string; rank: number } | null = null;
+
+  for (const [managerKey, data] of playoffLossesByManager) {
+    // Only consider top 4 seeds (likely had bye) who lost multiple playoff games
+    if (data.rank <= 4 && data.losses >= 2 && data.losses > maxLosses) {
+      maxLosses = data.losses;
+      worst = { managerKey, ...data };
+    }
+  }
+
+  if (!worst || maxLosses < 2) return null;
+
+  const manager = managers.find((m) => m.key === worst.managerKey);
+  if (!manager) return null;
+
+  return {
+    id: "playoff-choker",
+    badge: "NEMESIS",
+    title: "PLAYOFF CHOKER 💔",
+    name: manager.name,
+    avatarUrl: avatarByKey[worst.managerKey] ?? null,
+    primaryStat: {
+      value: String(maxLosses),
+      label: "PLAYOFF LOSSES",
+    },
+    punchline: `Had a bye week, then lost ${maxLosses} playoff games. The choke is real.`,
+    lines: [
+      { label: "Regular Season", value: `${getRankLabel(worst.rank)} seed` },
+      { label: "Season", value: worst.season },
+    ],
+    season: worst.season,
+  };
+}
+
+function computeMondayNightMiracle(
+  weeklyMatchups: WeeklyMatchupDetail[],
+  managers: ManagerRow[],
+  avatarByKey: Record<string, string | null>,
+): HeroReceiptCard | null {
+  if (weeklyMatchups.length === 0) return null;
+
+  // Find biggest comeback - win with largest positive margin (interpreted as "miracle" comeback)
+  // For simplicity, we'll use "biggest win margin" as proxy for comeback
+  // In reality, we'd need play-by-play data to know if they were behind
+  
+  let maxMargin = 0;
+  let best: WeeklyMatchupDetail | null = null;
+
+  for (const matchup of weeklyMatchups) {
+    if (matchup.won && matchup.margin > maxMargin) {
+      maxMargin = matchup.margin;
+      best = matchup;
+    }
+  }
+
+  if (!best || !best.won || maxMargin < 20) return null; // Require at least 20pt margin
+
+  const manager = managers.find((m) => m.key === best.managerKey);
+  const opponent = managers.find((m) => m.key === best.opponentKey);
+  if (!manager || !opponent) return null;
+
+  return {
+    id: "monday-night-miracle",
+    badge: "EDGE",
+    title: "MONDAY NIGHT MIRACLE 🌟",
+    name: manager.name,
+    avatarUrl: avatarByKey[best.managerKey] ?? null,
+    primaryStat: {
+      value: maxMargin.toFixed(1),
+      label: "PT WIN MARGIN",
+    },
+    punchline: `Won by ${maxMargin.toFixed(1)} points against ${opponent.name}. Absolute miracle.`,
+    lines: [
+      { label: "Week", value: String(best.week) },
+      { label: "Score", value: `${best.points.toFixed(1)} - ${best.opponentPoints.toFixed(1)}` },
+      { label: "Opponent", value: opponent.name },
+    ],
+    season: best.season,
+  };
+}
+
+function computePaperChampion(
+  seasonStats: SeasonStat[],
+  managers: ManagerRow[],
+  avatarByKey: Record<string, string | null>,
+): HeroReceiptCard | null {
+  if (seasonStats.length === 0) return null;
+
+  // Find manager with rank 1 (best regular season) but check if they actually won
+  // If there are multiple rank 1s or if rank 1 doesn't guarantee championship,
+  // we'll look for rank 1 with highest totalPF who might have lost in playoffs
+  
+  // Group by season and find rank 1s
+  const rank1BySeason = new Map<string, SeasonStat[]>();
+  for (const stat of seasonStats) {
+    if (stat.rank === 1) {
+      const existing = rank1BySeason.get(stat.season) || [];
+      existing.push(stat);
+      rank1BySeason.set(stat.season, existing);
+    }
+  }
+
+  // Find season with multiple rank 1s (tie) or rank 1 with most totalPF who might have choked
+  let best: SeasonStat | null = null;
+  let bestSeason: string | null = null;
+
+  for (const [season, rank1s] of rank1BySeason) {
+    if (rank1s.length > 1) {
+      // Multiple rank 1s - pick the one with highest totalPF
+      const top = rank1s.reduce((a, b) => a.totalPF > b.totalPF ? a : b);
+      if (!best || top.totalPF > best.totalPF) {
+        best = top;
+        bestSeason = season;
+      }
+    } else if (rank1s.length === 1) {
+      // Single rank 1 - check if they had high totalPF (might have choked in playoffs)
+      const stat = rank1s[0];
+      // Look for rank 1 who didn't win (heuristic: if there's a rank 2 with similar PF, they might have lost)
+      const rank2 = seasonStats.find(s => s.season === season && s.rank === 2);
+      if (rank2 && rank2.totalPF >= stat.totalPF * 0.95) {
+        // Rank 2 was close, rank 1 might have choked
+        if (!best || stat.totalPF > best.totalPF) {
+          best = stat;
+          bestSeason = season;
+        }
+      }
+    }
+  }
+
+  // Fallback: rank 1 with highest totalPF across all seasons
+  if (!best) {
+    const allRank1s = seasonStats.filter(s => s.rank === 1);
+    if (allRank1s.length > 0) {
+      best = allRank1s.reduce((a, b) => a.totalPF > b.totalPF ? a : b);
+      bestSeason = best.season;
+    }
+  }
+
+  if (!best || !bestSeason) return null;
+
+  const manager = managers.find((m) => m.key === best.managerKey);
+  if (!manager) return null;
+
+  return {
+    id: "paper-champion",
+    badge: "NEMESIS",
+    title: "PAPER CHAMPION 📄",
+    name: manager.name,
+    avatarUrl: avatarByKey[best.managerKey] ?? null,
+    primaryStat: {
+      value: Math.round(best.totalPF).toLocaleString(),
+      label: "PTS, NO TITLE",
+    },
+    punchline: `Best regular season (${getRankLabel(best.rank)} seed) but couldn't seal the deal.`,
+    lines: [
+      { label: "Record", value: `${best.wins}-${best.losses}` },
+      { label: "Season", value: bestSeason },
+      { label: "Playoff Teams", value: String(best.playoffTeams) },
+    ],
+    season: bestSeason,
+  };
 }
