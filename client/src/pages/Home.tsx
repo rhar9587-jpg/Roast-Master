@@ -260,6 +260,19 @@ export default function Home() {
     window.location.href = `/league-history/dominance?league_id=1204010682635255808&start_week=1&end_week=17`;
   }
 
+  function handleViewLeagueHistory() {
+    if (leagueId) {
+      const params = new URLSearchParams({
+        league_id: leagueId,
+        start_week: String(1),
+        end_week: String(week || 17),
+      });
+      window.location.href = `/league-history/dominance?${params.toString()}`;
+    } else {
+      window.location.href = `/league-history/dominance`;
+    }
+  }
+
   function handleValueCardClick() {
     handleRoastMyLeague();
   }
@@ -315,13 +328,16 @@ export default function Home() {
               Turn your Sleeper league into shareable roasts. Find receipts. Tag your nemesis. Own the group chat.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" onClick={handleRoastMyLeague} className="font-semibold">
-                Roast My League
+              <Button size="lg" onClick={handleViewLeagueHistory} className="font-semibold">
+                See Who Owns Your League
               </Button>
-              <Button variant="outline" size="lg" onClick={handleExampleLeague} className="font-semibold">
-                See an Example League
+              <Button variant="outline" size="lg" onClick={handleRoastMyLeague} className="font-semibold">
+                Get My Weekly Roast
               </Button>
             </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              Free to explore • Premium to share
+            </p>
           </section>
 
           {/* Visual Product Preview */}
@@ -666,7 +682,21 @@ export default function Home() {
 
       {loading && <div className="text-gray-500">Loading…</div>}
 
-      {activeView === "roast" && roastData && <RoastCard data={roastData} />}
+      {activeView === "roast" && roastData && (
+        <>
+          <RoastCard data={roastData} />
+          {leagueId && (
+            <div className="w-full max-w-3xl mx-auto mt-6 text-center">
+              <Link 
+                href={`/league-history/dominance?league_id=${encodeURIComponent(leagueId)}${week ? `&start_week=1&end_week=${week}` : ''}`}
+                className="text-sm text-primary hover:underline font-medium"
+              >
+                Want the full picture? See the dominance grid →
+              </Link>
+            </div>
+          )}
+        </>
+      )}
       {activeView === "wrapped" && wrappedData && <SeasonWrappedCard data={wrappedData} />}
       {activeView === "autopsy" && autopsyData && <LeagueAutopsyCard data={autopsyData} />}
       {activeView === "fpl" && fplData && <FplRoastCard data={fplData} />}

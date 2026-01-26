@@ -68,6 +68,7 @@ export default function LeagueHistoryPage() {
   const [showPostAnalysisToast, setShowPostAnalysisToast] = useState(false);
   const [isPremiumState, setIsPremiumState] = useState(isPremium());
   const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [unlockShownThisSession, setUnlockShownThisSession] = useState(false);
   const { toast } = useToast();
 
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
@@ -823,7 +824,15 @@ export default function LeagueHistoryPage() {
   }
 
   function handleUpgrade() {
-    setShowUnlockModal(true);
+    if (!unlockShownThisSession) {
+      setShowUnlockModal(true);
+      setUnlockShownThisSession(true);
+    } else {
+      toast({
+        title: "Unlock to share the receipts",
+        description: "Headlines, League Storylines, and all exports.",
+      });
+    }
   }
 
   return (
@@ -1033,17 +1042,6 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {/* Conversion Banner - moved up to appear after Headlines */}
-      {hasData && hasEnoughData && (
-        <section>
-          <ConversionBanner 
-            onUpgrade={handleUpgrade}
-            ownedCount={ownedCount}
-            rivalryExists={rivalryExists}
-          />
-        </section>
-      )}
-
       {hasData && !hasEnoughData && (
         <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-center">
           <p className="text-sm text-muted-foreground mb-1">
@@ -1153,6 +1151,17 @@ export default function LeagueHistoryPage() {
             />
           </section>
         )}
+
+      {/* Conversion Banner - appears after Storylines */}
+      {hasData && hasEnoughData && (
+        <section>
+          <ConversionBanner 
+            onUpgrade={handleUpgrade}
+            ownedCount={ownedCount}
+            rivalryExists={rivalryExists}
+          />
+        </section>
+      )}
 
       {/* Post-Analysis Toast */}
       {showPostAnalysisToast && hasData && (

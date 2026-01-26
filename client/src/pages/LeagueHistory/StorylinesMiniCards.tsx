@@ -108,11 +108,9 @@ const YOUR_ROAST_EMPTY_MESSAGE =
 function BlurredMiniCardWrapper({
   children,
   onUnlock,
-  hoverText,
 }: {
   children: React.ReactNode;
   onUnlock?: () => void;
-  hoverText: string;
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -130,9 +128,14 @@ function BlurredMiniCardWrapper({
         <div className="text-center">
           <Lock className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
           {isHovered && (
-            <p className="text-xs font-medium text-muted-foreground">
-              {hoverText}
-            </p>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">
+                This is just the beginning…
+              </p>
+              <p className="text-xs font-medium text-muted-foreground">
+                Unlock to see who really owns this league
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -181,7 +184,6 @@ export function StorylinesMiniCards({
                 <BlurredMiniCardWrapper
                   key={c.id}
                   onUnlock={onUnlock}
-                  hoverText={`🔒 ${remainingCount} more league stories`}
                 >
                   {card}
                 </BlurredMiniCardWrapper>
@@ -190,7 +192,7 @@ export function StorylinesMiniCards({
           </div>
           {!isPremium && (
             <p className="text-xs text-muted-foreground text-center mt-2 mb-3">
-              There are more receipts like this. Unlock to see them all.
+              This is just the beginning… Unlock to see who really owns this league.
             </p>
           )}
         </section>

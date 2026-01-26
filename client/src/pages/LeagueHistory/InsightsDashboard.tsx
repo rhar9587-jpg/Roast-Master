@@ -64,9 +64,14 @@ function BlurredCardWrapper({
         <div className="text-center">
           <Lock className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
           {isHovered && (
-            <p className="text-xs font-medium text-muted-foreground">
-              🔒 2 more headlines waiting
-            </p>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">
+                This is just the beginning…
+              </p>
+              <p className="text-xs font-medium text-muted-foreground">
+                Unlock to see who really owns this league
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -204,7 +209,7 @@ export function InsightsDashboard({
         </BlurredCardWrapper>
       </RoastDeckCarousel>
       <p className="text-xs text-muted-foreground text-center mt-2">
-        This is just one of your league's headlines. Unlock to reveal the rest.
+        This is just the beginning… Unlock to see who really owns this league.
       </p>
     </div>
   );

@@ -89,7 +89,7 @@ export function StickyUpgradeBar({ onUpgrade }: Props) {
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">
-              Unlock the receipts • ${PRICE_ONE_TIME} one-time
+              Unlock the full receipts • $29 one-time
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -98,7 +98,7 @@ export function StickyUpgradeBar({ onUpgrade }: Props) {
               size="sm"
               className="font-semibold whitespace-nowrap"
             >
-              Upgrade →
+              Unlock →
             </Button>
             <Button
               variant="ghost"

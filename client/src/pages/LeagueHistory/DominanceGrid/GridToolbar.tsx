@@ -118,6 +118,20 @@ export function GridToolbar({
             )}
           </Tooltip>
           <p className="text-xs text-muted-foreground mt-1 text-center whitespace-nowrap">Perfect for the league chat</p>
+          {!isPremium && (
+            <a
+              href="/previews/grid.png"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-muted-foreground hover:text-foreground underline mt-0.5"
+              onClick={(e) => {
+                e.preventDefault();
+                window.open("/previews/grid.png", "_blank");
+              }}
+            >
+              See example export
+            </a>
+          )}
         </div>
         <div className="flex flex-col items-center">
           <Tooltip>
@@ -140,6 +154,20 @@ export function GridToolbar({
             )}
           </Tooltip>
           <p className="text-xs text-muted-foreground mt-1 text-center whitespace-nowrap">Tag your nemesis 💀</p>
+          {!isPremium && (
+            <a
+              href="/previews/grid.png"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-muted-foreground hover:text-foreground underline mt-0.5"
+              onClick={(e) => {
+                e.preventDefault();
+                window.open("/previews/grid.png", "_blank");
+              }}
+            >
+              See example export
+            </a>
+          )}
         </div>
       </div>
     </div>

@@ -45,10 +45,10 @@ export function UnlockReceiptsModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">
-            Unlock the Receipts
+            Unlock the Full Receipts
           </DialogTitle>
           <DialogDescription className="pt-2">
-            {contextualCopy}
+            You've seen the truth. Now make it a moment your league won't forget.
           </DialogDescription>
         </DialogHeader>
 
@@ -68,19 +68,19 @@ export function UnlockReceiptsModal({
           <div className="space-y-2">
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Reveal the headlines</span>
+              <span>Drop this in the group chat</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Export the receipts</span>
+              <span>Call out your rivals</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Share the chaos</span>
+              <span>Start the drama</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>League Storylines</span>
+              <span>Keep the receipts forever</span>
             </div>
           </div>
         </div>
@@ -94,7 +94,7 @@ export function UnlockReceiptsModal({
             30-day money-back guarantee
           </p>
           <p className="text-xs text-muted-foreground">
-            Join 500+ leagues already roasting
+            Built for group chats and league banter.
           </p>
         </div>
 
@@ -110,9 +110,14 @@ export function UnlockReceiptsModal({
             onClick={handleUnlock}
             className="w-full sm:w-auto font-semibold"
           >
-            Try Premium
+            Unlock Full Receipts ($29)
           </Button>
         </DialogFooter>
+
+        {/* CTA Subtext */}
+        <p className="text-xs text-muted-foreground text-center mt-2">
+          One-time. No subscription. 30-day money-back guarantee.
+        </p>
       </DialogContent>
     </Dialog>
   );
