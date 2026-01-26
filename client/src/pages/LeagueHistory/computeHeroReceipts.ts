@@ -10,6 +10,16 @@ function logHeroReceiptSkip(label: string, reason: string) {
   console.log(`[HeroReceipts] ${label} skipped: ${reason}`);
 }
 
+/**
+ * Generate canonical matchup key for deduplication.
+ * Format: `${season}-${week}-${minKey}-${maxKey}`
+ */
+function getMatchupKey(matchup: WeeklyMatchupDetail): string {
+  const minKey = matchup.managerKey < matchup.opponentKey ? matchup.managerKey : matchup.opponentKey;
+  const maxKey = matchup.managerKey < matchup.opponentKey ? matchup.opponentKey : matchup.managerKey;
+  return `${matchup.season}-${matchup.week}-${minKey}-${maxKey}`;
+}
+
 export function computeHeroReceipts(
   seasonStats: SeasonStat[],
   weeklyMatchups: WeeklyMatchupDetail[],
@@ -17,6 +27,7 @@ export function computeHeroReceipts(
   avatarByKey: Record<string, string | null>,
 ): HeroReceiptCard[] {
   const receipts: HeroReceiptCard[] = [];
+  const selectedMatchupKeys = new Set<string>();
 
   if (shouldDebugHeroReceipts && seasonStats.length === 0) {
     console.log("[HeroReceipts] seasonStats is empty");
@@ -33,7 +44,7 @@ export function computeHeroReceipts(
   if (missedIt) receipts.push(missedIt);
   else logHeroReceiptSkip("Missed It By That Much", "no non-playoff high scorer");
 
-  const blowout = computeBiggestBlowout(weeklyMatchups, managers, avatarByKey);
+  const blowout = computeBiggestBlowout(weeklyMatchups, managers, avatarByKey, selectedMatchupKeys);
   if (blowout) receipts.push(blowout);
   else logHeroReceiptSkip("Biggest Blowout", "no losing blowout found");
 
@@ -53,9 +64,9 @@ export function computeHeroReceipts(
   if (playoffChoker) receipts.push(playoffChoker);
   else logHeroReceiptSkip("Playoff Choker", "no qualifying playoff choker found");
 
-  const mondayNightMiracle = computeMondayNightMiracle(weeklyMatchups, managers, avatarByKey);
-  if (mondayNightMiracle) receipts.push(mondayNightMiracle);
-  else logHeroReceiptSkip("Monday Night Miracle", "no qualifying comeback found");
+  const gameOfTheYear = computeGameOfTheYear(weeklyMatchups, managers, avatarByKey, selectedMatchupKeys);
+  if (gameOfTheYear) receipts.push(gameOfTheYear);
+  else logHeroReceiptSkip("Game of the Year", "no qualifying high-scoring game found");
 
   const paperChampion = computePaperChampion(seasonStats, managers, avatarByKey);
   if (paperChampion) receipts.push(paperChampion);
@@ -175,6 +186,7 @@ function computeBiggestBlowout(
   weeklyMatchups: WeeklyMatchupDetail[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  selectedMatchupKeys: Set<string>,
 ): HeroReceiptCard | null {
   if (weeklyMatchups.length === 0) return null;
 
@@ -194,6 +206,10 @@ function computeBiggestBlowout(
   const manager = managers.find((m) => m.key === worst.managerKey);
   const opponent = managers.find((m) => m.key === worst.opponentKey);
   if (!manager || !opponent) return null;
+
+  // Track this matchup to prevent duplication
+  const matchupKey = getMatchupKey(worst);
+  selectedMatchupKeys.add(matchupKey);
 
   return {
     id: "biggest-blowout",
@@ -384,6 +400,7 @@ function getOrdinalSuffix(n: number): string {
 }
 
 function getRankLabel(rank: number): string {
+  if (rank == null || !Number.isFinite(rank) || rank < 1) return "—";
   if (rank === 1) return "Champion";
   if (rank === 2) return "2nd";
   if (rank === 3) return "3rd";
@@ -398,22 +415,57 @@ function computePlayoffChoker(
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0 || weeklyMatchups.length === 0) return null;
 
-  // Find managers who made playoffs (playoffQualified) but had most losses in playoff weeks
-  // Playoff weeks are typically weeks 14-17, but we'll use weeks after regular season
-  // For simplicity, we'll look for managers who made playoffs but had poor playoff performance
-  // We'll identify playoff weeks as weeks where only playoff teams play (heuristic: weeks 14+)
+  // Build map of playoff week ranges per season
+  const playoffStartBySeason = new Map<string, number>();
+  const playoffEndBySeason = new Map<string, number>();
+  for (const stat of seasonStats) {
+    if (stat.playoffStartWeek !== undefined) {
+      playoffStartBySeason.set(stat.season, stat.playoffStartWeek);
+    }
+    if (stat.playoffWeekEnd !== undefined) {
+      playoffEndBySeason.set(stat.season, stat.playoffWeekEnd);
+    }
+  }
+
+  // Track unique playoff games per manager to avoid double-counting
+  const playoffGamesSeen = new Set<string>();
+  const playoffLossesByManager = new Map<string, { 
+    losses: number; 
+    season: string; 
+    rank: number;
+    countedWeeks: Array<{ week: number; won: boolean; points: number }>;
+  }>();
   
-  const playoffWeekStart = 14;
-  const playoffLossesByManager = new Map<string, { losses: number; season: string; rank: number }>();
-  
-  // Count playoff losses (weeks 14+) for playoff-qualified teams
+  // Count playoff losses for playoff-qualified teams
   for (const matchup of weeklyMatchups) {
-    if (matchup.week >= playoffWeekStart && !matchup.won) {
+    const playoffStart = playoffStartBySeason.get(matchup.season) ?? 15;
+    const playoffEnd = playoffEndBySeason.get(matchup.season);
+    
+    // Check if this is a playoff week
+    const isPlayoffWeek = matchup.week >= playoffStart && (playoffEnd === undefined || matchup.week <= playoffEnd);
+    
+    if (isPlayoffWeek && !matchup.won && Number.isFinite(matchup.opponentPoints)) {
       const stat = seasonStats.find(s => s.managerKey === matchup.managerKey && s.season === matchup.season);
       if (stat && stat.playoffQualified) {
-        const current = playoffLossesByManager.get(matchup.managerKey) || { losses: 0, season: matchup.season, rank: stat.rank };
-        current.losses++;
-        playoffLossesByManager.set(matchup.managerKey, current);
+        // Create unique key to avoid double-counting (each matchup appears twice in weeklyMatchups)
+        const gameKey = `${matchup.season}-${matchup.week}-${matchup.managerKey}`;
+        if (!playoffGamesSeen.has(gameKey)) {
+          playoffGamesSeen.add(gameKey);
+          
+          const current = playoffLossesByManager.get(matchup.managerKey) || { 
+            losses: 0, 
+            season: matchup.season, 
+            rank: stat.rank,
+            countedWeeks: []
+          };
+          current.losses++;
+          current.countedWeeks.push({
+            week: matchup.week,
+            won: matchup.won,
+            points: matchup.points
+          });
+          playoffLossesByManager.set(matchup.managerKey, current);
+        }
       }
     }
   }
@@ -422,11 +474,11 @@ function computePlayoffChoker(
 
   // Find manager with most playoff losses who had a bye (top 2-4 seeds typically get byes)
   let maxLosses = 0;
-  let worst: { managerKey: string; losses: number; season: string; rank: number } | null = null;
+  let worst: { managerKey: string; losses: number; season: string; rank: number; countedWeeks: Array<{ week: number; won: boolean; points: number }> } | null = null;
 
   for (const [managerKey, data] of playoffLossesByManager) {
     // Only consider top 4 seeds (likely had bye) who lost multiple playoff games
-    if (data.rank <= 4 && data.losses >= 2 && data.losses > maxLosses) {
+    if (data.rank <= 4 && data.rank >= 1 && data.losses >= 2 && data.losses > maxLosses) {
       maxLosses = data.losses;
       worst = { managerKey, ...data };
     }
@@ -436,6 +488,22 @@ function computePlayoffChoker(
 
   const manager = managers.find((m) => m.key === worst.managerKey);
   if (!manager) return null;
+
+  const rankDisplay = getRankLabel(worst.rank);
+
+  // Debug logging
+  if (shouldDebugHeroReceipts) {
+    const playoffStart = playoffStartBySeason.get(worst.season) ?? 15;
+    const playoffEnd = playoffEndBySeason.get(worst.season);
+    console.log(`[HeroReceipts] Playoff Choker:`, {
+      season: worst.season,
+      managerKey: worst.managerKey,
+      rankDisplay,
+      playoffStartWeek: playoffStart,
+      playoffWeekEnd: playoffEnd,
+      countedWeeks: worst.countedWeeks
+    });
+  }
 
   return {
     id: "playoff-choker",
@@ -449,51 +517,59 @@ function computePlayoffChoker(
     },
     punchline: `Had a bye week, then lost ${maxLosses} playoff games. The choke is real.`,
     lines: [
-      { label: "Regular Season", value: `${getRankLabel(worst.rank)} seed` },
+      { label: "Regular Season Seed", value: rankDisplay },
       { label: "Season", value: worst.season },
     ],
     season: worst.season,
   };
 }
 
-function computeMondayNightMiracle(
+function computeGameOfTheYear(
   weeklyMatchups: WeeklyMatchupDetail[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  selectedMatchupKeys: Set<string>,
 ): HeroReceiptCard | null {
   if (weeklyMatchups.length === 0) return null;
 
-  // Find biggest comeback - win with largest positive margin (interpreted as "miracle" comeback)
-  // For simplicity, we'll use "biggest win margin" as proxy for comeback
-  // In reality, we'd need play-by-play data to know if they were behind
-  
-  let maxMargin = 0;
+  // Find matchup with highest combined score (points + opponentPoints)
+  const MIN_COMBINED_SCORE = 260;
+  let maxCombinedScore = 0;
   let best: WeeklyMatchupDetail | null = null;
 
   for (const matchup of weeklyMatchups) {
-    if (matchup.won && matchup.margin > maxMargin) {
-      maxMargin = matchup.margin;
+    const matchupKey = getMatchupKey(matchup);
+    // Skip if this matchup was already selected by another card
+    if (selectedMatchupKeys.has(matchupKey)) continue;
+
+    const combinedScore = matchup.points + matchup.opponentPoints;
+    if (combinedScore >= MIN_COMBINED_SCORE && combinedScore > maxCombinedScore) {
+      maxCombinedScore = combinedScore;
       best = matchup;
     }
   }
 
-  if (!best || !best.won || maxMargin < 20) return null; // Require at least 20pt margin
+  if (!best || maxCombinedScore < MIN_COMBINED_SCORE) return null;
 
   const manager = managers.find((m) => m.key === best.managerKey);
   const opponent = managers.find((m) => m.key === best.opponentKey);
   if (!manager || !opponent) return null;
 
+  // Track this matchup to prevent duplication
+  const matchupKey = getMatchupKey(best);
+  selectedMatchupKeys.add(matchupKey);
+
   return {
-    id: "monday-night-miracle",
+    id: "game-of-the-year",
     badge: "EDGE",
-    title: "MONDAY NIGHT MIRACLE 🌟",
+    title: "GAME OF THE YEAR 🏆",
     name: manager.name,
     avatarUrl: avatarByKey[best.managerKey] ?? null,
     primaryStat: {
-      value: maxMargin.toFixed(1),
-      label: "PT WIN MARGIN",
+      value: Math.round(maxCombinedScore).toLocaleString(),
+      label: "COMBINED SCORE",
     },
-    punchline: `Won by ${maxMargin.toFixed(1)} points against ${opponent.name}. Absolute miracle.`,
+    punchline: `Combined ${Math.round(maxCombinedScore).toLocaleString()} points with ${opponent.name}. Absolute shootout.`,
     lines: [
       { label: "Week", value: String(best.week) },
       { label: "Score", value: `${best.points.toFixed(1)} - ${best.opponentPoints.toFixed(1)}` },

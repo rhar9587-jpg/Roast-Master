@@ -92,6 +92,8 @@ export type SeasonStat = {
   playoffQualified: boolean;
   playoffTeams: number;
   playoffQualifiedInferred?: boolean;
+  playoffStartWeek?: number;
+  playoffWeekEnd?: number;
 };
 
 export type WeeklyMatchupDetail = {

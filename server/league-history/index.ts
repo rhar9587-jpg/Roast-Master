@@ -414,6 +414,8 @@ export async function handleLeagueHistoryDominance(params: {
     playoffQualified: boolean;
     playoffTeams: number;
     playoffQualifiedInferred?: boolean;
+    playoffStartWeek?: number;
+    playoffWeekEnd?: number;
   }> = [];
   const weeklyMatchups: Array<{
     season: string;
@@ -434,6 +436,23 @@ export async function handleLeagueHistoryDominance(params: {
     const playoffQualifiedInferred = playoffTeams === undefined;
     if (playoffQualifiedInferred) {
       console.warn(`[LeagueHistory] playoff_teams missing for season ${season}; using inferred playoff qualification`);
+    }
+
+    // Compute playoff week range
+    const playoffWeekEnd = league?.settings?.playoff_week_end;
+    let playoffStartWeek: number | undefined;
+    // Prefer playoff_start_week or playoff_week_start if present
+    const settings = league?.settings as any;
+    if (settings?.playoff_start_week !== undefined) {
+      playoffStartWeek = settings.playoff_start_week;
+    } else if (settings?.playoff_week_start !== undefined) {
+      playoffStartWeek = settings.playoff_week_start;
+    } else if (playoffWeekEnd !== undefined) {
+      // If start missing but end present: assume 2-round playoffs (end - 1)
+      playoffStartWeek = Math.max(15, playoffWeekEnd - 1);
+    } else {
+      // If both missing: fallback to 15
+      playoffStartWeek = 15;
     }
 
     // Compute totalPF per manager from matchups for this season
@@ -477,6 +496,8 @@ export async function handleLeagueHistoryDominance(params: {
         playoffQualified,
         playoffTeams: playoffTeams ?? 0,
         playoffQualifiedInferred,
+        playoffStartWeek,
+        playoffWeekEnd,
       });
     }
 
