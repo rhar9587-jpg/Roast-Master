@@ -3,14 +3,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check } from "lucide-react";
 
 const PRICE_ONE_TIME = 29;
+const EXAMPLE_LEAGUE_ID = "1204010682635255808";
 
 type Props = {
   onUpgrade?: () => void;
   ownedCount?: number;
   rivalryExists?: boolean;
+  leagueName?: string;
+  leagueId?: string;
 };
 
-export function ConversionBanner({ onUpgrade, ownedCount, rivalryExists }: Props) {
+export function ConversionBanner({ onUpgrade, ownedCount, rivalryExists, leagueName, leagueId }: Props) {
   const handleUpgrade = () => {
     if (onUpgrade) {
       onUpgrade();
@@ -27,49 +30,30 @@ export function ConversionBanner({ onUpgrade, ownedCount, rivalryExists }: Props
     >
       <CardHeader className="text-center pb-4">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          Turn this into a league moment
+          Unlock FULL receipts for {leagueName?.trim() ? leagueName : "this league"} — ${PRICE_ONE_TIME} (one-time)
         </CardTitle>
-        <p className="text-sm text-muted-foreground mt-2 max-w-2xl mx-auto">
-          You already see the truth. Premium lets you drop the receipts and start the chaos.
-        </p>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Pricing */}
-        <div className="text-center">
-          <div className="flex items-baseline justify-center gap-2">
-            <span className="text-4xl font-bold">${PRICE_ONE_TIME}</span>
-            <span className="text-sm text-muted-foreground">one-time</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            $29 one-time • No subscription • Lifetime access
-          </p>
-        </div>
-
-        {/* Social-Focused Benefits */}
+        {/* Benefits */}
         <div className="max-w-2xl mx-auto">
           <ul className="space-y-3 text-sm">
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>Tag your nemesis in the group chat</span>
+              <span>Dominance grid + headlines</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>Start the rivalry debates</span>
+              <span>Hero receipts deck</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>Create the receipts everyone argues about</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>Share the drama</span>
+              <span>Shareable cards (PNG + captions)</span>
             </li>
           </ul>
         </div>
 
-        {/* Value Anchor */}
         <p className="text-sm text-muted-foreground mt-2 text-center">
-          Headlines, League Storylines, and all exports — <strong>$29 once</strong>.
+          Why pay? Because every group chat needs receipts.
         </p>
 
         {/* CTA */}
@@ -82,6 +66,23 @@ export function ConversionBanner({ onUpgrade, ownedCount, rivalryExists }: Props
             Unlock Full Receipts ($29)
           </Button>
         </div>
+
+        {leagueId === EXAMPLE_LEAGUE_ID && (
+          <div className="text-center text-xs text-muted-foreground">
+            <button onClick={handleUpgrade} className="text-primary hover:underline font-medium">
+              Unlock this league ($29)
+            </button>
+            {" "}or{" "}
+            <button
+              onClick={() => {
+                window.location.href = "/league-history/dominance";
+              }}
+              className="text-primary hover:underline font-medium"
+            >
+              load your league
+            </button>
+          </div>
+        )}
 
         {/* Trust & Social Proof */}
         <div className="text-center space-y-2 pt-2 border-t">

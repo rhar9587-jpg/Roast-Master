@@ -7,6 +7,7 @@ const PRICE_ONE_TIME = 29;
 
 type Props = {
   onUpgrade?: () => void;
+  leagueName?: string;
 };
 
 function isDismissed(): boolean {
@@ -24,7 +25,7 @@ function setDismissed(): void {
   localStorage.setItem(STORAGE_KEY, String(dismissedUntil));
 }
 
-export function StickyUpgradeBar({ onUpgrade }: Props) {
+export function StickyUpgradeBar({ onUpgrade, leagueName }: Props) {
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissedState, setIsDismissedState] = useState(false);
 
@@ -89,7 +90,7 @@ export function StickyUpgradeBar({ onUpgrade }: Props) {
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">
-              Unlock the full receipts • $29 one-time
+              Unlock FULL receipts for {leagueName?.trim() ? leagueName : "this league"} • $29 one-time
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">

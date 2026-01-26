@@ -17,6 +17,7 @@ type Props = {
   onUnlock?: () => void;
   ownedCount?: number;
   rivalryExists?: boolean;
+  leagueName?: string;
 };
 
 export function UnlockReceiptsModal({
@@ -25,6 +26,7 @@ export function UnlockReceiptsModal({
   onUnlock,
   ownedCount,
   rivalryExists,
+  leagueName,
 }: Props) {
   const handleUnlock = () => {
     if (onUnlock) {
@@ -45,44 +47,32 @@ export function UnlockReceiptsModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">
-            Unlock the Full Receipts
+            Unlock FULL receipts for {leagueName?.trim() ? leagueName : "this league"}
           </DialogTitle>
           <DialogDescription className="pt-2">
-            You've seen the truth. Now make it a moment your league won't forget.
+            {leagueName?.trim() ? leagueName : "This league"} — ${PRICE_ONE_TIME} (one-time)
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Pricing */}
-          <div className="text-center">
-            <div className="flex items-baseline justify-center gap-2">
-              <span className="text-4xl font-bold">${PRICE_ONE_TIME}</span>
-              <span className="text-sm text-muted-foreground">one-time</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              no subscription
-            </p>
-          </div>
-
           {/* Features */}
           <div className="space-y-2">
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Drop this in the group chat</span>
+              <span>Dominance grid + headlines</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Call out your rivals</span>
+              <span>Hero receipts deck</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Start the drama</span>
-            </div>
-            <div className="flex items-start gap-2 text-sm">
-              <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Keep the receipts forever</span>
+              <span>Shareable cards (PNG + captions)</span>
             </div>
           </div>
+          <p className="text-xs text-muted-foreground text-center">
+            Why pay? Because every group chat needs receipts.
+          </p>
         </div>
 
         {/* Trust Signals */}

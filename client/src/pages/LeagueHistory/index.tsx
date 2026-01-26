@@ -47,6 +47,8 @@ import type {
   ManagerRow,
 } from "./types";
 
+const EXAMPLE_LEAGUE_ID = "1204010682635255808";
+
 function isCountable(c: DominanceCellDTO) {
   return (c?.games ?? 0) >= 3;
 }
@@ -78,6 +80,7 @@ export default function LeagueHistoryPage() {
   const storylinesExportRef = useRef<HTMLDivElement | null>(null);
   const yourRoastExportRef = useRef<HTMLDivElement | null>(null);
   const viewAsPickerRef = useRef<HTMLDivElement | null>(null);
+  const selectorRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedFromUrl = useRef(false);
   const shouldAutoTrigger = useRef(false);
   const hasScrolledToPicker = useRef(false);
@@ -904,6 +907,13 @@ export default function LeagueHistoryPage() {
     }
   }
 
+  function handleLoadYourLeagueFromExample() {
+    setIsSelectorCollapsed(false);
+    setTimeout(() => {
+      selectorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  }
+
   return (
     <div className="mx-auto max-w-6xl p-4 md:p-6 space-y-4">
       {/* Hero Section */}
@@ -1044,21 +1054,39 @@ export default function LeagueHistoryPage() {
         </div>
       )}
 
-      <LeagueSelector
-        leagueId={leagueId}
-        startWeek={startWeek}
-        endWeek={endWeek}
-        onLeagueIdChange={setLeagueId}
-        onStartWeekChange={setStartWeek}
-        onEndWeekChange={setEndWeek}
-        onAnalyze={() => refetch()}
-        isFetching={isFetching}
-        error={error as Error | null}
-        isCollapsed={isSelectorCollapsed}
-        onCollapsedChange={setIsSelectorCollapsed}
-        leagueName={data?.league?.name}
-        season={data?.league?.season}
-      />
+      {leagueId === EXAMPLE_LEAGUE_ID && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <span>
+            This is an example league. Load your league to see your receipts →
+          </span>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={handleUpgrade}>
+              Unlock this league ($29)
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleLoadYourLeagueFromExample}>
+              Load your league
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div ref={selectorRef}>
+        <LeagueSelector
+          leagueId={leagueId}
+          startWeek={startWeek}
+          endWeek={endWeek}
+          onLeagueIdChange={setLeagueId}
+          onStartWeekChange={setStartWeek}
+          onEndWeekChange={setEndWeek}
+          onAnalyze={() => refetch()}
+          isFetching={isFetching}
+          error={error as Error | null}
+          isCollapsed={isSelectorCollapsed}
+          onCollapsedChange={setIsSelectorCollapsed}
+          leagueName={data?.league?.name}
+          season={data?.league?.season}
+        />
+      </div>
 
       {hasData && hasEnoughData && (
         <section>
@@ -1257,6 +1285,8 @@ export default function LeagueHistoryPage() {
             onUpgrade={handleUpgrade}
             ownedCount={ownedCount}
             rivalryExists={rivalryExists}
+            leagueName={data?.league?.name}
+            leagueId={leagueId}
           />
         </section>
       )}
@@ -1275,7 +1305,7 @@ export default function LeagueHistoryPage() {
 
       {/* Sticky Upgrade Bar */}
       {hasData && hasEnoughData && (
-        <StickyUpgradeBar onUpgrade={handleUpgrade} />
+        <StickyUpgradeBar onUpgrade={handleUpgrade} leagueName={data?.league?.name} />
       )}
 
       {/* Unlock Modal */}
@@ -1285,6 +1315,7 @@ export default function LeagueHistoryPage() {
         onUnlock={handleUnlock}
         ownedCount={ownedCount}
         rivalryExists={rivalryExists}
+        leagueName={data?.league?.name}
       />
 
       {hasData && (

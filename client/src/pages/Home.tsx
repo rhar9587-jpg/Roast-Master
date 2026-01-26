@@ -7,7 +7,7 @@ import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
 import { FplRoastCard } from "@/components/FplRoastCard";
 import type { RoastResponse, WrappedResponse, LeagueAutopsyResponse, FplRoastResponse } from "@shared/schema";
 import { ChevronDown, ChevronRight, HelpCircle } from "lucide-react";
-import { setStoredUsername } from "./LeagueHistory/utils";
+import { getRecentLeagues, setStoredUsername } from "./LeagueHistory/utils";
 
 type Sport = "nfl" | "fpl";
 type TeamOption = { roster_id: number; name: string };
@@ -42,6 +42,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [weeklyRoastIntent, setWeeklyRoastIntent] = useState(false);
 
   // Fetch current FPL gameweek on mount
   useEffect(() => {
@@ -258,15 +259,23 @@ export default function Home() {
   }
 
   function handleRoastMyLeague() {
+    setWeeklyRoastIntent(true);
     document.getElementById("username-input")?.scrollIntoView({ behavior: "smooth", block: "center" });
     document.getElementById("username-input")?.focus();
   }
 
-  function handleExampleLeague() {
-    window.location.href = `/league-history/dominance?league_id=1204010682635255808&start_week=1&end_week=17`;
-  }
-
   function handleViewLeagueHistory() {
+    const recent = typeof window !== "undefined" ? getRecentLeagues() : [];
+    const mostRecent = recent[0];
+    if (mostRecent?.leagueId) {
+      const params = new URLSearchParams({
+        league_id: mostRecent.leagueId,
+        start_week: String(mostRecent.startWeek ?? 1),
+        end_week: String(mostRecent.endWeek ?? 17),
+      });
+      window.location.href = `/league-history/dominance?${params.toString()}`;
+      return;
+    }
     if (leagueId) {
       const params = new URLSearchParams({
         league_id: leagueId,
@@ -274,14 +283,10 @@ export default function Home() {
         end_week: String(week || 17),
       });
       window.location.href = `/league-history/dominance?${params.toString()}`;
-    } else if (username.trim()) {
-      // If username entered but no league selected, go to league history to let them pick
-      window.location.href = `/league-history/dominance`;
-    } else {
-      // No username or league - auto-load example league for instant "wow"
-      const exampleLeagueId = "1204010682635255808";
-      window.location.href = `/league-history/dominance?league_id=${exampleLeagueId}&start_week=1&end_week=17`;
+      return;
     }
+    const exampleLeagueId = "1204010682635255808";
+    window.location.href = `/league-history/dominance?league_id=${exampleLeagueId}&start_week=1&end_week=17`;
   }
 
   function handleValueCardClick() {
@@ -338,6 +343,9 @@ export default function Home() {
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
               Turn your Sleeper league into shareable roasts. Find receipts. Tag your nemesis. Own the group chat.
             </p>
+            <p className="text-sm text-muted-foreground">
+              One-time $29 unlock for this league • Unlimited receipts • Shareable cards
+            </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" onClick={handleViewLeagueHistory} className="font-semibold">
                 See Who Owns Your League
@@ -346,11 +354,16 @@ export default function Home() {
                 Get My Weekly Roast
               </Button>
             </div>
+            <div className="text-xs text-muted-foreground flex flex-wrap justify-center gap-3">
+              <span>Built for group chats</span>
+              <span>Fast + secure checkout</span>
+              <span>30-day money-back guarantee</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Trusted by 500+ leagues (placeholder)
+            </p>
             <p className="text-xs text-muted-foreground">
               Try it free with an example league, or enter your username below
-            </p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Free to explore • Premium to share
             </p>
           </section>
 
@@ -462,6 +475,7 @@ export default function Home() {
                   data-testid="input-sleeper-username"
                 />
                 <p className="mt-1 text-xs text-gray-500">Use your Sleeper username (same as in the app).</p>
+                <p className="text-xs text-gray-500">Takes ~10 seconds.</p>
               </div>
 
               <div>
@@ -481,7 +495,7 @@ export default function Home() {
                 id="button-find-leagues"
                 onClick={findLeagues}
                 disabled={!username || loading}
-                className="w-full rounded-lg bg-black px-4 py-2 text-white font-semibold disabled:opacity-40"
+                className="w-full rounded-lg bg-black px-4 py-2 text-white font-semibold transition-opacity disabled:opacity-70 disabled:cursor-not-allowed"
                 data-testid="button-find-leagues"
               >
                 Find my leagues
@@ -551,21 +565,30 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="border-t pt-4">
-              <label className="block text-sm font-semibold text-gray-700">Week</label>
-              <input
-                type="number"
-                value={week}
-                onChange={(e) => setWeek(Number(e.target.value))}
-                className="mt-1 w-full rounded-lg border px-3 py-2"
-                data-testid="input-week"
-              />
-            </div>
+            {weeklyRoastIntent ? (
+              <div className="border-t pt-4">
+                <label className="block text-sm font-semibold text-gray-700">Week</label>
+                <input
+                  type="number"
+                  value={week}
+                  onChange={(e) => setWeek(Number(e.target.value))}
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                  data-testid="input-week"
+                />
+              </div>
+            ) : (
+              <div className="border-t pt-4 text-xs text-muted-foreground">
+                Want a specific week? Click “Get My Weekly Roast” above.
+              </div>
+            )}
           </section>
 
           <div className="flex gap-3">
             <button
-              onClick={fetchRoast}
+              onClick={() => {
+                setWeeklyRoastIntent(true);
+                fetchRoast();
+              }}
               disabled={!leagueId || loading}
               className="flex-1 rounded-xl bg-pink-600 px-4 py-3 text-white font-extrabold disabled:opacity-40"
               data-testid="button-roast-league"
@@ -734,7 +757,7 @@ export default function Home() {
                 href={`/league-history/dominance?league_id=${encodeURIComponent(leagueId)}${week ? `&start_week=1&end_week=${week}` : ''}`}
                 className="text-sm text-primary hover:underline font-medium"
               >
-                Want the full picture? See the dominance grid →
+                See full League History receipts →
               </Link>
             </div>
           )}
