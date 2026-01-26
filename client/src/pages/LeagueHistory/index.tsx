@@ -25,6 +25,7 @@ import {
 
 import { LeagueSelector } from "./LeagueSelector";
 import { InsightsDashboard } from "./InsightsDashboard";
+import { HeroReceipts } from "./HeroReceipts";
 import { DominanceGrid } from "./DominanceGrid";
 import { StorylinesMiniCards } from "./StorylinesMiniCards";
 import { MatchupDetailModal } from "./MatchupDetailModal";
@@ -35,7 +36,8 @@ import { StickyUpgradeBar } from "./StickyUpgradeBar";
 import { UnlockReceiptsModal } from "./UnlockReceiptsModal";
 import { isPremium, setPremium } from "./premium";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername } from "./utils";
-import { computeLeagueStorylines, computeYourRoast } from "./storylines";
+import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards } from "./storylines";
+import { computeHeroReceipts } from "./computeHeroReceipts";
 import type {
   Badge,
   DominanceApiResponse,
@@ -580,6 +582,24 @@ export default function LeagueHistoryPage() {
     [viewerKey, allCells, managers]
   );
 
+  // Compute hero receipts from seasonStats and weeklyMatchups
+  const heroReceipts = useMemo(
+    () =>
+      data?.seasonStats && data?.weeklyMatchups
+        ? computeHeroReceipts(data.seasonStats, data.weeklyMatchups, managers, avatarByKey)
+        : [],
+    [data?.seasonStats, data?.weeklyMatchups, managers, avatarByKey]
+  );
+
+  // Compute additional mini cards from seasonStats and weeklyMatchups
+  const additionalMiniCards = useMemo(
+    () =>
+      data?.seasonStats && data?.weeklyMatchups
+        ? computeAdditionalMiniCards(data.weeklyMatchups, data.seasonStats, managers)
+        : [],
+    [data?.seasonStats, data?.weeklyMatchups, managers]
+  );
+
   // Compute ownedCount for contextual copy
   const ownedCount = useMemo(() => {
     if (!viewerKey || !allCells.length) return 0;
@@ -1042,6 +1062,16 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
+      {hasData && hasEnoughData && heroReceipts.length > 0 && (
+        <section className="mt-8">
+          <HeroReceipts
+            heroReceipts={heroReceipts}
+            isPremium={isPremiumState}
+            onUnlock={handleUpgrade}
+          />
+        </section>
+      )}
+
       {hasData && !hasEnoughData && (
         <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-center">
           <p className="text-sm text-muted-foreground mb-1">
@@ -1135,7 +1165,7 @@ export default function LeagueHistoryPage() {
               )}
             </div>
             <StorylinesMiniCards
-              leagueCards={leagueStorylines}
+              leagueCards={[...leagueStorylines, ...additionalMiniCards]}
               yourRoastCards={yourRoastCards}
               viewerChosen={!!viewerKey}
               onOpenCell={(key) => openCell(key)}

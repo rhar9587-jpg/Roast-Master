@@ -26,12 +26,18 @@ export type SleeperLeague = {
   name: string;
   season?: string;
   previous_league_id?: string | null; // ✅ add this
-  settings?: { playoff_week_end?: number };
+  settings?: { playoff_week_end?: number; playoff_teams?: number };
 };
 
 export type SleeperRoster = {
   roster_id: number;
   owner_id: string | null;
+  settings?: {
+    wins?: number;
+    losses?: number;
+    ties?: number;
+    rank?: number;
+  };
 };
 
 export type SleeperUser = {

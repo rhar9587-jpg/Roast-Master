@@ -55,6 +55,8 @@ export type DominanceApiResponse = {
     totalScore: number;
   }>;
   cells?: DominanceCellDTO[];
+  seasonStats?: SeasonStat[];
+  weeklyMatchups?: WeeklyMatchupDetail[];
 };
 
 export type VictimRow = {
@@ -79,3 +81,39 @@ export type ManagerRow = { key: string; name: string };
 
 export type RowTotal = { w: number; l: number; t: number; games: number; score: number };
 export type GrandTotal = { w: number; l: number; t: number; games: number; score: number };
+
+export type SeasonStat = {
+  season: string;
+  managerKey: string;
+  rank: number;
+  wins: number;
+  losses: number;
+  totalPF: number;
+  playoffQualified: boolean;
+  playoffTeams: number;
+  playoffQualifiedInferred?: boolean;
+};
+
+export type WeeklyMatchupDetail = {
+  season: string;
+  week: number;
+  managerKey: string;
+  opponentKey: string;
+  points: number;
+  opponentPoints: number;
+  margin: number;
+  won: boolean;
+};
+
+export type HeroReceiptCard = {
+  id: string;
+  badge: Badge;
+  title: string;
+  name: string;
+  avatarUrl?: string | null;
+  primaryStat: { value: string; label?: string };
+  punchline?: string;
+  lines?: Array<{label: string; value: string}>;
+  season?: string;
+  onClick?: () => void;
+};

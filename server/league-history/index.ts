@@ -294,13 +294,25 @@ export async function handleLeagueHistoryDominance(params: {
 
   // Build matchups across all seasons in chain
   const allWeekMatchups: WeekMatchups[] = [];
+  const seasonDataMap = new Map<string, {
+    season: string;
+    league_id: string;
+    rosters: Awaited<ReturnType<typeof getRosters>>;
+    users: Awaited<ReturnType<typeof getUsers>>;
+    league: Awaited<ReturnType<typeof getLeague>>;
+    rosterToManagerKey: Map<number, { key: string; name: string }>;
+    weekMatchups: WeekMatchups[];
+  }>();
 
   // NOTE: we keep week numbers 1..end_week per season; you can later expand to
   // auto-using playoff_week_end per season if you want.
   const weeks = Array.from({ length: end_week - start_week + 1 }, (_, i) => start_week + i);
 
-  for (const seasonLeague of chain) {
-    const [rosters, users] = await Promise.all([getRosters(seasonLeague.league_id), getUsers(seasonLeague.league_id)]);
+    const [rosters, users, league] = await Promise.all([
+      getRosters(seasonLeague.league_id),
+      getUsers(seasonLeague.league_id),
+      getLeague(seasonLeague.league_id),
+    ]);
 
     const userById = new Map(users.map((u) => [u.user_id, u]));
 
@@ -333,6 +345,16 @@ export async function handleLeagueHistoryDominance(params: {
   }
   }
 
+    // Store season data for later processing (before week loop so we can track weekMatchups)
+    seasonDataMap.set(season, {
+      season,
+      league_id: seasonLeague.league_id,
+      rosters,
+      users,
+      league,
+      rosterToManagerKey,
+      weekMatchups: [], // Will be populated as we process weeks
+    });
 
     // Fetch matchups per week for this season league
     for (const w of weeks) {
@@ -358,7 +380,132 @@ export async function handleLeagueHistoryDominance(params: {
 
       if (!mapped.length) continue;
 
-      allWeekMatchups.push({ week: w, matchups: mapped });
+      const weekMatchup: WeekMatchups = { week: w, matchups: mapped };
+      allWeekMatchups.push(weekMatchup);
+      
+      // Track this week's matchup for this season
+      const seasonData = seasonDataMap.get(season);
+      if (seasonData) {
+        seasonData.weekMatchups.push(weekMatchup);
+      }
+    }
+  }
+
+  // Compute seasonStats and weeklyMatchups from stored season data
+  const seasonStats: Array<{
+    season: string;
+    managerKey: string;
+    rank: number;
+    wins: number;
+    losses: number;
+    totalPF: number;
+    playoffQualified: boolean;
+    playoffTeams: number;
+    playoffQualifiedInferred?: boolean;
+  }> = [];
+  const weeklyMatchups: Array<{
+    season: string;
+    week: number;
+    managerKey: string;
+    opponentKey: string;
+    points: number;
+    opponentPoints: number;
+    margin: number;
+    won: boolean;
+  }> = [];
+
+  for (const [season, seasonData] of seasonDataMap) {
+    const { league, rosters, rosterToManagerKey, weekMatchups } = seasonData;
+
+    // Get playoff_teams from league settings
+    const playoffTeams = league?.settings?.playoff_teams;
+    const playoffQualifiedInferred = playoffTeams === undefined;
+
+    // Compute totalPF per manager from matchups for this season
+    const totalPFByManager = new Map<string, number>();
+    for (const weekData of weekMatchups) {
+      for (const m of weekData.matchups) {
+        const current = totalPFByManager.get(m.managerKey) || 0;
+        totalPFByManager.set(m.managerKey, current + m.points);
+      }
+    }
+
+    // Build seasonStats from rosters
+    for (const r of rosters) {
+      const managerKeyData = rosterToManagerKey.get(r.roster_id);
+      if (!managerKeyData) continue;
+
+      const rank = r.settings?.rank ?? 0;
+      const wins = r.settings?.wins ?? 0;
+      const losses = r.settings?.losses ?? 0;
+      const totalPF = totalPFByManager.get(managerKeyData.key) || 0;
+
+      // Determine playoff qualification
+      let playoffQualified = false;
+      if (playoffTeams !== undefined) {
+        playoffQualified = rank <= playoffTeams;
+      } else {
+        // Heuristic: top 50% or top 6, whichever is smaller
+        const leagueSize = rosters.length;
+        const top50Percent = Math.ceil(leagueSize / 2);
+        const top6 = 6;
+        playoffQualified = rank <= Math.min(top50Percent, top6);
+      }
+
+      seasonStats.push({
+        season,
+        managerKey: managerKeyData.key,
+        rank,
+        wins,
+        losses,
+        totalPF,
+        playoffQualified,
+        playoffTeams: playoffTeams ?? 0,
+        playoffQualifiedInferred,
+      });
+    }
+
+    // Build weeklyMatchups by pairing matchups by matchup_id for this season
+    for (const weekData of weekMatchups) {
+      // Group by matchup_id
+        const matchupGroups = new Map<number | null, typeof weekData.matchups>();
+        for (const m of weekData.matchups) {
+          const group = matchupGroups.get(m.matchup_id) || [];
+          group.push(m);
+          matchupGroups.set(m.matchup_id, group);
+        }
+
+        // Create matchup pairs
+        for (const [matchupId, entries] of matchupGroups) {
+          if (entries.length === 2) {
+            const [a, b] = entries;
+            const margin = Math.abs(a.points - b.points);
+            const aWon = a.points > b.points;
+
+            weeklyMatchups.push({
+              season,
+              week: weekData.week,
+              managerKey: a.managerKey,
+              opponentKey: b.managerKey,
+              points: a.points,
+              opponentPoints: b.points,
+              margin: aWon ? margin : -margin,
+              won: aWon,
+            });
+
+            weeklyMatchups.push({
+              season,
+              week: weekData.week,
+              managerKey: b.managerKey,
+              opponentKey: a.managerKey,
+              points: b.points,
+              opponentPoints: a.points,
+              margin: aWon ? -margin : margin,
+              won: !aWon,
+            });
+          }
+        }
+      }
     }
   }
 
@@ -419,5 +566,7 @@ export async function handleLeagueHistoryDominance(params: {
     grid,
     cells,
     totalsByManager,
+    seasonStats,
+    weeklyMatchups,
   };
 }

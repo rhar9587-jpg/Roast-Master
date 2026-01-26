@@ -1,4 +1,4 @@
-import type { DominanceCellDTO, ManagerRow, RowTotal } from "./types";
+import type { DominanceCellDTO, ManagerRow, RowTotal, WeeklyMatchupDetail, SeasonStat } from "./types";
 import { fmtScore } from "./utils";
 
 export type MiniCard = {
@@ -410,4 +410,168 @@ export function computeYourRoast(
   }
 
   return cards;
+}
+
+/** Additional MINI cards computed from seasonStats and weeklyMatchups */
+export function computeAdditionalMiniCards(
+  weeklyMatchups: WeeklyMatchupDetail[],
+  seasonStats: SeasonStat[],
+  managers: ManagerRow[],
+): MiniCard[] {
+  const cards: MiniCard[] = [];
+
+  // Heartbreaker: Most losses by <5 points
+  const heartbreaker = computeHeartbreaker(weeklyMatchups, managers);
+  if (heartbreaker) cards.push(heartbreaker);
+
+  // Blowout Artist: Most wins by 30+ points
+  const blowoutArtist = computeBlowoutArtist(weeklyMatchups, managers);
+  if (blowoutArtist) cards.push(blowoutArtist);
+
+  // Giant Slayer: Most wins vs #1 seed
+  const giantSlayer = computeGiantSlayer(weeklyMatchups, seasonStats, managers);
+  if (giantSlayer) cards.push(giantSlayer);
+
+  return cards;
+}
+
+function computeHeartbreaker(
+  weeklyMatchups: WeeklyMatchupDetail[],
+  managers: ManagerRow[],
+): MiniCard | null {
+  if (weeklyMatchups.length === 0) return null;
+
+  // Count close losses (<5 points) per manager
+  const closeLossCounts = new Map<string, number>();
+  for (const matchup of weeklyMatchups) {
+    if (!matchup.won && Math.abs(matchup.margin) < 5) {
+      const current = closeLossCounts.get(matchup.managerKey) || 0;
+      closeLossCounts.set(matchup.managerKey, current + 1);
+    }
+  }
+
+  if (closeLossCounts.size === 0) return null;
+
+  // Find manager with most close losses
+  let maxCount = 0;
+  let winnerKey: string | null = null;
+  for (const [key, count] of closeLossCounts) {
+    if (count > maxCount) {
+      maxCount = count;
+      winnerKey = key;
+    }
+  }
+
+  if (!winnerKey || maxCount === 0) return null;
+
+  const manager = managers.find((m) => m.key === winnerKey);
+  if (!manager) return null;
+
+  return {
+    id: "heartbreaker",
+    title: "HEARTBREAKER 💔",
+    statPrimary: String(maxCount),
+    statSecondary: "close losses",
+    line: `${manager.name} lost ${maxCount} game${maxCount === 1 ? "" : "s"} by less than 5 points.`,
+    managerKey: winnerKey,
+  };
+}
+
+function computeBlowoutArtist(
+  weeklyMatchups: WeeklyMatchupDetail[],
+  managers: ManagerRow[],
+): MiniCard | null {
+  if (weeklyMatchups.length === 0) return null;
+
+  // Count blowout wins (30+ point margin) per manager
+  const blowoutCounts = new Map<string, number>();
+  for (const matchup of weeklyMatchups) {
+    if (matchup.won && matchup.margin >= 30) {
+      const current = blowoutCounts.get(matchup.managerKey) || 0;
+      blowoutCounts.set(matchup.managerKey, current + 1);
+    }
+  }
+
+  if (blowoutCounts.size === 0) return null;
+
+  // Find manager with most blowouts
+  let maxCount = 0;
+  let winnerKey: string | null = null;
+  for (const [key, count] of blowoutCounts) {
+    if (count > maxCount) {
+      maxCount = count;
+      winnerKey = key;
+    }
+  }
+
+  if (!winnerKey || maxCount === 0) return null;
+
+  const manager = managers.find((m) => m.key === winnerKey);
+  if (!manager) return null;
+
+  return {
+    id: "blowout-artist",
+    title: "BLOWOUT ARTIST 💥",
+    statPrimary: String(maxCount),
+    statSecondary: "blowouts",
+    line: `${manager.name} won ${maxCount} game${maxCount === 1 ? "" : "s"} by 30+ points.`,
+    managerKey: winnerKey,
+  };
+}
+
+function computeGiantSlayer(
+  weeklyMatchups: WeeklyMatchupDetail[],
+  seasonStats: SeasonStat[],
+  managers: ManagerRow[],
+): MiniCard | null {
+  if (weeklyMatchups.length === 0 || seasonStats.length === 0) return null;
+
+  // Find #1 seed per season
+  const topSeedsBySeason = new Map<string, string>();
+  for (const stat of seasonStats) {
+    if (stat.rank === 1) {
+      const existing = topSeedsBySeason.get(stat.season);
+      if (!existing || stat.totalPF > (seasonStats.find((s) => s.season === stat.season && s.managerKey === existing)?.totalPF || 0)) {
+        topSeedsBySeason.set(stat.season, stat.managerKey);
+      }
+    }
+  }
+
+  // Count wins vs #1 seed per manager
+  const winsVsTopSeed = new Map<string, number>();
+  for (const matchup of weeklyMatchups) {
+    if (matchup.won) {
+      const topSeed = topSeedsBySeason.get(matchup.season);
+      if (topSeed && matchup.opponentKey === topSeed) {
+        const current = winsVsTopSeed.get(matchup.managerKey) || 0;
+        winsVsTopSeed.set(matchup.managerKey, current + 1);
+      }
+    }
+  }
+
+  if (winsVsTopSeed.size === 0) return null;
+
+  // Find manager with most wins vs #1 seed
+  let maxCount = 0;
+  let winnerKey: string | null = null;
+  for (const [key, count] of winsVsTopSeed) {
+    if (count > maxCount) {
+      maxCount = count;
+      winnerKey = key;
+    }
+  }
+
+  if (!winnerKey || maxCount === 0) return null;
+
+  const manager = managers.find((m) => m.key === winnerKey);
+  if (!manager) return null;
+
+  return {
+    id: "giant-slayer",
+    title: "GIANT SLAYER 🗡️",
+    statPrimary: String(maxCount),
+    statSecondary: "wins vs champ",
+    line: `${manager.name} beat the #1 seed ${maxCount} time${maxCount === 1 ? "" : "s"}.`,
+    managerKey: winnerKey,
+  };
 }
