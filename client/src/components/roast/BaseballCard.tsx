@@ -239,7 +239,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
       ].join(" ")}
     >
       {bgLayers()}
-      <div className="relative h-full flex flex-col p-3.5">{children}</div>
+      <div className="relative h-full flex flex-col p-3">{children}</div>
     </div>
   );
 
@@ -273,7 +273,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
       </div>
 
       {/* avatar */}
-      <div className="mt-3 flex items-center justify-center">
+      <div className="mt-2 flex items-center justify-center">
         {avatarUrl ? (
           <img
             src={avatarUrl}
@@ -296,7 +296,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
       </div>
 
       {/* nameplate */}
-      <div className="mt-2 text-center">
+      <div className="mt-1.5 text-center">
         <div className="mx-6 rounded-md border border-black/10 bg-black/5 py-1">
           <div className="text-xl font-extrabold tracking-wide uppercase leading-tight line-clamp-2">{name}</div>
         </div>
@@ -304,14 +304,14 @@ export function BaseballCard(props: LegacyProps | V2Props) {
       </div>
 
       {/* primary stat */}
-      <div className="mt-2.5 text-center">
+      <div className="mt-2 text-center">
         <div className="text-5xl font-black leading-none">{primaryStat.value}</div>
         {primaryStat.label ? <div className={`mt-1.5 text-sm font-bold uppercase tracking-wide ${tone.accent}`}>{primaryStat.label}</div> : null}
       </div>
 
       {/* stat lines */}
       {lines.length ? (
-        <div className="mt-2.5 space-y-1.5">
+        <div className="mt-2 space-y-1.5">
           {lines.slice(0, 4).map((l) => (
             <div key={l.label} className="flex items-center justify-between gap-3 rounded-md border border-black/10 bg-background/80 px-3 py-1.5">
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{l.label}</div>
@@ -322,7 +322,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
       ) : null}
 
       {/* footer pinned */}
-      <div className="mt-auto pt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="mt-auto pt-0.5 flex items-center justify-between text-[11px] text-muted-foreground">
         <div>{season}</div>
         <div className="flex items-center gap-2">
           <div className="opacity-80">{watermark}</div>
@@ -333,7 +333,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
       </div>
 
       {/* hint */}
-      <div className="pt-1 pb-2.5 text-[10px] opacity-50">Tap to flip</div>
+      <div className="pt-0.5 pb-2 text-[10px] opacity-50">Tap to flip</div>
     </FaceShell>
   );
 
@@ -403,7 +403,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
   };
 
   // ✅ Fixed height (important): prevents “blank card” + weird overlaps because faces are absolute
-  const STAGE = "h-[440px]"; // tweak if you want taller cards later
+  const STAGE = "h-[470px]"; // tweak if you want taller cards later
 
   return (
     <Card

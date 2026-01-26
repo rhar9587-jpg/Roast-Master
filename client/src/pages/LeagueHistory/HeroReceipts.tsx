@@ -76,9 +76,9 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
   if (isPremium) {
     return (
       <div>
-        <div className="mb-4">
-          <h2 className="text-2xl font-bold">League Receipts</h2>
-          <p className="text-sm text-muted-foreground mt-1">
+        <div className="mb-3">
+          <h2 className="text-sm font-medium text-muted-foreground">League Receipts</h2>
+          <p className="text-xs text-muted-foreground mt-1">
             The moments your league will never forget.
           </p>
         </div>
@@ -89,9 +89,9 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold">League Receipts</h2>
-        <p className="text-sm text-muted-foreground mt-1">
+      <div className="mb-3">
+        <h2 className="text-sm font-medium text-muted-foreground">League Receipts</h2>
+        <p className="text-xs text-muted-foreground mt-1">
           The moments your league will never forget.
         </p>
       </div>
