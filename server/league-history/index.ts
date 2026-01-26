@@ -308,6 +308,8 @@ export async function handleLeagueHistoryDominance(params: {
   // auto-using playoff_week_end per season if you want.
   const weeks = Array.from({ length: end_week - start_week + 1 }, (_, i) => start_week + i);
 
+  for (const seasonLeague of chain) {
+    const season = seasonLeague.season || String(new Date().getFullYear());
     const [rosters, users, league] = await Promise.all([
       getRosters(seasonLeague.league_id),
       getUsers(seasonLeague.league_id),
@@ -507,7 +509,6 @@ export async function handleLeagueHistoryDominance(params: {
         }
       }
     }
-  }
 
   const managers = Array.from(managerByKey.values());
   const grid = buildDominanceGrid(managers, allWeekMatchups);
