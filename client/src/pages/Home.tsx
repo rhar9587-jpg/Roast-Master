@@ -360,7 +360,7 @@ export default function Home() {
               <span>30-day money-back guarantee</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Trusted by 500+ leagues (placeholder)
+              Built for leagues that talk trash.
             </p>
             <p className="text-xs text-muted-foreground">
               Try it free with an example league, or enter your username below

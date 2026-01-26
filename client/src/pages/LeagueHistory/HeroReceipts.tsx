@@ -15,30 +15,42 @@ type Props = {
 function BlurredCardWrapper({
   children,
   onUnlock,
+  title,
+  remainingCount,
 }: {
   children: React.ReactNode;
   onUnlock?: () => void;
+  title: string;
+  remainingCount: number;
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
-    <div className="relative">
-      <div className="blur-sm opacity-60 pointer-events-none">{children}</div>
-      <div
-        className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.01] rounded-2xl"
-        onClick={onUnlock}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <div className="text-center">
-          <Lock className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
-          {isHovered && (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">
-                Unlock to reveal the receipts
-              </p>
-            </div>
-          )}
+    <div className="space-y-2">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </div>
+      <div className="text-xs text-muted-foreground">
+        🔒 {remainingCount} more receipts your league will argue about.
+      </div>
+      <div className="relative">
+        <div className="blur-sm opacity-60 pointer-events-none">{children}</div>
+        <div
+          className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.01] rounded-2xl"
+          onClick={onUnlock}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <div className="text-center">
+            <Lock className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
+            {isHovered && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Unlock to reveal the receipts
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -105,8 +117,14 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
           if (idx < 2) {
             return <React.Fragment key={heroReceipts[idx].id}>{card}</React.Fragment>;
           }
+          const remainingCount = Math.max(heroReceipts.length - 2, 0);
           return (
-            <BlurredCardWrapper key={heroReceipts[idx].id} onUnlock={onUnlock}>
+            <BlurredCardWrapper
+              key={heroReceipts[idx].id}
+              onUnlock={onUnlock}
+              title={heroReceipts[idx].title}
+              remainingCount={remainingCount}
+            >
               {card}
             </BlurredCardWrapper>
           );
