@@ -174,6 +174,7 @@ export default function LeagueHistoryPage() {
     const urlLeagueId = params.get("league_id");
     const urlStartWeek = params.get("start_week");
     const urlEndWeek = params.get("end_week");
+    const urlViewer = params.get("view");
 
     // Priority 1: URL params (shareable links, Home navigation)
     if (urlLeagueId && urlLeagueId.trim()) {
@@ -190,6 +191,10 @@ export default function LeagueHistoryPage() {
         if (!isNaN(week) && week >= 1) {
           setEndWeek(week);
         }
+      }
+      // Set viewer if provided in URL
+      if (urlViewer && urlViewer.trim()) {
+        setViewerKey(urlViewer.trim());
       }
       return; // URL params take precedence, exit early
     }
@@ -227,16 +232,23 @@ export default function LeagueHistoryPage() {
     }
     params.set("start_week", String(startWeek));
     params.set("end_week", String(endWeek));
+    // Include viewer if selected
+    if (viewerKey && viewerKey.trim()) {
+      params.set("view", viewerKey.trim());
+    }
 
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, "", newUrl);
-  }, [leagueId, startWeek, endWeek]);
+  }, [leagueId, startWeek, endWeek, viewerKey]);
 
   useEffect(() => {
     const justFetched = prevFetching.current && !isFetching && hasData;
     prevFetching.current = isFetching;
-    if (justFetched && !isSelectorCollapsed) setIsSelectorCollapsed(true);
-  }, [isFetching, hasData, isSelectorCollapsed]);
+    // Always collapse form after successful data fetch to focus on content
+    if (justFetched) {
+      setIsSelectorCollapsed(true);
+    }
+  }, [isFetching, hasData]);
 
   // Save to recent leagues after successful fetch
   useEffect(() => {
@@ -636,9 +648,19 @@ export default function LeagueHistoryPage() {
     )
       return;
     
-    // Priority: persisted > username match > empty
-    const saved = getViewerByLeague(leagueId.trim());
+    // Check if viewer was set from URL params (highest priority)
+    const params = new URLSearchParams(window.location.search);
+    const urlViewer = params.get("view");
     const keys = new Set(managers.map((m) => m.key));
+    
+    // Priority: URL param > persisted > username match > empty
+    if (urlViewer && urlViewer.trim() && keys.has(urlViewer.trim())) {
+      setViewerKey(urlViewer.trim());
+      setViewerByLeague(leagueId.trim(), urlViewer.trim());
+      return;
+    }
+    
+    const saved = getViewerByLeague(leagueId.trim());
     
     if (saved && keys.has(saved)) {
       setViewerKey(saved);
@@ -987,47 +1009,18 @@ export default function LeagueHistoryPage() {
               </p>
             )}
           </div>
-          {managers.length > 0 && (
+          {process.env.NODE_ENV === "development" && (
             <div className="flex items-center gap-2 shrink-0">
-              {process.env.NODE_ENV === "development" && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setPremium(!isPremiumState);
-                    setIsPremiumState(!isPremiumState);
-                  }}
-                >
-                  {isPremiumState ? "Premium: ON" : "Premium: OFF"}
-                </Button>
-              )}
-              <span className="text-sm text-muted-foreground">View as:</span>
-              <Select
-                value={viewerKey || "__none__"}
-                onValueChange={(v) => {
-                  if (v === "__none__") {
-                    setViewerKey("");
-                    if (leagueId.trim()) setViewerByLeague(leagueId.trim(), "");
-                  } else {
-                    setViewerKey(v);
-                    if (leagueId.trim()) setViewerByLeague(leagueId.trim(), v);
-                  }
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setPremium(!isPremiumState);
+                  setIsPremiumState(!isPremiumState);
                 }}
               >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Pick your manager" />
-                </SelectTrigger>
-                <SelectContent className="!bg-background">
-                  <SelectItem value="__none__">
-                    Pick your manager
-                  </SelectItem>
-                  {managers.map((m) => (
-                    <SelectItem key={m.key} value={m.key}>
-                      {m.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {isPremiumState ? "Premium: ON" : "Premium: OFF"}
+              </Button>
             </div>
           )}
         </div>
@@ -1068,6 +1061,42 @@ export default function LeagueHistoryPage() {
               Found your nemesis? Send this roast.
             </p>
           )}
+        </section>
+      )}
+
+      {/* View as picker - moved here for better visibility */}
+      {hasData && hasEnoughData && managers.length > 0 && (
+        <section className="flex items-center justify-center gap-3 py-2">
+          <span className="text-sm font-medium text-foreground">View as:</span>
+          <Select
+            value={viewerKey || "__none__"}
+            onValueChange={(v) => {
+              if (v === "__none__") {
+                setViewerKey("");
+                if (leagueId.trim()) setViewerByLeague(leagueId.trim(), "");
+              } else {
+                setViewerKey(v);
+                if (leagueId.trim()) setViewerByLeague(leagueId.trim(), v);
+              }
+            }}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Pick your manager" />
+            </SelectTrigger>
+            <SelectContent className="!bg-background">
+              <SelectItem value="__none__">
+                Pick your manager
+              </SelectItem>
+              {managers.map((m) => (
+                <SelectItem key={m.key} value={m.key}>
+                  {m.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            See your personal receipts
+          </p>
         </section>
       )}
 

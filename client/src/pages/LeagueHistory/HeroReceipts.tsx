@@ -70,6 +70,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
       lines={receipt.lines}
       season={receipt.season}
       onClick={receipt.onClick}
+      enableShare={isPremium}
     />
   ));
 

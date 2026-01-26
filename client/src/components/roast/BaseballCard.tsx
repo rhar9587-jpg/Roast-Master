@@ -1,5 +1,10 @@
 import * as React from "react";
 import { Card } from "@/components/ui/card";
+import { Share2 } from "lucide-react";
+import { toPng } from "html-to-image";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { TagNemesisModal } from "./TagNemesisModal";
 
 type LegacyStat = { label: string; value: string };
 type Badge = "OWNED" | "NEMESIS" | "RIVAL" | "EDGE" | "SMALL SAMPLE";
@@ -45,6 +50,18 @@ type V2Props = {
 
   /** Optional: if true, flipping also calls onClick */
   callOnClickOnFlip?: boolean;
+
+  /** Optional: enable share functionality */
+  onShare?: () => void;
+  enableShare?: boolean;
+
+  /** Optional: context for generating roast text (e.g., victim names, landlord names) */
+  roastContext?: {
+    victimName?: string;
+    landlordName?: string;
+    opponentName?: string;
+    record?: string;
+  };
 };
 
 function isLegacyProps(p: LegacyProps | V2Props): p is LegacyProps {
@@ -141,9 +158,16 @@ export function BaseballCard(props: LegacyProps | V2Props) {
     onClick,
     defaultFlipped,
     callOnClickOnFlip,
+    onShare,
+    enableShare = false,
+    roastContext,
   } = props;
 
   const [flipped, setFlipped] = React.useState<boolean>(!!defaultFlipped);
+  const [isSharing, setIsSharing] = React.useState(false);
+  const [showTagModal, setShowTagModal] = React.useState(false);
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const tone =
     badge === "OWNED"
@@ -201,6 +225,26 @@ export function BaseballCard(props: LegacyProps | V2Props) {
     if (callOnClickOnFlip && onClick) onClick();
   }, [callOnClickOnFlip, onClick]);
 
+  // Generate contextual roast text for group chat
+  const generateRoastText = React.useCallback(() => {
+    const badgeIconEmoji = badge === "OWNED" ? "👑" : badge === "NEMESIS" ? "💀" : badge === "RIVAL" ? "⚔️" : badge === "EDGE" ? "⚡" : "🎲";
+    
+    // Contextual roast based on card type
+    if (badge === "OWNED" && roastContext?.victimName) {
+      // Landlord card - tag the victim
+      return `${title} ${badgeIconEmoji} — ${name} owns ${roastContext.victimName}. Rent is due. @${roastContext.victimName.replace(/\s+/g, "")}`;
+    } else if (badge === "NEMESIS" && roastContext?.landlordName) {
+      // Victim card - tag the nemesis
+      return `${title} ${badgeIconEmoji} — ${name} got owned by ${roastContext.landlordName}. It's rough. @${roastContext.landlordName.replace(/\s+/g, "")}`;
+    } else if (badge === "RIVAL" && roastContext?.opponentName) {
+      // Rivalry card - tag both
+      return `${title} ${badgeIconEmoji} — ${name} vs ${roastContext.opponentName}. This one's personal. ${roastContext.record || ""}`;
+    } else {
+      // Generic roast
+      return `${title} ${badgeIconEmoji} — ${name}${punchline ? ` ${punchline}` : ""} • ${primaryStat.value} ${primaryStat.label || ""}`;
+    }
+  }, [badge, title, name, punchline, primaryStat, roastContext]);
+
   // IMPORTANT: iOS + Embla can swallow "click" during swipe; pointer-up is more reliable.
   const handlePointerUp = (e: React.PointerEvent) => {
     const target = e.target as HTMLElement | null;
@@ -208,6 +252,82 @@ export function BaseballCard(props: LegacyProps | V2Props) {
     if (target?.closest("button,a,input,textarea,select,[data-no-flip='true']")) return;
     flip();
   };
+
+  const handleShare = React.useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!cardRef.current || isSharing) return;
+    
+    setIsSharing(true);
+    try {
+      // Wait for fonts to load
+      if (typeof document !== "undefined" && (document as any).fonts?.ready) {
+        await (document as any).fonts.ready;
+      }
+      await new Promise<void>((r) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => r()))
+      );
+
+      // Export card as PNG
+      const dataUrl = await toPng(cardRef.current, {
+        pixelRatio: 2,
+        cacheBust: true,
+        backgroundColor: "#ffffff",
+      });
+
+      // Generate caption (compute badgeIcon inline)
+      const badgeIconEmoji = badge === "OWNED" ? "👑" : badge === "NEMESIS" ? "💀" : badge === "RIVAL" ? "⚔️" : badge === "EDGE" ? "⚡" : "🎲";
+      const caption = `${title} ${badgeIconEmoji} — ${name}${punchline ? ` ${punchline}` : ""} • ${primaryStat.value} ${primaryStat.label || ""}`.trim();
+      
+      // Generate contextual roast text for modal
+      const roastText = generateRoastText();
+
+      // Try native share first (mobile)
+      if (navigator.share && navigator.canShare) {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const file = new File([blob], `fantasy-roast-${title.toLowerCase().replace(/\s+/g, "-")}-${name.toLowerCase().replace(/\s+/g, "-")}.png`, {
+          type: "image/png",
+        });
+
+        if (navigator.canShare({ files: [file], text: caption })) {
+          await navigator.share({
+            files: [file],
+            text: caption,
+            title: title,
+          });
+          // Show tag nemesis modal after share
+          setShowTagModal(true);
+          if (onShare) onShare();
+          return;
+        }
+      }
+
+      // Fallback: copy image to clipboard and caption text
+      try {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": blob }),
+        ]);
+        await navigator.clipboard.writeText(caption);
+        // Show tag nemesis modal after copy
+        setShowTagModal(true);
+        if (onShare) onShare();
+      } catch (clipboardError) {
+        // If clipboard fails, at least copy the text
+        await navigator.clipboard.writeText(caption);
+        // Open image in new tab as fallback
+        window.open(dataUrl, "_blank");
+        // Show tag nemesis modal even on fallback
+        setShowTagModal(true);
+        if (onShare) onShare();
+      }
+    } catch (error) {
+      console.error("Share failed:", error);
+    } finally {
+      setIsSharing(false);
+    }
+  }, [cardRef, isSharing, title, badge, name, punchline, primaryStat, onShare, toast, generateRoastText]);
 
   const bgLayers = () => (
     <div className="pointer-events-none absolute inset-0">
@@ -266,9 +386,24 @@ export function BaseballCard(props: LegacyProps | V2Props) {
           ) : null}
         </div>
 
-        <div className="text-right">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</div>
-          <div className="mt-0.5 text-[10px] uppercase tracking-wider opacity-70">{setCode}</div>
+        <div className="flex items-center gap-2">
+          <div className="text-right">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</div>
+            <div className="mt-0.5 text-[10px] uppercase tracking-wider opacity-70">{setCode}</div>
+          </div>
+          {enableShare && (
+            <Button
+              data-no-flip="true"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 shrink-0"
+              onClick={handleShare}
+              disabled={isSharing}
+              title="Share this card"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -407,6 +542,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
 
   return (
     <Card
+      ref={cardRef}
       className={[
         "relative overflow-hidden border-[3px] p-1 rounded-md",
         STAGE,
@@ -454,6 +590,16 @@ export function BaseballCard(props: LegacyProps | V2Props) {
           </div>
         </div>
       </div>
+      
+      {/* Tag Nemesis Modal */}
+      {enableShare && (
+        <TagNemesisModal
+          open={showTagModal}
+          onOpenChange={setShowTagModal}
+          initialText={generateRoastText()}
+          cardTitle={title}
+        />
+      )}
     </Card>
   );
 }

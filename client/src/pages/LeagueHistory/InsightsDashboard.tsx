@@ -118,6 +118,11 @@ export function InsightsDashboard({
       onClick={() =>
         onOpenCell(landlord?.bestVictim?.cellKey ?? null)
       }
+      enableShare={true}
+      roastContext={{
+        victimName: landlord?.bestVictim?.victimName,
+        landlordName: landlord?.landlordName,
+      }}
     />
   );
 
@@ -144,6 +149,11 @@ export function InsightsDashboard({
       ]}
       season="2024–25"
       onClick={() => onOpenCell(mostOwned?.cellKey ?? null)}
+      enableShare={true}
+      roastContext={{
+        victimName: mostOwned?.victimName,
+        landlordName: mostOwned?.worstNemesisName,
+      }}
     />
   );
 
@@ -184,6 +194,11 @@ export function InsightsDashboard({
       onClick={() =>
         onOpenCell(biggestRivalry?.cellKey ?? null)
       }
+      enableShare={isPremium}
+      roastContext={{
+        opponentName: biggestRivalry?.bName,
+        record: biggestRivalry?.record,
+      }}
     />
   );
 
@@ -201,9 +216,7 @@ export function InsightsDashboard({
     <div>
       <RoastDeckCarousel>
         {landlordCard}
-        <BlurredCardWrapper onUnlock={onUnlock}>
-          {mostOwnedCard}
-        </BlurredCardWrapper>
+        {mostOwnedCard}
         <BlurredCardWrapper onUnlock={onUnlock}>
           {biggestRivalryCard}
         </BlurredCardWrapper>

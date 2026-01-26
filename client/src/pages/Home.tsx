@@ -41,6 +41,7 @@ export default function Home() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Fetch current FPL gameweek on mount
   useEffect(() => {
@@ -98,6 +99,7 @@ export default function Home() {
     setRosterId(null);
     setTeams([]);
     setNeedsDropdown(false);
+    setShowPreview(false);
     if (!lId) return;
 
     try {
@@ -111,8 +113,12 @@ export default function Home() {
       } else {
         await loadTeams(lId);
       }
+      
+      // Show preview after league is selected
+      setShowPreview(true);
     } catch {
       await loadTeams(lId);
+      setShowPreview(true);
     }
   }
 
@@ -268,8 +274,13 @@ export default function Home() {
         end_week: String(week || 17),
       });
       window.location.href = `/league-history/dominance?${params.toString()}`;
-    } else {
+    } else if (username.trim()) {
+      // If username entered but no league selected, go to league history to let them pick
       window.location.href = `/league-history/dominance`;
+    } else {
+      // No username or league - auto-load example league for instant "wow"
+      const exampleLeagueId = "1204010682635255808";
+      window.location.href = `/league-history/dominance?league_id=${exampleLeagueId}&start_week=1&end_week=17`;
     }
   }
 
@@ -335,6 +346,9 @@ export default function Home() {
                 Get My Weekly Roast
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Try it free with an example league, or enter your username below
+            </p>
             <p className="text-sm text-muted-foreground mt-2">
               Free to explore • Premium to share
             </p>
@@ -559,6 +573,35 @@ export default function Home() {
               Roast My League
             </button>
           </div>
+
+          {/* Personalized Preview Card */}
+          {showPreview && leagueId && leagues.length > 0 && (
+            <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-purple-100/50 p-6 shadow-lg space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1 flex-1">
+                  <h3 className="text-lg font-bold tracking-tight">
+                    Ready to see who owns your league?
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {leagues.find(l => l.league_id === leagueId)?.name || "Your league"} is loaded. 
+                    {rosterId ? " We found your team!" : " Select your team to see your personal receipts."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleViewLeagueHistory}
+                  className="flex-1 font-semibold"
+                  size="lg"
+                >
+                  See Who Owns Your League →
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Free to explore • Premium to share
+              </p>
+            </div>
+          )}
 
           {/* League History Card - Upgraded */}
           <div className="rounded-2xl border bg-gradient-to-br from-purple-50 to-purple-100/50 p-8 shadow-lg space-y-4">
