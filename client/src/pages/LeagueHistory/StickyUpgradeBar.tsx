@@ -112,13 +112,18 @@ export function StickyUpgradeBar({
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              onClick={handleUpgrade}
-              size="sm"
-              className="font-semibold whitespace-nowrap"
-            >
-              Unlock Full Roast ($29)
-            </Button>
+            <div className="flex flex-col items-center">
+              <Button
+                onClick={handleUpgrade}
+                size="sm"
+                className="font-semibold whitespace-nowrap"
+              >
+                Unlock Full Roast ($29)
+              </Button>
+              <p className="text-xs text-muted-foreground text-center mt-1">
+                Split with your league — less than $3 each.
+              </p>
+            </div>
             <Button
               variant="ghost"
               size="sm"

@@ -86,6 +86,9 @@ export function ConversionBanner({
           >
             Unlock Full Roast ($29)
           </Button>
+          <p className="text-xs text-muted-foreground text-center mt-2">
+            Split with your league — less than $3 each.
+          </p>
         </div>
         <p className="text-sm font-semibold text-center">
           Risk-free • 30-day money-back guarantee

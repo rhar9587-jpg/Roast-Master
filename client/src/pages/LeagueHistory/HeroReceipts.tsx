@@ -11,18 +11,22 @@ type Props = {
   onUnlock?: () => void;
 };
 
-// Helper component to wrap blurred cards
-function BlurredCardWrapper({
-  children,
-  onUnlock,
-  title,
-  remainingCount,
-}: {
+type CardWrapperProps = {
   children: React.ReactNode;
-  onUnlock?: () => void;
   title: string;
-  remainingCount: number;
-}) {
+  subtitle?: string;
+  onUnlock?: () => void;
+  showOverlay?: boolean;
+};
+
+// Helper component to align headings across cards
+function CardWithHeading({
+  children,
+  title,
+  subtitle,
+  onUnlock,
+  showOverlay = false,
+}: CardWrapperProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -30,28 +34,32 @@ function BlurredCardWrapper({
       <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </div>
-      <div className="text-xs text-muted-foreground">
-        🔒 {remainingCount} more roasts your league will argue about.
+      <div className="text-xs text-muted-foreground min-h-[16px]">
+        {subtitle ? subtitle : <span className="opacity-0">placeholder</span>}
       </div>
       <div className="relative">
-        <div className="blur-sm opacity-60 pointer-events-none">{children}</div>
-        <div
-          className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.01] rounded-2xl"
-          onClick={onUnlock}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          <div className="text-center">
-            <Lock className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
-            {isHovered && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Unlock to reveal the roast
-                </p>
-              </div>
-            )}
-          </div>
+        <div className={showOverlay ? "blur-sm opacity-60 pointer-events-none" : ""}>
+          {children}
         </div>
+        {showOverlay && (
+          <div
+            className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.01] rounded-2xl"
+            onClick={onUnlock}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            <div className="text-center">
+              <Lock className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
+              {isHovered && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Unlock to reveal the roast
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -132,20 +140,22 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
             />
           );
 
-          if (index === 0) {
-            return card;
-          }
-
           const remainingCount = heroReceipts.length - 1;
+          const subtitle =
+            index === 0
+              ? undefined
+              : `🔒 ${Math.max(remainingCount, 0)} more roasts your league will argue about.`;
+
           return (
-            <BlurredCardWrapper
+            <CardWithHeading
               key={receipt.id}
-              onUnlock={onUnlock}
               title={receipt.title}
-              remainingCount={Math.max(remainingCount, 0)}
+              subtitle={subtitle}
+              onUnlock={onUnlock}
+              showOverlay={index !== 0}
             >
               {card}
-            </BlurredCardWrapper>
+            </CardWithHeading>
           );
         })}
       </RoastDeckCarousel>
