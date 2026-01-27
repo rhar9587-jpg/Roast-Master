@@ -108,35 +108,47 @@ const YOUR_ROAST_EMPTY_MESSAGE =
 function BlurredMiniCardWrapper({
   children,
   onUnlock,
+  title,
+  remainingCount,
 }: {
   children: React.ReactNode;
   onUnlock?: () => void;
+  title: string;
+  remainingCount: number;
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
-    <div className="relative">
-      <div className="blur-sm opacity-60 pointer-events-none">
-        {children}
+    <div className="space-y-2">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
       </div>
-      <div
-        className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.01] rounded-2xl"
-        onClick={onUnlock}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <div className="text-center">
-          <Lock className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
-          {isHovered && (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">
-                This is just the beginning…
-              </p>
-              <p className="text-xs font-medium text-muted-foreground">
-                Unlock to see who really owns this league
-              </p>
-            </div>
-          )}
+      <div className="text-xs text-muted-foreground">
+        🔒 {remainingCount} more receipts your league will argue about.
+      </div>
+      <div className="relative">
+        <div className="blur-sm opacity-60 pointer-events-none">
+          {children}
+        </div>
+        <div
+          className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.01] rounded-2xl"
+          onClick={onUnlock}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <div className="text-center">
+            <Lock className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
+            {isHovered && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">
+                  This is just the beginning…
+                </p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Unlock to see who really owns this league
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -184,6 +196,8 @@ export function StorylinesMiniCards({
                 <BlurredMiniCardWrapper
                   key={c.id}
                   onUnlock={onUnlock}
+                  title={c.title}
+                  remainingCount={Math.max(remainingCount, 0)}
                 >
                   {card}
                 </BlurredMiniCardWrapper>

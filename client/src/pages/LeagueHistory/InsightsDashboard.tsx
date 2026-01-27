@@ -119,6 +119,7 @@ export function InsightsDashboard({
         onOpenCell(landlord?.bestVictim?.cellKey ?? null)
       }
       enableShare={true}
+      watermarkOverlay={!isPremium ? "Fantasy Roast — Unlock to see full receipts" : undefined}
       roastContext={{
         victimName: landlord?.bestVictim?.victimName,
         landlordName: landlord?.landlordName,
@@ -149,7 +150,7 @@ export function InsightsDashboard({
       ]}
       season="2024–25"
       onClick={() => onOpenCell(mostOwned?.cellKey ?? null)}
-      enableShare={true}
+      enableShare={isPremium}
       roastContext={{
         victimName: mostOwned?.victimName,
         landlordName: mostOwned?.worstNemesisName,

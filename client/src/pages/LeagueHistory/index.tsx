@@ -642,6 +642,15 @@ export default function LeagueHistoryPage() {
     [data?.seasonStats, data?.weeklyMatchups, managers]
   );
 
+  const lockedReceiptsCount = useMemo(() => {
+    return Math.max(heroReceipts.length - 2, 0);
+  }, [heroReceipts.length]);
+
+  const lockedStorylinesCount = useMemo(() => {
+    const totalStorylines = leagueStorylines.length + additionalMiniCards.length;
+    return Math.max(totalStorylines - 1, 0);
+  }, [leagueStorylines.length, additionalMiniCards.length]);
+
   // Compute ownedCount for contextual copy
   const ownedCount = useMemo(() => {
     if (!viewerKey || !allCells.length) return 0;
@@ -1287,6 +1296,8 @@ export default function LeagueHistoryPage() {
             rivalryExists={rivalryExists}
             leagueName={data?.league?.name}
             leagueId={leagueId}
+            lockedReceiptsCount={lockedReceiptsCount}
+            lockedStorylinesCount={lockedStorylinesCount}
           />
         </section>
       )}
@@ -1305,7 +1316,12 @@ export default function LeagueHistoryPage() {
 
       {/* Sticky Upgrade Bar */}
       {hasData && hasEnoughData && (
-        <StickyUpgradeBar onUpgrade={handleUpgrade} leagueName={data?.league?.name} />
+        <StickyUpgradeBar
+          onUpgrade={handleUpgrade}
+          leagueName={data?.league?.name}
+          lockedReceiptsCount={lockedReceiptsCount}
+          lockedStorylinesCount={lockedStorylinesCount}
+        />
       )}
 
       {/* Unlock Modal */}
@@ -1316,6 +1332,8 @@ export default function LeagueHistoryPage() {
         ownedCount={ownedCount}
         rivalryExists={rivalryExists}
         leagueName={data?.league?.name}
+        lockedReceiptsCount={lockedReceiptsCount}
+        lockedStorylinesCount={lockedStorylinesCount}
       />
 
       {hasData && (

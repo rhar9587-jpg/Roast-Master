@@ -11,9 +11,19 @@ type Props = {
   rivalryExists?: boolean;
   leagueName?: string;
   leagueId?: string;
+  lockedReceiptsCount?: number;
+  lockedStorylinesCount?: number;
 };
 
-export function ConversionBanner({ onUpgrade, ownedCount, rivalryExists, leagueName, leagueId }: Props) {
+export function ConversionBanner({
+  onUpgrade,
+  ownedCount,
+  rivalryExists,
+  leagueName,
+  leagueId,
+  lockedReceiptsCount,
+  lockedStorylinesCount,
+}: Props) {
   const handleUpgrade = () => {
     if (onUpgrade) {
       onUpgrade();
@@ -22,6 +32,12 @@ export function ConversionBanner({ onUpgrade, ownedCount, rivalryExists, leagueN
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
+
+  const showMissingCounts =
+    typeof lockedReceiptsCount === "number" &&
+    typeof lockedStorylinesCount === "number" &&
+    lockedReceiptsCount > 0 &&
+    lockedStorylinesCount > 0;
 
   return (
     <Card
@@ -39,15 +55,15 @@ export function ConversionBanner({ onUpgrade, ownedCount, rivalryExists, leagueN
           <ul className="space-y-3 text-sm">
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>Dominance grid + headlines</span>
+              <span>Every matchup. Every receipt.</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>Hero receipts deck</span>
+              <span>The moments your league will argue about.</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>Shareable cards (PNG + captions)</span>
+              <span>Drop chaos in the group chat.</span>
             </li>
           </ul>
         </div>
@@ -58,19 +74,27 @@ export function ConversionBanner({ onUpgrade, ownedCount, rivalryExists, leagueN
 
         {/* CTA */}
         <div className="text-center">
+          {showMissingCounts && (
+            <div className="text-xs font-semibold text-muted-foreground mb-2">
+              Unlock {lockedReceiptsCount} more receipts + {lockedStorylinesCount} storylines in this league.
+            </div>
+          )}
           <Button
             onClick={handleUpgrade}
             size="lg"
             className="font-semibold px-8"
           >
-            Unlock Full Receipts ($29)
+            Drop the Receipts ($29)
           </Button>
         </div>
+        <p className="text-sm font-semibold text-center">
+          Risk-free • 30-day money-back guarantee
+        </p>
 
         {leagueId === EXAMPLE_LEAGUE_ID && (
           <div className="text-center text-xs text-muted-foreground">
             <button onClick={handleUpgrade} className="text-primary hover:underline font-medium">
-              Unlock this league ($29)
+              Drop the Receipts ($29)
             </button>
             {" "}or{" "}
             <button

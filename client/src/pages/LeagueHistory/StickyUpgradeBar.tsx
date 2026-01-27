@@ -8,6 +8,8 @@ const PRICE_ONE_TIME = 29;
 type Props = {
   onUpgrade?: () => void;
   leagueName?: string;
+  lockedReceiptsCount?: number;
+  lockedStorylinesCount?: number;
 };
 
 function isDismissed(): boolean {
@@ -25,7 +27,12 @@ function setDismissed(): void {
   localStorage.setItem(STORAGE_KEY, String(dismissedUntil));
 }
 
-export function StickyUpgradeBar({ onUpgrade, leagueName }: Props) {
+export function StickyUpgradeBar({
+  onUpgrade,
+  leagueName,
+  lockedReceiptsCount,
+  lockedStorylinesCount,
+}: Props) {
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissedState, setIsDismissedState] = useState(false);
 
@@ -81,12 +88,23 @@ export function StickyUpgradeBar({ onUpgrade, leagueName }: Props) {
 
   if (!isVisible || isDismissedState) return null;
 
+  const showMissingCounts =
+    typeof lockedReceiptsCount === "number" &&
+    typeof lockedStorylinesCount === "number" &&
+    lockedReceiptsCount > 0 &&
+    lockedStorylinesCount > 0;
+
   return (
     <div
       className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-t shadow-lg animate-in slide-in-from-bottom-2 fade-in duration-300"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="mx-auto max-w-6xl px-4 py-3">
+        {showMissingCounts && (
+          <div className="text-xs font-semibold text-muted-foreground mb-1">
+            Unlock {lockedReceiptsCount} more receipts + {lockedStorylinesCount} storylines in this league.
+          </div>
+        )}
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">
@@ -99,7 +117,7 @@ export function StickyUpgradeBar({ onUpgrade, leagueName }: Props) {
               size="sm"
               className="font-semibold whitespace-nowrap"
             >
-              Unlock →
+              Drop the Receipts ($29)
             </Button>
             <Button
               variant="ghost"
@@ -111,6 +129,9 @@ export function StickyUpgradeBar({ onUpgrade, leagueName }: Props) {
               <X className="h-4 w-4" />
             </Button>
           </div>
+        </div>
+        <div className="text-xs font-semibold text-muted-foreground mt-1">
+          Risk-free • 30-day money-back guarantee
         </div>
       </div>
     </div>

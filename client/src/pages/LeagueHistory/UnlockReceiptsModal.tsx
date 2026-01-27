@@ -18,6 +18,8 @@ type Props = {
   ownedCount?: number;
   rivalryExists?: boolean;
   leagueName?: string;
+  lockedReceiptsCount?: number;
+  lockedStorylinesCount?: number;
 };
 
 export function UnlockReceiptsModal({
@@ -27,6 +29,8 @@ export function UnlockReceiptsModal({
   ownedCount,
   rivalryExists,
   leagueName,
+  lockedReceiptsCount,
+  lockedStorylinesCount,
 }: Props) {
   const handleUnlock = () => {
     if (onUnlock) {
@@ -41,6 +45,12 @@ export function UnlockReceiptsModal({
     : rivalryExists
       ? "Your league has a real rivalry. See the full story."
       : "Your league has stories worth sharing. Unlock the receipts.";
+
+  const showMissingCounts =
+    typeof lockedReceiptsCount === "number" &&
+    typeof lockedStorylinesCount === "number" &&
+    lockedReceiptsCount > 0 &&
+    lockedStorylinesCount > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -59,15 +69,15 @@ export function UnlockReceiptsModal({
           <div className="space-y-2">
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Dominance grid + headlines</span>
+              <span>Every matchup. Every receipt.</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Hero receipts deck</span>
+              <span>The moments your league will argue about.</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Shareable cards (PNG + captions)</span>
+              <span>Drop chaos in the group chat.</span>
             </div>
           </div>
           <p className="text-xs text-muted-foreground text-center">
@@ -96,17 +106,24 @@ export function UnlockReceiptsModal({
           >
             Not now
           </Button>
-          <Button
-            onClick={handleUnlock}
-            className="w-full sm:w-auto font-semibold"
-          >
-            Unlock Full Receipts ($29)
-          </Button>
+          <div className="w-full sm:w-auto text-center">
+            {showMissingCounts && (
+              <div className="text-xs font-semibold text-muted-foreground mb-2">
+                Unlock {lockedReceiptsCount} more receipts + {lockedStorylinesCount} storylines in this league.
+              </div>
+            )}
+            <Button
+              onClick={handleUnlock}
+              className="w-full sm:w-auto font-semibold"
+            >
+              Drop the Receipts ($29)
+            </Button>
+          </div>
         </DialogFooter>
 
         {/* CTA Subtext */}
-        <p className="text-xs text-muted-foreground text-center mt-2">
-          One-time. No subscription. 30-day money-back guarantee.
+        <p className="text-sm font-semibold text-center mt-2">
+          Risk-free • 30-day money-back guarantee
         </p>
       </DialogContent>
     </Dialog>

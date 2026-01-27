@@ -33,6 +33,7 @@ type V2Props = {
   season?: string;
   rarity?: Rarity;
   watermark?: string;
+  watermarkOverlay?: string;
 
   back?: {
     headline?: string;
@@ -154,6 +155,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
     season = "2024–25",
     rarity,
     watermark = "Fantasy Roast",
+    watermarkOverlay,
     back,
     onClick,
     defaultFlipped,
@@ -296,10 +298,16 @@ export function BaseballCard(props: LegacyProps | V2Props) {
             title: title,
           });
           // Native share complete - no modal needed, user already shared
-          toast({
-            title: "Card shared!",
-            description: "Tag your nemesis in the group chat.",
-          });
+          if (watermarkOverlay) {
+            toast({
+              title: "Unlock to remove the watermark and drop the full receipts.",
+            });
+          } else {
+            toast({
+              title: "Card shared!",
+              description: "Tag your nemesis in the group chat.",
+            });
+          }
           if (onShare) onShare();
           return;
         }
@@ -316,6 +324,11 @@ export function BaseballCard(props: LegacyProps | V2Props) {
         // Show tag nemesis modal after copy
         setShowTagModal(true);
         if (onShare) onShare();
+        if (watermarkOverlay) {
+          toast({
+            title: "Unlock to remove the watermark and drop the full receipts.",
+          });
+        }
       } catch (clipboardError) {
         // If clipboard fails, at least copy the text
         await navigator.clipboard.writeText(caption);
@@ -324,6 +337,11 @@ export function BaseballCard(props: LegacyProps | V2Props) {
         // Show tag nemesis modal even on fallback
         setShowTagModal(true);
         if (onShare) onShare();
+        if (watermarkOverlay) {
+          toast({
+            title: "Unlock to remove the watermark and drop the full receipts.",
+          });
+        }
       }
     } catch (error) {
       console.error("Share failed:", error);
@@ -368,6 +386,13 @@ export function BaseballCard(props: LegacyProps | V2Props) {
 
   const renderFront = () => (
     <FaceShell>
+      {watermarkOverlay && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="text-[11px] sm:text-xs font-semibold uppercase tracking-widest text-foreground/60 rotate-[-20deg]">
+            {watermarkOverlay}
+          </div>
+        </div>
+      )}
       {/* header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
