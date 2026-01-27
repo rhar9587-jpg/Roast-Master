@@ -1,5 +1,6 @@
 import { RoastDeckCarousel } from "@/components/roast/RoastDeckCarousel";
 import { BaseballCard } from "@/components/roast/BaseballCard";
+import { Button } from "@/components/ui/button";
 import { fmtScore } from "./utils";
 import type { LandlordSummary } from "./types";
 import { Lock } from "lucide-react";
@@ -119,7 +120,7 @@ export function InsightsDashboard({
         onOpenCell(landlord?.bestVictim?.cellKey ?? null)
       }
       enableShare={true}
-      watermarkOverlay={!isPremium ? "Fantasy Roast — Unlock to see the full roast" : undefined}
+      isPremium={isPremium}
       roastContext={{
         victimName: landlord?.bestVictim?.victimName,
         landlordName: landlord?.landlordName,
@@ -151,6 +152,7 @@ export function InsightsDashboard({
       season="2024–25"
       onClick={() => onOpenCell(mostOwned?.cellKey ?? null)}
       enableShare={isPremium}
+      isPremium={isPremium}
       roastContext={{
         victimName: mostOwned?.victimName,
         landlordName: mostOwned?.worstNemesisName,
@@ -196,6 +198,7 @@ export function InsightsDashboard({
         onOpenCell(biggestRivalry?.cellKey ?? null)
       }
       enableShare={isPremium}
+      isPremium={isPremium}
       roastContext={{
         opponentName: biggestRivalry?.bName,
         record: biggestRivalry?.record,
@@ -214,17 +217,28 @@ export function InsightsDashboard({
   }
 
   return (
-    <div>
+    <div className="space-y-4">
       <RoastDeckCarousel>
         {landlordCard}
-        {mostOwnedCard}
+        <BlurredCardWrapper onUnlock={onUnlock}>
+          {mostOwnedCard}
+        </BlurredCardWrapper>
         <BlurredCardWrapper onUnlock={onUnlock}>
           {biggestRivalryCard}
         </BlurredCardWrapper>
       </RoastDeckCarousel>
-      <p className="text-xs text-muted-foreground text-center mt-2">
-        This is just the beginning… Unlock to see who really owns this league.
-      </p>
+      <div className="rounded-lg border border-dashed bg-muted/20 p-4 space-y-3 text-center">
+        <p className="text-sm font-medium text-foreground">More roasts are waiting.</p>
+        <ul className="text-xs text-muted-foreground space-y-1">
+          <li>Weekly roasts for every matchup</li>
+          <li>Your Season wrapped</li>
+          <li>End-of-season recap</li>
+          <li>More hero cards your league will argue about</li>
+        </ul>
+        <Button size="sm" onClick={onUnlock}>
+          Unlock Full Roast ($29)
+        </Button>
+      </div>
     </div>
   );
 }

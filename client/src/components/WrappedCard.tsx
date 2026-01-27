@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-import * as htmlToImage from "html-to-image";
 import { motion } from "framer-motion";
 import { Download, Share2 } from "lucide-react";
+import { exportCardPng, dataUrlToFile, downloadDataUrl } from "@/lib/exportCardImage";
+import { WatermarkOverlay } from "@/components/ui/WatermarkOverlay";
 
 type WrappedCardProps = {
   kicker?: string;
@@ -21,6 +22,7 @@ type WrappedCardProps = {
   };
   showScoreBug?: boolean;
   onToggleScoreBug?: () => void;
+  isPremium?: boolean;
 };
 
 const accentClasses: Record<NonNullable<WrappedCardProps["accent"]>, string> = {
@@ -44,6 +46,7 @@ export function WrappedCard({
   matchupData,
   showScoreBug,
   onToggleScoreBug,
+  isPremium = false,
 }: WrappedCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -60,14 +63,12 @@ export function WrappedCard({
     if (!ref.current) return;
     setIsExporting(true);
     try {
-      const dataUrl = await htmlToImage.toPng(ref.current, {
-        pixelRatio: 2,
-        cacheBust: true,
+      const { dataUrl } = await exportCardPng({
+        element: ref.current,
+        filename,
+        isPremium,
       });
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = filename;
-      a.click();
+      downloadDataUrl(dataUrl, filename);
     } finally {
       setIsExporting(false);
     }
@@ -78,17 +79,17 @@ export function WrappedCard({
     setIsExporting(true);
 
     try {
-      const dataUrl = await htmlToImage.toPng(ref.current, {
-        pixelRatio: 2,
-        cacheBust: true,
-      });
-
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      const file = new File([blob], filename, { type: "image/png" });
-
       const shareText = "My Fantasy Wrapped";
       const shareUrl = window.location.href;
+
+      const { dataUrl } = await exportCardPng({
+        element: ref.current,
+        filename,
+        caption: shareText,
+        isPremium,
+      });
+
+      const file = await dataUrlToFile(dataUrl, filename);
 
       if ("share" in navigator && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
@@ -102,14 +103,11 @@ export function WrappedCard({
 
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareUrl);
-        alert("Link copied ✅");
+        alert(isPremium ? "Link copied ✅" : "Link copied ✅ (Unlock for clean exports)");
         return;
       }
 
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = filename;
-      a.click();
+      downloadDataUrl(dataUrl, filename);
     } finally {
       setIsExporting(false);
     }
@@ -124,7 +122,10 @@ export function WrappedCard({
         className="rounded-3xl shadow-2xl overflow-hidden border border-border/50 bg-white"
       >
         {/* Exported area */}
-        <div ref={ref} className="bg-[#0b0b0f]">
+        <div ref={ref} className="bg-[#0b0b0f] relative">
+          {/* Watermark for free users - visible in preview and export */}
+          <WatermarkOverlay show={!isPremium} theme="dark" />
+          
           <div className={`h-3 bg-gradient-to-r ${accentClasses[accent]}`} />
 
           <div className="p-10 md:p-12">
@@ -182,40 +183,47 @@ export function WrappedCard({
         </div>
 
         {/* Share controls (not exported) */}
-        <div className="p-4 bg-white flex gap-2 justify-end">
-          <button
-            onClick={downloadPng}
-            disabled={isExporting}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-primary text-primary-foreground font-semibold disabled:opacity-60"
-          >
-            <Download className="w-4 h-4" />
-            {isExporting ? "Preparing…" : "Download PNG"}
-          </button>
-
-          <div className="relative group">
+        <div className="p-4 bg-white flex flex-col gap-2">
+          <div className="flex gap-2 justify-end">
             <button
-              onClick={smartShare}
+              onClick={downloadPng}
               disabled={isExporting}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-muted text-foreground font-semibold disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-primary text-primary-foreground font-semibold disabled:opacity-60"
             >
-              <Share2 className="w-4 h-4" />
-              Post the Roast
+              <Download className="w-4 h-4" />
+              {isExporting ? "Preparing…" : "Download PNG"}
             </button>
 
-            <div
-              role="tooltip"
-              className="
-                pointer-events-none absolute -top-11 right-0 z-50
-                whitespace-nowrap rounded-lg bg-black/90 px-3 py-2
-                text-xs font-semibold text-white shadow-lg
-                opacity-0 translate-y-1 transition
-                group-hover:opacity-100 group-hover:translate-y-0
-              "
-            >
-              Let the league witness this.
-              <div className="absolute right-4 top-full h-2 w-2 rotate-45 bg-black/90" />
+            <div className="relative group">
+              <button
+                onClick={smartShare}
+                disabled={isExporting}
+                className="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-muted text-foreground font-semibold disabled:opacity-60"
+              >
+                <Share2 className="w-4 h-4" />
+                Post the Roast
+              </button>
+
+              <div
+                role="tooltip"
+                className="
+                  pointer-events-none absolute -top-11 right-0 z-50
+                  whitespace-nowrap rounded-lg bg-black/90 px-3 py-2
+                  text-xs font-semibold text-white shadow-lg
+                  opacity-0 translate-y-1 transition
+                  group-hover:opacity-100 group-hover:translate-y-0
+                "
+              >
+                Let the league witness this.
+                <div className="absolute right-4 top-full h-2 w-2 rotate-45 bg-black/90" />
+              </div>
             </div>
           </div>
+          {!isPremium && (
+            <p className="text-xs text-gray-500 text-right">
+              Watermark removed when you unlock ($29)
+            </p>
+          )}
         </div>
       </motion.div>
     </div>

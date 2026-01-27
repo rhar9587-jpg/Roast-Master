@@ -219,14 +219,32 @@ export function StorylinesMiniCards({
           </h2>
           {yourRoastCards.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {yourRoastCards.map((c) => (
-                <MiniCardItem
-                  key={c.id}
-                  card={c}
-                  onOpenCell={onOpenCell}
-                  onHighlightManager={onHighlightManager}
-                />
-              ))}
+              {yourRoastCards.map((c, index) => {
+                const card = (
+                  <MiniCardItem
+                    key={c.id}
+                    card={c}
+                    onOpenCell={onOpenCell}
+                    onHighlightManager={onHighlightManager}
+                  />
+                );
+
+                if (isPremium || index === 0) {
+                  return card;
+                }
+
+                const remainingCount = yourRoastCards.length - 1;
+                return (
+                  <BlurredMiniCardWrapper
+                    key={c.id}
+                    onUnlock={onUnlock}
+                    title={c.title}
+                    remainingCount={Math.max(remainingCount, 0)}
+                  >
+                    {card}
+                  </BlurredMiniCardWrapper>
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed bg-muted/20 px-4 py-6 text-center">

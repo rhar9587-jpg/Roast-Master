@@ -86,6 +86,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
       season={receipt.season}
       onClick={receipt.onClick}
       enableShare={isPremium}
+      isPremium={isPremium}
     />
   ));
 
@@ -112,27 +113,42 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
         </p>
       </div>
       <RoastDeckCarousel>
-        {cards.map((card, idx) => {
-          // Show first 2 cards free, blur the rest
-          if (idx < 2) {
-            return <React.Fragment key={heroReceipts[idx].id}>{card}</React.Fragment>;
+        {heroReceipts.map((receipt, index) => {
+          const card = (
+            <BaseballCard
+              key={receipt.id}
+              badge={receipt.badge}
+              badgeText={badgeTextById[receipt.id]}
+              title={receipt.title}
+              name={receipt.name}
+              avatarUrl={receipt.avatarUrl ?? null}
+              primaryStat={receipt.primaryStat}
+              punchline={receipt.punchline}
+              lines={receipt.lines}
+              season={receipt.season}
+              onClick={receipt.onClick}
+              enableShare={false}
+              isPremium={false}
+            />
+          );
+
+          if (index === 0) {
+            return card;
           }
-          const remainingCount = Math.max(heroReceipts.length - 2, 0);
+
+          const remainingCount = heroReceipts.length - 1;
           return (
             <BlurredCardWrapper
-              key={heroReceipts[idx].id}
+              key={receipt.id}
               onUnlock={onUnlock}
-              title={heroReceipts[idx].title}
-              remainingCount={remainingCount}
+              title={receipt.title}
+              remainingCount={Math.max(remainingCount, 0)}
             >
               {card}
             </BlurredCardWrapper>
           );
         })}
       </RoastDeckCarousel>
-      <p className="text-xs text-muted-foreground text-center mt-2">
-        Unlock to reveal the full roast and share the truth.
-      </p>
     </div>
   );
 }

@@ -1,11 +1,12 @@
 import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { Share2 } from "lucide-react";
-import { toPng } from "html-to-image";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { TagNemesisModal } from "./TagNemesisModal";
 import { track } from "@/lib/track";
+import { exportCardPng, dataUrlToFile } from "@/lib/exportCardImage";
+import { WatermarkOverlay } from "@/components/ui/WatermarkOverlay";
 
 type LegacyStat = { label: string; value: string };
 type Badge = "OWNED" | "NEMESIS" | "RIVAL" | "EDGE" | "SMALL SAMPLE";
@@ -64,6 +65,9 @@ type V2Props = {
     opponentName?: string;
     record?: string;
   };
+
+  /** Optional: premium status for clean exports (no watermark) */
+  isPremium?: boolean;
 };
 
 function isLegacyProps(p: LegacyProps | V2Props): p is LegacyProps {
@@ -164,6 +168,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
     onShare,
     enableShare = false,
     roastContext,
+    isPremium = false,
   } = props;
 
   const [flipped, setFlipped] = React.useState<boolean>(!!defaultFlipped);
@@ -261,39 +266,30 @@ export function BaseballCard(props: LegacyProps | V2Props) {
     if (!cardRef.current || isSharing) return;
     
     // Track share attempt
-    track("share_clicked", { card_type: title, card_name: name, has_watermark: !!watermarkOverlay });
+    track("share_clicked", { card_type: title, card_name: name, has_watermark: !isPremium });
     
     setIsSharing(true);
     try {
-      // Wait for fonts to load
-      if (typeof document !== "undefined" && (document as any).fonts?.ready) {
-        await (document as any).fonts.ready;
-      }
+      // Wait for render to settle
       await new Promise<void>((r) =>
         requestAnimationFrame(() => requestAnimationFrame(() => r()))
       );
 
-      // Export card as PNG
-      const dataUrl = await toPng(cardRef.current, {
-        pixelRatio: 2,
-        cacheBust: true,
-        backgroundColor: "#ffffff",
-      });
-
-      // Generate caption (compute badgeIcon inline)
+      // Export card as PNG (with watermark for free users)
+      const filename = `fantasy-roast-${title.toLowerCase().replace(/\s+/g, "-")}-${name.toLowerCase().replace(/\s+/g, "-")}.png`;
       const badgeIconEmoji = badge === "OWNED" ? "👑" : badge === "NEMESIS" ? "💀" : badge === "RIVAL" ? "⚔️" : badge === "EDGE" ? "⚡" : "🎲";
       const caption = `${title} ${badgeIconEmoji} — ${name}${punchline ? ` ${punchline}` : ""} • ${primaryStat.value} ${primaryStat.label || ""}`.trim();
-      
-      // Generate contextual roast text for modal
-      const roastText = generateRoastText();
+
+      const { dataUrl } = await exportCardPng({
+        element: cardRef.current,
+        filename,
+        caption,
+        isPremium,
+      });
 
       // Try native share first (mobile)
       if (navigator.share && navigator.canShare) {
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
-        const file = new File([blob], `fantasy-roast-${title.toLowerCase().replace(/\s+/g, "-")}-${name.toLowerCase().replace(/\s+/g, "-")}.png`, {
-          type: "image/png",
-        });
+        const file = await dataUrlToFile(dataUrl, filename);
 
         if (navigator.canShare({ files: [file], text: caption })) {
           await navigator.share({
@@ -302,9 +298,9 @@ export function BaseballCard(props: LegacyProps | V2Props) {
             title: title,
           });
           // Native share complete - no modal needed, user already shared
-          if (watermarkOverlay) {
+          if (!isPremium) {
             toast({
-              title: "Unlock to remove the watermark and drop the full receipts.",
+              title: "Unlock to remove the watermark and drop the full roast.",
             });
           } else {
             toast({
@@ -319,18 +315,17 @@ export function BaseballCard(props: LegacyProps | V2Props) {
 
       // Fallback: copy image to clipboard and caption text
       try {
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
+        const file = await dataUrlToFile(dataUrl, filename);
         await navigator.clipboard.write([
-          new ClipboardItem({ "image/png": blob }),
+          new ClipboardItem({ "image/png": file }),
         ]);
         await navigator.clipboard.writeText(caption);
         // Show tag nemesis modal after copy
         setShowTagModal(true);
         if (onShare) onShare();
-        if (watermarkOverlay) {
+        if (!isPremium) {
           toast({
-            title: "Unlock to remove the watermark and drop the full receipts.",
+            title: "Unlock to remove the watermark and drop the full roast.",
           });
         }
       } catch (clipboardError) {
@@ -341,9 +336,9 @@ export function BaseballCard(props: LegacyProps | V2Props) {
         // Show tag nemesis modal even on fallback
         setShowTagModal(true);
         if (onShare) onShare();
-        if (watermarkOverlay) {
+        if (!isPremium) {
           toast({
-            title: "Unlock to remove the watermark and drop the full receipts.",
+            title: "Unlock to remove the watermark and drop the full roast.",
           });
         }
       }
@@ -352,7 +347,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
     } finally {
       setIsSharing(false);
     }
-  }, [cardRef, isSharing, title, badge, name, punchline, primaryStat, onShare, toast, generateRoastText]);
+  }, [cardRef, isSharing, title, badge, name, punchline, primaryStat, onShare, toast, isPremium]);
 
   const bgLayers = () => (
     <div className="pointer-events-none absolute inset-0">
@@ -390,13 +385,8 @@ export function BaseballCard(props: LegacyProps | V2Props) {
 
   const renderFront = () => (
     <FaceShell>
-      {watermarkOverlay && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="text-[11px] sm:text-xs font-semibold uppercase tracking-widest text-foreground/60 rotate-[-20deg]">
-            {watermarkOverlay}
-          </div>
-        </div>
-      )}
+      {/* Watermark for free users - visible in preview and export */}
+      <WatermarkOverlay show={!isPremium} theme="light" />
       {/* header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -518,6 +508,8 @@ export function BaseballCard(props: LegacyProps | V2Props) {
 
     return (
       <FaceShell>
+        {/* Watermark for free users - visible in preview and export */}
+        <WatermarkOverlay show={!isPremium} theme="light" />
         {/* top header */}
         <div className="flex items-start justify-between gap-2">
           <div>

@@ -37,6 +37,7 @@ import { UnlockReceiptsModal } from "./UnlockReceiptsModal";
 import { RoastCard } from "@/components/RoastCard";
 import { SeasonWrappedCard } from "@/components/SeasonWrappedCard";
 import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
+import { LockedModePreview } from "./LockedModePreview";
 import { isPremium, setPremium } from "./premium";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername } from "./utils";
 import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards } from "./storylines";
@@ -1268,7 +1269,43 @@ export default function LeagueHistoryPage() {
         />
       </div>
 
-      {hasData && activeMode === "weekly" && (
+      {hasData && activeMode === "weekly" && !isPremiumState && (
+        <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-semibold text-foreground">Week</label>
+              <input
+                type="number"
+                min={1}
+                max={18}
+                value={weeklyWeek}
+                onChange={(e) => setWeeklyWeek(Number(e.target.value))}
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+                disabled
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                <span className="font-medium">Locked.</span> Unlock to generate weekly roasts.
+              </p>
+            </div>
+            <Button disabled>Generate Weekly Roast</Button>
+          </div>
+        </section>
+      )}
+
+      {hasData && activeMode === "weekly" && !isPremiumState && (
+        <LockedModePreview
+          title="Weekly Roast"
+          description="Pick any week and generate the chaos from that slate."
+          previewItems={[
+            "Top dog and fraud of the week",
+            "Matchup chaos and blowouts",
+            "Shareable roast cards for the group chat",
+          ]}
+          onUnlock={handleUpgrade}
+        />
+      )}
+
+      {hasData && activeMode === "weekly" && isPremiumState && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="flex-1">
@@ -1292,18 +1329,60 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {hasData && activeMode === "weekly" && weeklyRoastData && (
-        <RoastCard data={weeklyRoastData} />
+      {hasData && activeMode === "weekly" && isPremiumState && weeklyRoastData && (
+        <RoastCard data={weeklyRoastData} isPremium={isPremiumState} />
       )}
 
-      {hasData && activeMode === "weekly" && !weeklyRoastData && !weeklyRoastLoading && (
+      {hasData && activeMode === "weekly" && isPremiumState && !weeklyRoastData && !weeklyRoastLoading && (
         <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
           <p className="text-sm text-muted-foreground">Choose a week to generate the roast.</p>
           <p className="text-xs text-muted-foreground mt-1">History is always available.</p>
         </div>
       )}
 
-      {hasData && activeMode === "season" && (
+      {hasData && activeMode === "season" && !isPremiumState && (
+        <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-semibold text-foreground">Pick your team</label>
+              <select
+                value={seasonRosterId}
+                onChange={(e) =>
+                  setSeasonRosterId(e.target.value ? Number(e.target.value) : "")
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+                disabled
+              >
+                <option value="">Choose your roster...</option>
+                {seasonTeams.map((t) => (
+                  <option key={t.roster_id} value={t.roster_id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                <span className="font-medium">Locked.</span> Unlock to generate Your Season.
+              </p>
+            </div>
+            <Button disabled>Generate Your Season</Button>
+          </div>
+        </section>
+      )}
+
+      {hasData && activeMode === "season" && !isPremiumState && (
+        <LockedModePreview
+          title="Your Season"
+          description="Pick a manager and reveal their season wrapped."
+          previewItems={[
+            "Personal highlights and lowlights",
+            "Your season story in shareable cards",
+            "A roast-worthy recap for the group chat",
+          ]}
+          onUnlock={handleUpgrade}
+        />
+      )}
+
+      {hasData && activeMode === "season" && isPremiumState && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="flex-1">
@@ -1337,18 +1416,46 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {hasData && activeMode === "season" && seasonWrappedData && (
-        <SeasonWrappedCard data={seasonWrappedData} />
+      {hasData && activeMode === "season" && isPremiumState && seasonWrappedData && (
+        <SeasonWrappedCard data={seasonWrappedData} isPremium={isPremiumState} />
       )}
 
-      {hasData && activeMode === "season" && !seasonWrappedData && !seasonWrappedLoading && (
+      {hasData && activeMode === "season" && isPremiumState && !seasonWrappedData && !seasonWrappedLoading && (
         <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
           <p className="text-sm text-muted-foreground">Choose a manager to generate Your Season.</p>
           <p className="text-xs text-muted-foreground mt-1">History is always available.</p>
         </div>
       )}
 
-      {hasData && activeMode === "end" && (
+      {hasData && activeMode === "end" && !isPremiumState && (
+        <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">End-of-Season</h2>
+              <p className="text-sm text-muted-foreground">League-wide moments and chaos.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                <span className="font-medium">Locked.</span> Unlock to generate the recap.
+              </p>
+            </div>
+            <Button disabled>Generate End-of-Season</Button>
+          </div>
+        </section>
+      )}
+
+      {hasData && activeMode === "end" && !isPremiumState && (
+        <LockedModePreview
+          title="Recap"
+          description="End-of-season moments that your league won't forget."
+          previewItems={[
+            "Biggest blowouts and upsets",
+            "Season highs and lows",
+            "Shareable recap cards for the league",
+          ]}
+          onUnlock={handleUpgrade}
+        />
+      )}
+
+      {hasData && activeMode === "end" && isPremiumState && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
@@ -1365,11 +1472,11 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {hasData && activeMode === "end" && autopsyData && (
-        <LeagueAutopsyCard data={autopsyData} />
+      {hasData && activeMode === "end" && isPremiumState && autopsyData && (
+        <LeagueAutopsyCard data={autopsyData} isPremium={isPremiumState} />
       )}
 
-      {hasData && activeMode === "end" && !autopsyData && !autopsyLoading && (
+      {hasData && activeMode === "end" && isPremiumState && !autopsyData && !autopsyLoading && (
         <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
           <p className="text-sm text-muted-foreground">Click Generate to see the league recap.</p>
           <p className="text-xs text-muted-foreground mt-1">History is always available.</p>

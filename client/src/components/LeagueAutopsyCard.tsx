@@ -1,6 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { toPng } from "html-to-image";
 import { WrappedCard } from "@/components/WrappedCard";
 import type { LeagueAutopsyResponse } from "@shared/schema";
 import { Skull, TrendingUp, TrendingDown, Zap, Scale } from "lucide-react";
@@ -17,10 +16,13 @@ const kickerIcon = (type: string) => {
   return null;
 };
 
-export function LeagueAutopsyCard({ data }: { data: LeagueAutopsyResponse }) {
+interface LeagueAutopsyCardProps {
+  data: LeagueAutopsyResponse;
+  isPremium?: boolean;
+}
+
+export function LeagueAutopsyCard({ data, isPremium = false }: LeagueAutopsyCardProps) {
   const [index, setIndex] = useState(0);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [isExporting, setIsExporting] = useState(false);
 
   const cards = data?.cards ?? [];
   const total = cards.length || 1;
@@ -46,51 +48,6 @@ export function LeagueAutopsyCard({ data }: { data: LeagueAutopsyResponse }) {
       subtitle: "No autopsy cards yet",
       stat: "—",
     } as const);
-
-  const filename = useMemo(() => {
-    const safe = (current.title || "league-autopsy")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$|/g, "");
-    return `${safe || "league-autopsy"}.png`;
-  }, [current.title]);
-
-  async function downloadPng() {
-    if (!cardRef.current) return;
-    setIsExporting(true);
-    try {
-      const dataUrl = await toPng(cardRef.current, { pixelRatio: 2 });
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = filename;
-      a.click();
-    } finally {
-      setIsExporting(false);
-    }
-  }
-
-  async function sharePng() {
-    if (!cardRef.current) return;
-    setIsExporting(true);
-    try {
-      const dataUrl = await toPng(cardRef.current, { pixelRatio: 2 });
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      const file = new File([blob], filename, { type: "image/png" });
-
-      const shareText = "League Autopsy - The season, as it happened.";
-
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ title: "League Autopsy", text: shareText, files: [file] });
-        return;
-      }
-
-      await navigator.clipboard.writeText(shareText);
-      window.open(dataUrl, "_blank");
-    } finally {
-      setIsExporting(false);
-    }
-  }
 
   return (
     <div className="w-full max-w-3xl mx-auto" data-testid="league-autopsy-card">
@@ -127,18 +84,17 @@ export function LeagueAutopsyCard({ data }: { data: LeagueAutopsyResponse }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.25 }}
       >
-        <div ref={cardRef}>
-          <WrappedCard
-            kicker="LEAGUE AUTOPSY"
-            kickerIcon={kickerIcon(current.type)}
-            title={current.title}
-            subtitle={current.subtitle}
-            tagline={current.tagline}
-            bigValue={current.stat || "—"}
-            footer={data?.league?.name || "fantasyroast.net"}
-            accent={accentFor(current.type)}
-          />
-        </div>
+        <WrappedCard
+          kicker="LEAGUE AUTOPSY"
+          kickerIcon={kickerIcon(current.type)}
+          title={current.title}
+          subtitle={current.subtitle}
+          tagline={current.tagline}
+          bigValue={current.stat || "—"}
+          footer={data?.league?.name || "fantasyroast.net"}
+          accent={accentFor(current.type)}
+          isPremium={isPremium}
+        />
       </motion.div>
     </div>
   );

@@ -1,6 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { toPng } from "html-to-image";
 import { WrappedCard } from "@/components/WrappedCard";
 
 type Accent = "green" | "pink" | "blue" | "orange";
@@ -18,10 +17,13 @@ type WrappedApiResponse = {
   };
 };
 
-export function SeasonWrappedCard({ data }: { data: WrappedApiResponse }) {
+interface SeasonWrappedCardProps {
+  data: WrappedApiResponse;
+  isPremium?: boolean;
+}
+
+export function SeasonWrappedCard({ data, isPremium = false }: SeasonWrappedCardProps) {
   const [index, setIndex] = useState(0);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [isExporting, setIsExporting] = useState(false);
 
   const cards = data?.wrapped?.cards ?? [];
   const total = cards.length || 1;
@@ -45,51 +47,6 @@ export function SeasonWrappedCard({ data }: { data: WrappedApiResponse }) {
       subtitle: "No wrapped cards yet",
       stat: "—",
     } as const);
-
-  const filename = useMemo(() => {
-    const safe = (current.title || "season-wrapped")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$|/g, "");
-    return `${safe || "season-wrapped"}.png`;
-  }, [current.title]);
-
-  async function downloadPng() {
-    if (!cardRef.current) return;
-    setIsExporting(true);
-    try {
-      const dataUrl = await toPng(cardRef.current, { pixelRatio: 2 });
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = filename;
-      a.click();
-    } finally {
-      setIsExporting(false);
-    }
-  }
-
-  async function sharePng() {
-    if (!cardRef.current) return;
-    setIsExporting(true);
-    try {
-      const dataUrl = await toPng(cardRef.current, { pixelRatio: 2 });
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      const file = new File([blob], filename, { type: "image/png" });
-
-      const shareText = "My Fantasy Season Wrapped";
-
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ title: "Season Wrapped", text: shareText, files: [file] });
-        return;
-      }
-
-      await navigator.clipboard.writeText(shareText);
-      window.open(dataUrl, "_blank");
-    } finally {
-      setIsExporting(false);
-    }
-  }
 
   return (
     <div className="w-full max-w-3xl mx-auto">
@@ -124,19 +81,15 @@ export function SeasonWrappedCard({ data }: { data: WrappedApiResponse }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.25 }}
       >
-        <div ref={cardRef}>
-          <WrappedCard
-            kicker="SEASON WRAPPED"
-            title={current.title}
-            subtitle={current.subtitle}
-            bigValue={current.stat || "—"}
-            footer="fantasyroast.net"
-            accent={accentFor(current.type)}
-          />
-        </div>
-
-        {/* Optional: if you want download/share buttons on wrapped too, add them here */}
-        {/* Keeping identical to your "previous version" by default. */}
+        <WrappedCard
+          kicker="SEASON WRAPPED"
+          title={current.title}
+          subtitle={current.subtitle}
+          bigValue={current.stat || "—"}
+          footer="fantasyroast.net"
+          accent={accentFor(current.type)}
+          isPremium={isPremium}
+        />
       </motion.div>
     </div>
   );

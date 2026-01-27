@@ -8,13 +8,14 @@ type Accent = "green" | "pink" | "blue" | "orange";
 
 interface RoastCardProps {
   data: RoastResponse;
+  isPremium?: boolean;
 }
 
 function safeNum(n: number | undefined | null, fallback = 0) {
   return typeof n === "number" && Number.isFinite(n) ? n : fallback;
 }
 
-export function RoastCard({ data }: RoastCardProps) {
+export function RoastCard({ data, isPremium = false }: RoastCardProps) {
   const [index, setIndex] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
   const [showScoreBug, setShowScoreBug] = useState(false);
@@ -176,6 +177,7 @@ export function RoastCard({ data }: RoastCardProps) {
         tagline={current.tagline}
         footer={current.footer}
         accent={current.accent}
+        isPremium={isPremium}
       />
     </div>
   );
