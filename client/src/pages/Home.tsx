@@ -30,7 +30,6 @@ export default function Home() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [weeklyRoastIntent, setWeeklyRoastIntent] = useState(false);
   const EXAMPLE_LEAGUE_ID = "1204010682635255808";
 
   // Track home visit once on mount
@@ -136,11 +135,6 @@ export default function Home() {
     }
   }
 
-  function handleRoastMyLeague() {
-    setWeeklyRoastIntent(true);
-    document.getElementById("username-input")?.scrollIntoView({ behavior: "smooth", block: "center" });
-    document.getElementById("username-input")?.focus();
-  }
 
   function handleViewLeagueHistory() {
     const recent = typeof window !== "undefined" ? getRecentLeagues() : [];
@@ -165,10 +159,6 @@ export default function Home() {
     }
     const exampleLeagueId = "1204010682635255808";
     window.location.href = `/league-history/dominance?league_id=${exampleLeagueId}&start_week=1&end_week=17`;
-  }
-
-  function handleValueCardClick() {
-    handleRoastMyLeague();
   }
 
   function handleTryExampleLeague() {
@@ -236,12 +226,6 @@ export default function Home() {
                 See Who Owns Your League
               </Button>
             </div>
-            <button
-              onClick={handleRoastMyLeague}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Already playing this week? Get a weekly roast →
-            </button>
           </section>
 
           {/* Example Cards */}
@@ -362,6 +346,7 @@ export default function Home() {
             <div className="mb-4">
               <h2 className="text-lg font-semibold">Get Started</h2>
               <p className="text-sm text-muted-foreground mt-1">Enter your league to generate your roasts</p>
+              <p className="text-xs text-muted-foreground mt-1">Want this week's roast? Enter your username below.</p>
             </div>
             <div className="space-y-4">
               <div>
@@ -422,11 +407,6 @@ export default function Home() {
                       </option>
                     ))}
                   </select>
-                  {weeklyRoastIntent && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Weekly Roast unlocks after your league loads.
-                    </p>
-                  )}
                 </div>
               )}
 

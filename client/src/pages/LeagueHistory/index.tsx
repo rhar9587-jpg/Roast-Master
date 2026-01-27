@@ -1199,10 +1199,10 @@ export default function LeagueHistoryPage() {
       {hasData && (
         <div className="flex flex-wrap gap-2 rounded-xl border bg-muted/20 p-1">
           {[
-            { id: "history", label: "League History" },
-            { id: "weekly", label: "Weekly Roast" },
+            { id: "history", label: "History" },
+            { id: "weekly", label: "Weekly" },
             { id: "season", label: "Your Season" },
-            { id: "end", label: "End-of-Season" },
+            { id: "end", label: "Recap" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -1217,6 +1217,21 @@ export default function LeagueHistoryPage() {
             </button>
           ))}
         </div>
+      )}
+
+      {hasData && (
+        <p className="text-sm text-muted-foreground">
+          {activeMode === "history" && "All-time dominance + the biggest moments. Built for the group chat."}
+          {activeMode === "weekly" && "Pick a week. Get the chaos from that matchup slate."}
+          {activeMode === "season" && "Pick a manager. See their season wrapped."}
+          {activeMode === "end" && "Pick a season. Get the league recap."}
+        </p>
+      )}
+
+      {activeMode === "history" && !isPremiumState && hasData && (
+        <p className="text-xs text-muted-foreground">
+          Unlock once for this league to share everything.
+        </p>
       )}
 
       {leagueId === EXAMPLE_LEAGUE_ID && (
@@ -1281,6 +1296,13 @@ export default function LeagueHistoryPage() {
         <RoastCard data={weeklyRoastData} />
       )}
 
+      {hasData && activeMode === "weekly" && !weeklyRoastData && !weeklyRoastLoading && (
+        <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
+          <p className="text-sm text-muted-foreground">Choose a week to generate the roast.</p>
+          <p className="text-xs text-muted-foreground mt-1">History is always available.</p>
+        </div>
+      )}
+
       {hasData && activeMode === "season" && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
@@ -1319,6 +1341,13 @@ export default function LeagueHistoryPage() {
         <SeasonWrappedCard data={seasonWrappedData} />
       )}
 
+      {hasData && activeMode === "season" && !seasonWrappedData && !seasonWrappedLoading && (
+        <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
+          <p className="text-sm text-muted-foreground">Choose a manager to generate Your Season.</p>
+          <p className="text-xs text-muted-foreground mt-1">History is always available.</p>
+        </div>
+      )}
+
       {hasData && activeMode === "end" && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1338,6 +1367,13 @@ export default function LeagueHistoryPage() {
 
       {hasData && activeMode === "end" && autopsyData && (
         <LeagueAutopsyCard data={autopsyData} />
+      )}
+
+      {hasData && activeMode === "end" && !autopsyData && !autopsyLoading && (
+        <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
+          <p className="text-sm text-muted-foreground">Click Generate to see the league recap.</p>
+          <p className="text-xs text-muted-foreground mt-1">History is always available.</p>
+        </div>
       )}
 
       {activeMode === "history" && hasData && hasEnoughData && (
