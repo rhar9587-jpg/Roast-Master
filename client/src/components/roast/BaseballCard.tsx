@@ -5,6 +5,7 @@ import { toPng } from "html-to-image";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { TagNemesisModal } from "./TagNemesisModal";
+import { track } from "@/lib/track";
 
 type LegacyStat = { label: string; value: string };
 type Badge = "OWNED" | "NEMESIS" | "RIVAL" | "EDGE" | "SMALL SAMPLE";
@@ -258,6 +259,9 @@ export function BaseballCard(props: LegacyProps | V2Props) {
   const handleShare = React.useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!cardRef.current || isSharing) return;
+    
+    // Track share attempt
+    track("share_clicked", { card_type: title, card_name: name, has_watermark: !!watermarkOverlay });
     
     setIsSharing(true);
     try {

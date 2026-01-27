@@ -1182,6 +1182,23 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // -------------------------
+  // Client-side Analytics Tracking
+  // -------------------------
+  app.post("/api/track", async (req: Request, res: Response) => {
+    try {
+      const { event, properties } = req.body;
+      if (!event || typeof event !== "string") {
+        return res.status(400).json({ error: "Missing event name" });
+      }
+      trackEvent(event, "/api/track", "POST", properties || {});
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      console.error("[/api/track] Error:", err);
+      return res.status(200).json({ ok: true }); // Never break client
+    }
+  });
+
+  // -------------------------
   // Analytics Stats Endpoint (protected by ADMIN_KEY)
   // -------------------------
   app.get("/api/stats", async (req: Request, res: Response) => {

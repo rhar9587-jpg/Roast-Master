@@ -31,7 +31,7 @@ function BlurredCardWrapper({
         {title}
       </div>
       <div className="text-xs text-muted-foreground">
-        🔒 {remainingCount} more receipts your league will argue about.
+        🔒 {remainingCount} more roasts your league will argue about.
       </div>
       <div className="relative">
         <div className="blur-sm opacity-60 pointer-events-none">{children}</div>
@@ -46,7 +46,7 @@ function BlurredCardWrapper({
             {isHovered && (
               <div className="space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Unlock to reveal the receipts
+                  Unlock to reveal the roast
                 </p>
               </div>
             )}
@@ -93,7 +93,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
     return (
       <div>
         <div className="mb-3">
-          <h2 className="text-sm font-medium text-muted-foreground">League Receipts</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">League Roasts</h2>
           <p className="text-xs text-muted-foreground mt-1">
             The moments your league will never forget.
           </p>
@@ -106,7 +106,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
   return (
     <div>
       <div className="mb-3">
-        <h2 className="text-sm font-medium text-muted-foreground">League Receipts</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">League Roasts</h2>
         <p className="text-xs text-muted-foreground mt-1">
           The moments your league will never forget.
         </p>
@@ -131,7 +131,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
         })}
       </RoastDeckCarousel>
       <p className="text-xs text-muted-foreground text-center mt-2">
-        Unlock to reveal the full receipts and share the truth.
+        Unlock to reveal the full roast and share the truth.
       </p>
     </div>
   );

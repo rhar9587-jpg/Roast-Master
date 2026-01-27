@@ -34,10 +34,14 @@ import { ConversionBanner } from "./ConversionBanner";
 import { PostAnalysisToast } from "./PostAnalysisToast";
 import { StickyUpgradeBar } from "./StickyUpgradeBar";
 import { UnlockReceiptsModal } from "./UnlockReceiptsModal";
+import { RoastCard } from "@/components/RoastCard";
+import { SeasonWrappedCard } from "@/components/SeasonWrappedCard";
+import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
 import { isPremium, setPremium } from "./premium";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername } from "./utils";
 import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards } from "./storylines";
 import { computeHeroReceipts } from "./computeHeroReceipts";
+import { trackFunnel } from "@/lib/track";
 import type {
   Badge,
   DominanceApiResponse,
@@ -46,8 +50,11 @@ import type {
   LandlordSummary,
   ManagerRow,
 } from "./types";
+import type { RoastResponse, WrappedResponse, LeagueAutopsyResponse } from "@shared/schema";
 
 const EXAMPLE_LEAGUE_ID = "1204010682635255808";
+type Mode = "history" | "weekly" | "season" | "end";
+type TeamOption = { roster_id: number; name: string };
 
 function isCountable(c: DominanceCellDTO) {
   return (c?.games ?? 0) >= 3;
@@ -73,6 +80,20 @@ export default function LeagueHistoryPage() {
   const [isPremiumState, setIsPremiumState] = useState(isPremium());
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [unlockShownThisSession, setUnlockShownThisSession] = useState(false);
+  const [activeMode, setActiveMode] = useState<Mode>("history");
+  const [weeklyWeek, setWeeklyWeek] = useState<number>(17);
+  const [weeklyRoastData, setWeeklyRoastData] = useState<RoastResponse | null>(null);
+  const [weeklyRoastLoading, setWeeklyRoastLoading] = useState(false);
+  const [weeklyRoastError, setWeeklyRoastError] = useState<string | null>(null);
+  const [seasonWrappedData, setSeasonWrappedData] = useState<WrappedResponse | null>(null);
+  const [seasonWrappedLoading, setSeasonWrappedLoading] = useState(false);
+  const [seasonWrappedError, setSeasonWrappedError] = useState<string | null>(null);
+  const [seasonTeams, setSeasonTeams] = useState<TeamOption[]>([]);
+  const [seasonTeamsLoading, setSeasonTeamsLoading] = useState(false);
+  const [seasonRosterId, setSeasonRosterId] = useState<number | "">("");
+  const [autopsyData, setAutopsyData] = useState<LeagueAutopsyResponse | null>(null);
+  const [autopsyLoading, setAutopsyLoading] = useState(false);
+  const [autopsyError, setAutopsyError] = useState<string | null>(null);
   const { toast } = useToast();
 
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
@@ -246,12 +267,20 @@ export default function LeagueHistoryPage() {
     window.history.replaceState({}, "", newUrl);
   }, [leagueId, startWeek, endWeek, viewerKey]);
 
+  // Track when league history loads
+  const hasTrackedLoad = useRef(false);
   useEffect(() => {
     const justFetched = prevFetching.current && !isFetching && hasData;
     prevFetching.current = isFetching;
     // Always collapse form after successful data fetch to focus on content
     if (justFetched) {
       setIsSelectorCollapsed(true);
+      
+      // Track league history loaded (once per session per league)
+      if (!hasTrackedLoad.current && leagueId) {
+        hasTrackedLoad.current = true;
+        trackFunnel.leagueHistoryLoaded(leagueId);
+      }
       
       // Auto-scroll to "View as" picker after a short delay to let UI render
       // Check data?.grid?.length inside effect (managers is defined later via useMemo)
@@ -269,7 +298,7 @@ export default function LeagueHistoryPage() {
         }
       }
     }
-  }, [isFetching, hasData, data?.grid?.length]);
+  }, [isFetching, hasData, data?.grid?.length, leagueId]);
 
   // Save to recent leagues after successful fetch
   useEffect(() => {
@@ -894,24 +923,56 @@ export default function LeagueHistoryPage() {
     setIsPremiumState(isPremium());
   }, []);
 
+  // Reset mode-specific data when league changes
+  useEffect(() => {
+    if (!leagueId) return;
+    setActiveMode("history");
+    setWeeklyWeek(endWeek || 17);
+    setWeeklyRoastData(null);
+    setWeeklyRoastError(null);
+    setSeasonWrappedData(null);
+    setSeasonWrappedError(null);
+    setSeasonRosterId("");
+    setAutopsyData(null);
+    setAutopsyError(null);
+  }, [leagueId, endWeek]);
+
+  // Load roster list when "Your Season" is selected
+  useEffect(() => {
+    if (activeMode !== "season" || !leagueId.trim()) return;
+    setSeasonTeamsLoading(true);
+    fetch(`/api/league-teams?league_id=${leagueId.trim()}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setSeasonTeams(data?.teams || []);
+      })
+      .catch(() => {
+        setSeasonTeams([]);
+      })
+      .finally(() => {
+        setSeasonTeamsLoading(false);
+      });
+  }, [activeMode, leagueId]);
+
   function handleUnlock() {
     setPremium(true);
     setIsPremiumState(true);
     setShowUnlockModal(false);
     toast({
-      title: "Receipts unlocked!",
+      title: "Full roast unlocked!",
       description: "Share the chaos with your league.",
     });
   }
 
   function handleUpgrade() {
+    trackFunnel.unlockClicked(leagueId, "page");
     if (!unlockShownThisSession) {
       setShowUnlockModal(true);
       setUnlockShownThisSession(true);
     } else {
       toast({
-        title: "Unlock to share the receipts",
-        description: "Headlines, League Storylines, and all exports.",
+        title: "Unlock the full roast for this league — $29 one-time",
+        description: "Headlines, storylines, and all exports.",
       });
     }
   }
@@ -921,6 +982,78 @@ export default function LeagueHistoryPage() {
     setTimeout(() => {
       selectorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 100);
+  }
+
+  async function fetchWeeklyRoast() {
+    if (!leagueId.trim()) return;
+    setWeeklyRoastLoading(true);
+    setWeeklyRoastError(null);
+    try {
+      const res = await fetch("/api/roast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          league_id: leagueId.trim(),
+          week: weeklyWeek,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch weekly roast.");
+      setWeeklyRoastData(data);
+    } catch (err: any) {
+      setWeeklyRoastError(err.message || "Failed to fetch weekly roast.");
+      setWeeklyRoastData(null);
+    } finally {
+      setWeeklyRoastLoading(false);
+    }
+  }
+
+  async function fetchSeasonWrapped() {
+    if (!leagueId.trim()) return;
+    setSeasonWrappedLoading(true);
+    setSeasonWrappedError(null);
+    try {
+      const res = await fetch("/api/wrapped", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          league_id: leagueId.trim(),
+          week: endWeek || 17,
+          roster_id: typeof seasonRosterId === "number" ? seasonRosterId : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch Your Season.");
+      setSeasonWrappedData(data);
+    } catch (err: any) {
+      setSeasonWrappedError(err.message || "Failed to fetch Your Season.");
+      setSeasonWrappedData(null);
+    } finally {
+      setSeasonWrappedLoading(false);
+    }
+  }
+
+  async function fetchLeagueAutopsy() {
+    if (!leagueId.trim()) return;
+    setAutopsyLoading(true);
+    setAutopsyError(null);
+    try {
+      const res = await fetch("/api/league-autopsy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          league_id: leagueId.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch End-of-Season.");
+      setAutopsyData(data);
+    } catch (err: any) {
+      setAutopsyError(err.message || "Failed to fetch End-of-Season.");
+      setAutopsyData(null);
+    } finally {
+      setAutopsyLoading(false);
+    }
   }
 
   return (
@@ -934,7 +1067,7 @@ export default function LeagueHistoryPage() {
                 Who Owns Your League?
               </h1>
               <p className="text-base md:text-lg text-muted-foreground max-w-2xl">
-                Turn your Sleeper league into shareable roasts. Find receipts. Tag your nemesis. Own the group chat.
+                Turn your Sleeper league into shareable roasts. Find the moments. Tag your nemesis. Own the group chat.
               </p>
               <p className="text-sm text-muted-foreground mt-2">
                 Built for group chats and league banter.
@@ -1009,9 +1142,9 @@ export default function LeagueHistoryPage() {
             </div>
             <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-center">
               <h3 className="text-sm font-semibold mb-1">Your Roast</h3>
-              <p className="text-xs text-muted-foreground">
-                Your personal receipts
-              </p>
+          <p className="text-xs text-muted-foreground">
+            Your personal roasts
+          </p>
             </div>
           </div>
           
@@ -1063,14 +1196,37 @@ export default function LeagueHistoryPage() {
         </div>
       )}
 
+      {hasData && (
+        <div className="flex flex-wrap gap-2 rounded-xl border bg-muted/20 p-1">
+          {[
+            { id: "history", label: "League History" },
+            { id: "weekly", label: "Weekly Roast" },
+            { id: "season", label: "Your Season" },
+            { id: "end", label: "End-of-Season" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveMode(tab.id as Mode)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                activeMode === tab.id
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {leagueId === EXAMPLE_LEAGUE_ID && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <span>
-            This is an example league. Load your league to see your receipts →
+            This is an example league. Load your league to see your roasts →
           </span>
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={handleUpgrade}>
-              Unlock this league ($29)
+              Unlock full roast ($29)
             </Button>
             <Button size="sm" variant="outline" onClick={handleLoadYourLeagueFromExample}>
               Load your league
@@ -1097,7 +1253,94 @@ export default function LeagueHistoryPage() {
         />
       </div>
 
-      {hasData && hasEnoughData && (
+      {hasData && activeMode === "weekly" && (
+        <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-semibold text-foreground">Week</label>
+              <input
+                type="number"
+                min={1}
+                max={18}
+                value={weeklyWeek}
+                onChange={(e) => setWeeklyWeek(Number(e.target.value))}
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              />
+            </div>
+            <Button onClick={fetchWeeklyRoast} disabled={weeklyRoastLoading}>
+              {weeklyRoastLoading ? "Generating…" : "Generate Weekly Roast"}
+            </Button>
+          </div>
+          {weeklyRoastError && (
+            <p className="text-xs text-red-600">{weeklyRoastError}</p>
+          )}
+        </section>
+      )}
+
+      {hasData && activeMode === "weekly" && weeklyRoastData && (
+        <RoastCard data={weeklyRoastData} />
+      )}
+
+      {hasData && activeMode === "season" && (
+        <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-semibold text-foreground">Pick your team</label>
+              <select
+                value={seasonRosterId}
+                onChange={(e) =>
+                  setSeasonRosterId(e.target.value ? Number(e.target.value) : "")
+                }
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+                disabled={seasonTeamsLoading}
+              >
+                <option value="">Choose your roster...</option>
+                {seasonTeams.map((t) => (
+                  <option key={t.roster_id} value={t.roster_id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              {seasonTeamsLoading && (
+                <p className="mt-1 text-xs text-muted-foreground">Loading rosters…</p>
+              )}
+            </div>
+            <Button onClick={fetchSeasonWrapped} disabled={seasonWrappedLoading}>
+              {seasonWrappedLoading ? "Generating…" : "Generate Your Season"}
+            </Button>
+          </div>
+          {seasonWrappedError && (
+            <p className="text-xs text-red-600">{seasonWrappedError}</p>
+          )}
+        </section>
+      )}
+
+      {hasData && activeMode === "season" && seasonWrappedData && (
+        <SeasonWrappedCard data={seasonWrappedData} />
+      )}
+
+      {hasData && activeMode === "end" && (
+        <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">End-of-Season</h2>
+              <p className="text-sm text-muted-foreground">League-wide moments and chaos.</p>
+            </div>
+            <Button onClick={fetchLeagueAutopsy} disabled={autopsyLoading}>
+              {autopsyLoading ? "Generating…" : "Generate End-of-Season"}
+            </Button>
+          </div>
+          {autopsyError && (
+            <p className="text-xs text-red-600">{autopsyError}</p>
+          )}
+        </section>
+      )}
+
+      {hasData && activeMode === "end" && autopsyData && (
+        <LeagueAutopsyCard data={autopsyData} />
+      )}
+
+      {activeMode === "history" && hasData && hasEnoughData && (
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-2">
             Your league's biggest moments
@@ -1120,7 +1363,7 @@ export default function LeagueHistoryPage() {
       )}
 
       {/* View as picker - moved here for better visibility */}
-      {hasData && hasEnoughData && managers.length > 0 && (
+      {activeMode === "history" && hasData && hasEnoughData && managers.length > 0 && (
         <section ref={viewAsPickerRef} className="flex items-center justify-center gap-3 py-2">
           <span className="text-sm font-medium text-foreground">View as:</span>
           <Select
@@ -1150,12 +1393,12 @@ export default function LeagueHistoryPage() {
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            See your personal receipts
+            See your personal roasts
           </p>
         </section>
       )}
 
-      {hasData && hasEnoughData && heroReceipts.length > 0 && (
+      {activeMode === "history" && hasData && hasEnoughData && heroReceipts.length > 0 && (
         <p className="text-xs text-muted-foreground text-center">
           You’ve seen who owns the league. Now here’s how it broke.
         </p>
@@ -1167,7 +1410,7 @@ export default function LeagueHistoryPage() {
         </p>
       )}
 
-      {hasData && hasEnoughData && heroReceipts.length > 0 && (
+      {activeMode === "history" && hasData && hasEnoughData && heroReceipts.length > 0 && (
         <section className="mt-8">
           <HeroReceipts
             heroReceipts={heroReceipts}
@@ -1177,7 +1420,7 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {hasData && !hasEnoughData && (
+      {activeMode === "history" && hasData && !hasEnoughData && (
         <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-center">
           <p className="text-sm text-muted-foreground mb-1">
             Not enough roasts yet.
@@ -1188,7 +1431,8 @@ export default function LeagueHistoryPage() {
         </div>
       )}
 
-      <section>
+      {activeMode === "history" && (
+        <section>
         <h2 className="text-sm font-medium text-muted-foreground mb-2">
           Every matchup, every roast
         </h2>
@@ -1225,8 +1469,10 @@ export default function LeagueHistoryPage() {
           </div>
         )}
       </section>
+      )}
 
-      {hasData &&
+      {activeMode === "history" &&
+        hasData &&
         hasEnoughData &&
         (leagueStorylines.length > 0 || !!viewerKey) && (
           <section>
@@ -1288,7 +1534,7 @@ export default function LeagueHistoryPage() {
         )}
 
       {/* Conversion Banner - appears after Storylines */}
-      {hasData && hasEnoughData && (
+      {activeMode === "history" && hasData && hasEnoughData && (
         <section>
           <ConversionBanner 
             onUpgrade={handleUpgrade}
@@ -1303,7 +1549,7 @@ export default function LeagueHistoryPage() {
       )}
 
       {/* Post-Analysis Toast */}
-      {showPostAnalysisToast && hasData && (
+      {activeMode === "history" && showPostAnalysisToast && hasData && (
         <PostAnalysisToast
           matchupCount={matchupCount}
           managerCount={managerCount}
@@ -1315,7 +1561,7 @@ export default function LeagueHistoryPage() {
       )}
 
       {/* Sticky Upgrade Bar */}
-      {hasData && hasEnoughData && (
+      {activeMode === "history" && hasData && hasEnoughData && (
         <StickyUpgradeBar
           onUpgrade={handleUpgrade}
           leagueName={data?.league?.name}
@@ -1325,18 +1571,20 @@ export default function LeagueHistoryPage() {
       )}
 
       {/* Unlock Modal */}
-      <UnlockReceiptsModal
-        open={showUnlockModal}
-        onOpenChange={setShowUnlockModal}
-        onUnlock={handleUnlock}
-        ownedCount={ownedCount}
-        rivalryExists={rivalryExists}
-        leagueName={data?.league?.name}
-        lockedReceiptsCount={lockedReceiptsCount}
-        lockedStorylinesCount={lockedStorylinesCount}
-      />
+      {activeMode === "history" && (
+        <UnlockReceiptsModal
+          open={showUnlockModal}
+          onOpenChange={setShowUnlockModal}
+          onUnlock={handleUnlock}
+          ownedCount={ownedCount}
+          rivalryExists={rivalryExists}
+          leagueName={data?.league?.name}
+          lockedReceiptsCount={lockedReceiptsCount}
+          lockedStorylinesCount={lockedStorylinesCount}
+        />
+      )}
 
-      {hasData && (
+      {activeMode === "history" && hasData && (
         <div
           ref={gridExportRef}
           className="fixed pointer-events-none"
@@ -1362,11 +1610,13 @@ export default function LeagueHistoryPage() {
         </div>
       )}
 
-      <MatchupDetailModal
-        selected={selected}
-        open={!!selected}
-        onOpenChange={(open) => !open && setSelected(null)}
-      />
+      {activeMode === "history" && (
+        <MatchupDetailModal
+          selected={selected}
+          open={!!selected}
+          onOpenChange={(open) => !open && setSelected(null)}
+        />
+      )}
     </div>
   );
 }

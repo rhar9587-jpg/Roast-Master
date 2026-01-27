@@ -102,13 +102,13 @@ export function StickyUpgradeBar({
       <div className="mx-auto max-w-6xl px-4 py-3">
         {showMissingCounts && (
           <div className="text-xs font-semibold text-muted-foreground mb-1">
-            Unlock {lockedReceiptsCount} more receipts + {lockedStorylinesCount} storylines in this league.
+            Unlock {lockedReceiptsCount} more roasts + {lockedStorylinesCount} storylines in this league.
           </div>
         )}
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">
-              Unlock FULL receipts for {leagueName?.trim() ? leagueName : "this league"} • $29 one-time
+              Unlock the full roast for {leagueName?.trim() ? leagueName : "this league"} • $29 one-time
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -117,7 +117,7 @@ export function StickyUpgradeBar({
               size="sm"
               className="font-semibold whitespace-nowrap"
             >
-              Drop the Receipts ($29)
+              Unlock Full Roast ($29)
             </Button>
             <Button
               variant="ghost"

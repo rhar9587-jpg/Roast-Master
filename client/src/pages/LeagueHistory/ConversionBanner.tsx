@@ -46,7 +46,7 @@ export function ConversionBanner({
     >
       <CardHeader className="text-center pb-4">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          Unlock FULL receipts for {leagueName?.trim() ? leagueName : "this league"} — ${PRICE_ONE_TIME} (one-time)
+          Unlock the full roast for {leagueName?.trim() ? leagueName : "this league"} — ${PRICE_ONE_TIME} one-time
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -55,7 +55,7 @@ export function ConversionBanner({
           <ul className="space-y-3 text-sm">
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>Every matchup. Every receipt.</span>
+              <span>Every matchup. Every roast.</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
@@ -69,14 +69,14 @@ export function ConversionBanner({
         </div>
 
         <p className="text-sm text-muted-foreground mt-2 text-center">
-          Why pay? Because every group chat needs receipts.
+          Why pay? Because every group chat needs a roast.
         </p>
 
         {/* CTA */}
         <div className="text-center">
           {showMissingCounts && (
             <div className="text-xs font-semibold text-muted-foreground mb-2">
-              Unlock {lockedReceiptsCount} more receipts + {lockedStorylinesCount} storylines in this league.
+              Unlock {lockedReceiptsCount} more roasts + {lockedStorylinesCount} storylines in this league.
             </div>
           )}
           <Button
@@ -84,7 +84,7 @@ export function ConversionBanner({
             size="lg"
             className="font-semibold px-8"
           >
-            Drop the Receipts ($29)
+            Unlock Full Roast ($29)
           </Button>
         </div>
         <p className="text-sm font-semibold text-center">
@@ -94,7 +94,7 @@ export function ConversionBanner({
         {leagueId === EXAMPLE_LEAGUE_ID && (
           <div className="text-center text-xs text-muted-foreground">
             <button onClick={handleUpgrade} className="text-primary hover:underline font-medium">
-              Drop the Receipts ($29)
+              Unlock Full Roast ($29)
             </button>
             {" "}or{" "}
             <button

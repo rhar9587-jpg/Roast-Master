@@ -102,7 +102,7 @@ type Props = {
 };
 
 const YOUR_ROAST_EMPTY_MESSAGE =
-  "Pick a wider range to find real receipts.";
+  "Pick a wider range to find real roasts.";
 
 // Helper component for blurred mini cards
 function BlurredMiniCardWrapper({
@@ -124,7 +124,7 @@ function BlurredMiniCardWrapper({
         {title}
       </div>
       <div className="text-xs text-muted-foreground">
-        🔒 {remainingCount} more receipts your league will argue about.
+        🔒 {remainingCount} more roasts your league will argue about.
       </div>
       <div className="relative">
         <div className="blur-sm opacity-60 pointer-events-none">
@@ -174,7 +174,7 @@ export function StorylinesMiniCards({
       {leagueCards.length > 0 && (
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-3">
-            The receipts everyone's talking about
+            The roasts everyone is talking about
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {leagueCards.map((c, index) => {
@@ -215,7 +215,7 @@ export function StorylinesMiniCards({
       {viewerChosen && (
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-3">
-            Your personal receipts
+            Your personal roasts
           </h2>
           {yourRoastCards.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

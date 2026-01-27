@@ -41,10 +41,10 @@ export function UnlockReceiptsModal({
 
   // Contextual copy logic
   const contextualCopy = ownedCount && ownedCount > 0
-    ? `You own ${ownedCount} manager${ownedCount === 1 ? '' : 's'}. Want the receipts to prove it?`
+    ? `You own ${ownedCount} manager${ownedCount === 1 ? '' : 's'}. Want the roast to prove it?`
     : rivalryExists
       ? "Your league has a real rivalry. See the full story."
-      : "Your league has stories worth sharing. Unlock the receipts.";
+      : "Your league has stories worth sharing. Unlock the full roast.";
 
   const showMissingCounts =
     typeof lockedReceiptsCount === "number" &&
@@ -57,7 +57,7 @@ export function UnlockReceiptsModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">
-            Unlock FULL receipts for {leagueName?.trim() ? leagueName : "this league"}
+            Unlock the full roast for {leagueName?.trim() ? leagueName : "this league"}
           </DialogTitle>
           <DialogDescription className="pt-2">
             {leagueName?.trim() ? leagueName : "This league"} — ${PRICE_ONE_TIME} (one-time)
@@ -69,7 +69,7 @@ export function UnlockReceiptsModal({
           <div className="space-y-2">
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Every matchup. Every receipt.</span>
+              <span>Every matchup. Every roast.</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
@@ -81,7 +81,7 @@ export function UnlockReceiptsModal({
             </div>
           </div>
           <p className="text-xs text-muted-foreground text-center">
-            Why pay? Because every group chat needs receipts.
+            Why pay? Because every group chat needs a roast.
           </p>
         </div>
 
@@ -109,14 +109,14 @@ export function UnlockReceiptsModal({
           <div className="w-full sm:w-auto text-center">
             {showMissingCounts && (
               <div className="text-xs font-semibold text-muted-foreground mb-2">
-                Unlock {lockedReceiptsCount} more receipts + {lockedStorylinesCount} storylines in this league.
+                Unlock {lockedReceiptsCount} more roasts + {lockedStorylinesCount} storylines in this league.
               </div>
             )}
             <Button
               onClick={handleUnlock}
               className="w-full sm:w-auto font-semibold"
             >
-              Drop the Receipts ($29)
+              Unlock Full Roast ($29)
             </Button>
           </div>
         </DialogFooter>

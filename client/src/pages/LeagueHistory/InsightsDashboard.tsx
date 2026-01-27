@@ -119,7 +119,7 @@ export function InsightsDashboard({
         onOpenCell(landlord?.bestVictim?.cellKey ?? null)
       }
       enableShare={true}
-      watermarkOverlay={!isPremium ? "Fantasy Roast — Unlock to see full receipts" : undefined}
+      watermarkOverlay={!isPremium ? "Fantasy Roast — Unlock to see the full roast" : undefined}
       roastContext={{
         victimName: landlord?.bestVictim?.victimName,
         landlordName: landlord?.landlordName,

@@ -1,36 +1,25 @@
-import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { RoastCard } from "@/components/RoastCard";
-import { SeasonWrappedCard } from "@/components/SeasonWrappedCard";
-import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
 import { FplRoastCard } from "@/components/FplRoastCard";
-import type { RoastResponse, WrappedResponse, LeagueAutopsyResponse, FplRoastResponse } from "@shared/schema";
+import type { FplRoastResponse } from "@shared/schema";
 import { ChevronDown, ChevronRight, HelpCircle } from "lucide-react";
 import { getRecentLeagues, setStoredUsername } from "./LeagueHistory/utils";
+import { trackFunnel } from "@/lib/track";
 
 type Sport = "nfl" | "fpl";
-type TeamOption = { roster_id: number; name: string };
 type LeagueOption = { league_id: string; name: string; season: string };
-type View = "none" | "roast" | "wrapped" | "autopsy" | "fpl";
+type View = "none" | "fpl";
 
 export default function Home() {
   const [sport, setSport] = useState<Sport>("nfl");
   
   const [leagueId, setLeagueId] = useState("");
-  const [week, setWeek] = useState<number>(1);
   const [season, setSeason] = useState("2025");
   const [username, setUsername] = useState("");
-  const [rosterId, setRosterId] = useState<number | null>(null);
 
   const [leagues, setLeagues] = useState<LeagueOption[]>([]);
-  const [teams, setTeams] = useState<TeamOption[]>([]);
-  const [needsDropdown, setNeedsDropdown] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
-  const [roastData, setRoastData] = useState<RoastResponse | null>(null);
-  const [wrappedData, setWrappedData] = useState<WrappedResponse | null>(null);
-  const [autopsyData, setAutopsyData] = useState<LeagueAutopsyResponse | null>(null);
   const [fplData, setFplData] = useState<FplRoastResponse | null>(null);
 
   const [fplManagerId, setFplManagerId] = useState("");
@@ -41,9 +30,17 @@ export default function Home() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
   const [weeklyRoastIntent, setWeeklyRoastIntent] = useState(false);
   const EXAMPLE_LEAGUE_ID = "1204010682635255808";
+
+  // Track home visit once on mount
+  const hasTrackedVisit = useRef(false);
+  useEffect(() => {
+    if (!hasTrackedVisit.current) {
+      hasTrackedVisit.current = true;
+      trackFunnel.homeVisit();
+    }
+  }, []);
 
   // Fetch current FPL gameweek on mount
   useEffect(() => {
@@ -64,6 +61,7 @@ export default function Home() {
       setError("Please enter your Sleeper username.");
       return;
     }
+    trackFunnel.usernameSubmitted(username);
     setLoading(true);
     setError(null);
     try {
@@ -74,6 +72,7 @@ export default function Home() {
       }
       const data = await res.json();
       setLeagues(data);
+      trackFunnel.leaguesReturned(data.length, username);
       if (data.length === 0) {
         setError(`No leagues found for ${username} in ${season}.`);
       }
@@ -84,139 +83,20 @@ export default function Home() {
     }
   }
 
-  async function loadTeams(lId: string) {
-    if (!lId) return;
-    try {
-      const res = await fetch(`/api/league-teams?league_id=${lId}`);
-      const data = await res.json();
-      setTeams(data.teams || []);
-      setNeedsDropdown(true);
-    } catch {
-      setError("Failed to load league teams.");
-    }
-  }
-
   async function handleLeagueSelect(lId: string) {
     setLeagueId(lId);
-    setRosterId(null);
-    setTeams([]);
-    setNeedsDropdown(false);
-    setShowPreview(false);
     if (!lId) return;
 
-    try {
-      const res = await fetch(
-        `/api/resolve-roster?league_id=${lId}&username=${encodeURIComponent(username)}`
-      );
-      const data = await res.json();
+    // Track league selection
+    const selectedLeague = leagues.find(l => l.league_id === lId);
+    trackFunnel.leagueSelected(lId, selectedLeague?.name || "Unknown");
 
-      if (data?.roster_id) {
-        setRosterId(data.roster_id);
-      } else {
-        await loadTeams(lId);
-      }
-      
-      // Show preview after league is selected
-      setShowPreview(true);
-    } catch {
-      await loadTeams(lId);
-      setShowPreview(true);
-    }
-  }
-
-  async function fetchRoast() {
-    setLoading(true);
-    setError(null);
-    setActiveView("roast");
-    setWrappedData(null);
-    setAutopsyData(null);
-
-    try {
-      const res = await fetch("/api/roast", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          league_id: leagueId,
-          week,
-          roster_id: rosterId ?? undefined,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to fetch roast.");
-      setRoastData(data);
-    } catch (err: any) {
-      setError(err.message);
-      setRoastData(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchWrapped() {
-    if (!rosterId) {
-      setError("Select your team to generate My Season.");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setActiveView("wrapped");
-    setRoastData(null);
-    setAutopsyData(null);
-
-    try {
-      const res = await fetch("/api/wrapped", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          league_id: leagueId,
-          week,
-          roster_id: rosterId,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to fetch My Season.");
-      setWrappedData(data);
-    } catch (err: any) {
-      setError(err.message);
-      setWrappedData(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchLeagueAutopsy() {
-    if (!leagueId) {
-      setError("Select a league to generate League Autopsy.");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setActiveView("autopsy");
-    setRoastData(null);
-    setWrappedData(null);
-
-    try {
-      const res = await fetch("/api/league-autopsy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          league_id: leagueId,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to fetch League Autopsy.");
-      setAutopsyData(data);
-    } catch (err: any) {
-      setError(err.message);
-      setAutopsyData(null);
-    } finally {
-      setLoading(false);
-    }
+    const params = new URLSearchParams({
+      league_id: lId,
+      start_week: String(1),
+      end_week: String(17),
+    });
+    window.location.href = `/league-history/dominance?${params.toString()}`;
   }
 
   async function fetchFplRoast() {
@@ -234,9 +114,6 @@ export default function Home() {
     setLoading(true);
     setError(null);
     setActiveView("fpl");
-    setRoastData(null);
-    setWrappedData(null);
-    setAutopsyData(null);
 
     try {
       const res = await fetch("/api/fpl/roast", {
@@ -281,7 +158,7 @@ export default function Home() {
       const params = new URLSearchParams({
         league_id: leagueId,
         start_week: String(1),
-        end_week: String(week || 17),
+        end_week: String(17),
       });
       window.location.href = `/league-history/dominance?${params.toString()}`;
       return;
@@ -295,6 +172,7 @@ export default function Home() {
   }
 
   function handleTryExampleLeague() {
+    trackFunnel.exampleClicked();
     const params = new URLSearchParams({
       league_id: EXAMPLE_LEAGUE_ID,
       start_week: String(1),
@@ -304,7 +182,7 @@ export default function Home() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 space-y-10 md:space-y-14">
+    <div className="mx-auto max-w-5xl px-4 py-6 space-y-6 md:space-y-8">
       {/* Sport Selector */}
       <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
         <button
@@ -346,52 +224,32 @@ export default function Home() {
       {sport === "nfl" && (
         <>
           {/* Hero Section */}
-          <section className="text-center py-12 md:py-16 space-y-6">
+          <section className="text-center py-6 md:py-8 space-y-4">
             <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
               Who owns your league?
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-              Turn your Sleeper league into shareable roasts. Find receipts. Tag your nemesis. Own the group chat.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              One-time $29 unlock for this league • Unlimited receipts • Shareable cards
+              Turn your Sleeper league into shareable roasts. Find the moments. Tag your nemesis. Own the group chat.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" onClick={handleViewLeagueHistory} className="font-semibold">
                 See Who Owns Your League
               </Button>
-              <Button variant="outline" size="lg" onClick={handleRoastMyLeague} className="font-semibold">
-                Get My Weekly Roast
-              </Button>
             </div>
-            <div className="text-xs text-muted-foreground flex flex-wrap justify-center gap-3">
-              <span>Built for group chats</span>
-              <span>Fast + secure checkout</span>
-              <span>30-day money-back guarantee</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Built for leagues that talk trash.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Try it free with an example league, or enter your username below
-            </p>
+            <button
+              onClick={handleRoastMyLeague}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Already playing this week? Get a weekly roast →
+            </button>
           </section>
 
-          {/* Social Proof Strip */}
-          <div className="flex flex-wrap justify-center gap-6 md:gap-8 text-sm text-muted-foreground py-6">
-            <span>🔥 Built for competitive leagues</span>
-            <span>💬 Designed for group chats</span>
-            <span>🏆 Made for receipts</span>
-          </div>
-
-          {/* See the receipts */}
-          <section className="py-8 space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold tracking-tight">See the receipts</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                This is what you'll be able to share in your group chat.
-              </p>
-            </div>
+          {/* Example Cards */}
+          <section className="pt-2 pb-6 space-y-4">
+            <p className="text-center text-sm text-muted-foreground">See the roast</p>
+            <p className="text-center text-xs text-muted-foreground">
+              This is what you'll drop in the group chat.
+            </p>
 
             <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory md:grid md:grid-cols-4 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0">
               {/* Tile 1: Hero Card mock */}
@@ -491,11 +349,11 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="text-center pt-2">
+            <div className="text-center">
               <Button variant="outline" onClick={handleTryExampleLeague} className="font-semibold">
                 Try an example league →
               </Button>
-              <p className="text-xs text-muted-foreground mt-2">No login. 1 click.</p>
+              <p className="text-xs text-muted-foreground mt-1">No login. 1 click.</p>
             </div>
           </section>
 
@@ -564,25 +422,11 @@ export default function Home() {
                       </option>
                     ))}
                   </select>
-                </div>
-              )}
-
-              {needsDropdown && teams.length > 0 && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700">Select Your Team</label>
-                  <select
-                    value={rosterId ?? ""}
-                    onChange={(e) => setRosterId(Number(e.target.value))}
-                    className="mt-1 w-full rounded-lg border px-3 py-2"
-                    data-testid="select-team"
-                  >
-                    <option value="">Choose your roster...</option>
-                    {teams.map((t) => (
-                      <option key={t.roster_id} value={t.roster_id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
+                  {weeklyRoastIntent && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Weekly Roast unlocks after your league loads.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -612,119 +456,7 @@ export default function Home() {
               </div>
             </div>
 
-            {weeklyRoastIntent ? (
-              <div className="border-t pt-4">
-                <label className="block text-sm font-semibold text-gray-700">Week</label>
-                <input
-                  type="number"
-                  value={week}
-                  onChange={(e) => setWeek(Number(e.target.value))}
-                  className="mt-1 w-full rounded-lg border px-3 py-2"
-                  data-testid="input-week"
-                />
-              </div>
-            ) : (
-              <div className="border-t pt-4 text-xs text-muted-foreground">
-                Want a specific week? Click “Get My Weekly Roast” above.
-              </div>
-            )}
           </section>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setWeeklyRoastIntent(true);
-                fetchRoast();
-              }}
-              disabled={!leagueId || loading}
-              className="flex-1 rounded-xl bg-pink-600 px-4 py-3 text-white font-extrabold disabled:opacity-40"
-              data-testid="button-roast-league"
-            >
-              Roast My League
-            </button>
-          </div>
-
-          {/* Personalized Preview Card */}
-          {showPreview && leagueId && leagues.length > 0 && (
-            <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-purple-100/50 p-6 shadow-lg space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1 flex-1">
-                  <h3 className="text-lg font-bold tracking-tight">
-                    Ready to see who owns your league?
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {leagues.find(l => l.league_id === leagueId)?.name || "Your league"} is loaded. 
-                    {rosterId ? " We found your team!" : " Select your team to see your personal receipts."}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleViewLeagueHistory}
-                  className="flex-1 font-semibold"
-                  size="lg"
-                >
-                  See Who Owns Your League →
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground text-center">
-                Free to explore • Premium to share
-              </p>
-            </div>
-          )}
-
-          {/* League History Card - Upgraded */}
-          <div className="rounded-2xl border bg-gradient-to-br from-purple-50 to-purple-100/50 p-8 shadow-lg space-y-4">
-            <div>
-              <h2 className="text-xl md:text-2xl font-bold tracking-tight">League History</h2>
-              <p className="text-base font-medium text-purple-900/80 mt-1">Your league's full receipts engine</p>
-            </div>
-            <p className="text-sm text-gray-700">
-              See dominance, find your nemesis, export receipts. Free to explore • Premium to share
-            </p>
-            <Link href={leagueId ? `/league-history/dominance?league_id=${encodeURIComponent(leagueId)}` : "/league-history/dominance"}>
-              <button className="w-full rounded-xl bg-purple-600 px-4 py-3 text-white font-extrabold hover:bg-purple-700 transition-colors">
-                View League History
-              </button>
-            </Link>
-          </div>
-
-          <div className="rounded-2xl border bg-white p-5 shadow-sm space-y-4">
-            <div>
-              <h2 className="text-lg font-bold tracking-tight">Season Wrapped</h2>
-              <p className="text-sm text-gray-500">End-of-season receipts</p>
-            </div>
-
-            {!leagueId ? (
-              <p className="text-sm text-gray-400 italic">Select a league to unlock Season Wrapped.</p>
-            ) : (
-              <div className="flex gap-3 flex-wrap">
-                <button
-                  onClick={fetchLeagueAutopsy}
-                  disabled={!leagueId || loading}
-                  className="flex-1 min-w-[140px] rounded-xl bg-blue-600 px-4 py-3 text-white font-extrabold disabled:opacity-40"
-                  data-testid="button-league-autopsy"
-                >
-                  <div className="text-base">League Autopsy</div>
-                  <div className="text-xs font-normal opacity-80 mt-0.5">The league, as it happened.</div>
-                </button>
-
-                <button
-                  onClick={fetchWrapped}
-                  disabled={!leagueId || !rosterId || loading}
-                  className="flex-1 min-w-[140px] rounded-xl bg-green-600 px-4 py-3 text-white font-extrabold disabled:opacity-40"
-                  data-testid="button-my-season"
-                >
-                  <div className="text-base">My Season</div>
-                  <div className="text-xs font-normal opacity-80 mt-0.5">Your receipts.</div>
-                </button>
-              </div>
-            )}
-
-            {!rosterId && leagueId && (
-              <p className="text-xs text-gray-400">Select your team to unlock My Season.</p>
-            )}
-          </div>
         </>
       )}
 
@@ -795,23 +527,6 @@ export default function Home() {
 
       {loading && <div className="text-gray-500">Loading…</div>}
 
-      {activeView === "roast" && roastData && (
-        <>
-          <RoastCard data={roastData} />
-          {leagueId && (
-            <div className="w-full max-w-3xl mx-auto mt-6 text-center">
-              <Link 
-                href={`/league-history/dominance?league_id=${encodeURIComponent(leagueId)}${week ? `&start_week=1&end_week=${week}` : ''}`}
-                className="text-sm text-primary hover:underline font-medium"
-              >
-                See full League History receipts →
-              </Link>
-            </div>
-          )}
-        </>
-      )}
-      {activeView === "wrapped" && wrappedData && <SeasonWrappedCard data={wrappedData} />}
-      {activeView === "autopsy" && autopsyData && <LeagueAutopsyCard data={autopsyData} />}
       {activeView === "fpl" && fplData && <FplRoastCard data={fplData} />}
     </div>
   );
