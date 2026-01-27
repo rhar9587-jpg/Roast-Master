@@ -43,6 +43,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [weeklyRoastIntent, setWeeklyRoastIntent] = useState(false);
+  const EXAMPLE_LEAGUE_ID = "1204010682635255808";
 
   // Fetch current FPL gameweek on mount
   useEffect(() => {
@@ -293,6 +294,15 @@ export default function Home() {
     handleRoastMyLeague();
   }
 
+  function handleTryExampleLeague() {
+    const params = new URLSearchParams({
+      league_id: EXAMPLE_LEAGUE_ID,
+      start_week: String(1),
+      end_week: String(17),
+    });
+    window.location.href = `/league-history/dominance?${params.toString()}`;
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 space-y-10 md:space-y-14">
       {/* Sport Selector */}
@@ -367,50 +377,6 @@ export default function Home() {
             </p>
           </section>
 
-          {/* Visual Product Preview */}
-          <section className="relative max-w-4xl mx-auto py-8 group">
-            {/* Desktop Layout: Overlapping */}
-            <div className="hidden md:block relative">
-              {/* Grid Preview - blurred background */}
-              <div className="relative w-full rounded-xl shadow-lg overflow-hidden min-h-[300px]">
-                <img
-                  src="/previews/grid.png"
-                  alt="Dominance Grid Preview"
-                  className="w-full h-auto transition-transform group-hover:scale-[1.02]"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const placeholder = target.parentElement?.querySelector('.grid-placeholder') as HTMLElement;
-                    if (placeholder) placeholder.style.display = 'flex';
-                  }}
-                />
-                <div className="grid-placeholder absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center" style={{ display: 'none' }}>
-                  <span className="text-muted-foreground text-sm">Grid Preview</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile Layout: Stack vertically */}
-            <div className="flex flex-col gap-4 md:hidden">
-              <div className="w-full rounded-xl shadow-lg overflow-hidden min-h-[200px]">
-                <img
-                  src="/previews/grid.png"
-                  alt="Dominance Grid Preview"
-                  className="w-full h-auto"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const placeholder = target.parentElement?.querySelector('.grid-placeholder') as HTMLElement;
-                    if (placeholder) placeholder.style.display = 'flex';
-                  }}
-                />
-                <div className="grid-placeholder bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center min-h-[200px]" style={{ display: 'none' }}>
-                  <span className="text-muted-foreground text-sm">Grid Preview</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
           {/* Social Proof Strip */}
           <div className="flex flex-wrap justify-center gap-6 md:gap-8 text-sm text-muted-foreground py-6">
             <span>🔥 Built for competitive leagues</span>
@@ -418,37 +384,118 @@ export default function Home() {
             <span>🏆 Made for receipts</span>
           </div>
 
-          {/* Value Preview Section */}
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 py-8">
-            <div 
-              onClick={handleValueCardClick}
-              className="rounded-lg border border-muted/50 bg-muted/30 p-6 text-center cursor-pointer hover:bg-muted/40 transition-colors"
-            >
-              <h3 className="text-lg font-semibold mb-2">The Scoreboard</h3>
-              <p className="text-sm text-muted-foreground">See who dominates who</p>
-              <Link href="/league-history/dominance?league_id=1204010682635255808&start_week=1&end_week=17" className="text-xs text-primary hover:underline mt-2 inline-block">
-                See example →
-              </Link>
+          {/* See the receipts */}
+          <section className="py-8 space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold tracking-tight">See the receipts</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                This is what you'll be able to share in your group chat.
+              </p>
             </div>
-            <div 
-              onClick={handleValueCardClick}
-              className="rounded-lg border border-muted/50 bg-muted/30 p-6 text-center cursor-pointer hover:bg-muted/40 transition-colors"
-            >
-              <h3 className="text-lg font-semibold mb-2">The Headlines</h3>
-              <p className="text-sm text-muted-foreground">Landlords. Victims. Rivalries.</p>
-              <Link href="/league-history/dominance?league_id=1204010682635255808&start_week=1&end_week=17" className="text-xs text-primary hover:underline mt-2 inline-block">
-                See example →
-              </Link>
+
+            <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory md:grid md:grid-cols-4 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0">
+              {/* Tile 1: Hero Card mock */}
+              <div className="flex-none w-[240px] md:w-auto snap-center">
+                <div className="rounded-xl border-2 border-amber-400/60 bg-gradient-to-br from-amber-50 via-white to-amber-100/50 p-4 shadow-lg h-full min-h-[280px] flex flex-col">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                      OWNED
+                    </span>
+                  </div>
+                  <div className="text-center space-y-2 flex-1 flex flex-col justify-center">
+                    <div className="w-12 h-12 mx-auto rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-lg font-bold shadow-md">
+                      👑
+                    </div>
+                    <h3 className="text-lg font-bold tracking-tight">THE LANDLORD</h3>
+                    <p className="text-sm font-medium text-muted-foreground">RobOwnsYou</p>
+                    <div className="pt-2 border-t">
+                      <p className="text-2xl font-extrabold">4</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Managers Owned</p>
+                    </div>
+                    <p className="text-sm italic text-muted-foreground pt-2">"Rent is due."</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tile 2: Dominance Grid Thumbnail mock */}
+              <div className="flex-none w-[240px] md:w-auto snap-center">
+                <div className="rounded-xl border bg-white p-4 shadow-lg h-full min-h-[280px] flex flex-col">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                    Who Owns Who
+                  </p>
+                  <div className="grid grid-cols-4 gap-1 text-[10px] flex-1">
+                    <div className="bg-transparent"></div>
+                    <div className="bg-muted/50 rounded p-1.5 text-center font-medium truncate">Rob</div>
+                    <div className="bg-muted/50 rounded p-1.5 text-center font-medium truncate">Mike</div>
+                    <div className="bg-muted/50 rounded p-1.5 text-center font-medium truncate">Jake</div>
+
+                    <div className="bg-muted/50 rounded p-1.5 text-center font-medium truncate">Rob</div>
+                    <div className="bg-muted/30 rounded p-1.5 text-center">—</div>
+                    <div className="bg-green-100 rounded p-1.5 text-center font-bold text-green-700">4-1</div>
+                    <div className="bg-green-200 rounded p-1.5 text-center font-bold text-green-800">5-0</div>
+
+                    <div className="bg-muted/50 rounded p-1.5 text-center font-medium truncate">Mike</div>
+                    <div className="bg-red-100 rounded p-1.5 text-center font-bold text-red-700">1-4</div>
+                    <div className="bg-muted/30 rounded p-1.5 text-center">—</div>
+                    <div className="bg-yellow-100 rounded p-1.5 text-center font-medium text-yellow-700">2-2</div>
+
+                    <div className="bg-muted/50 rounded p-1.5 text-center font-medium truncate">Jake</div>
+                    <div className="bg-red-200 rounded p-1.5 text-center font-bold text-red-800">0-5</div>
+                    <div className="bg-yellow-100 rounded p-1.5 text-center font-medium text-yellow-700">2-2</div>
+                    <div className="bg-muted/30 rounded p-1.5 text-center">—</div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3 text-center">All-time head-to-head</p>
+                </div>
+              </div>
+
+              {/* Tile 3: Storyline Mini Card mock */}
+              <div className="flex-none w-[240px] md:w-auto snap-center">
+                <div className="rounded-xl border-2 border-red-400/60 bg-gradient-to-br from-red-50 via-white to-red-100/50 p-4 shadow-lg h-full min-h-[280px] flex flex-col">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
+                      BLOWOUT
+                    </span>
+                  </div>
+                  <div className="text-center space-y-2 flex-1 flex flex-col justify-center">
+                    <h3 className="text-base font-bold tracking-tight">Biggest Blowout</h3>
+                    <p className="text-sm font-medium text-muted-foreground">MikeGotCooked</p>
+                    <div className="pt-2 border-t">
+                      <p className="text-2xl font-extrabold text-red-600">62.4</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Margin of Victory</p>
+                    </div>
+                    <p className="text-sm italic text-muted-foreground pt-2">"Absolute embarrassment."</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tile 4: Share Moment mock */}
+              <div className="flex-none w-[240px] md:w-auto snap-center">
+                <div className="rounded-xl border bg-gradient-to-br from-blue-50 to-blue-100/50 p-4 shadow-lg h-full min-h-[280px] flex flex-col">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-3">
+                    💬 Group Chat Ready
+                  </p>
+                  <div className="bg-white rounded-2xl rounded-bl-sm p-3 shadow-sm border flex-1">
+                    <p className="text-sm font-medium">
+                      <span className="font-bold">THE LANDLORD 👑</span>
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      @RobOwnsYou owns 4 managers.
+                    </p>
+                    <p className="text-sm font-semibold mt-2">Rent is due.</p>
+                  </div>
+                  <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
+                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Copy</span>
+                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Share</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div 
-              onClick={handleValueCardClick}
-              className="rounded-lg border border-muted/50 bg-muted/30 p-6 text-center cursor-pointer hover:bg-muted/40 transition-colors"
-            >
-              <h3 className="text-lg font-semibold mb-2">Your Roast</h3>
-              <p className="text-sm text-muted-foreground">Your personal receipts</p>
-              <Link href="/league-history/dominance?league_id=1204010682635255808&start_week=1&end_week=17" className="text-xs text-primary hover:underline mt-2 inline-block">
-                See example →
-              </Link>
+
+            <div className="text-center pt-2">
+              <Button variant="outline" onClick={handleTryExampleLeague} className="font-semibold">
+                Try an example league →
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2">No login. 1 click.</p>
             </div>
           </section>
 
