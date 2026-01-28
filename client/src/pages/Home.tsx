@@ -196,9 +196,6 @@ export default function Home() {
             setSport("fpl"); 
             setActiveView("none"); 
             setError(null);
-            setRoastData(null);
-            setWrappedData(null);
-            setAutopsyData(null);
           }}
           className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-colors ${
             sport === "fpl" 
