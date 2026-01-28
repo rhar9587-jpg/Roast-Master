@@ -237,7 +237,6 @@ export function InsightsDashboard({
           </p>
         )}
         <ul className="text-xs text-muted-foreground space-y-1">
-          <li>Weekly roasts for every matchup</li>
           <li>Your Season wrapped</li>
           <li>End-of-season recap</li>
           <li>More hero cards your league will argue about</li>

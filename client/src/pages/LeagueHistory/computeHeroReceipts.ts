@@ -1,4 +1,12 @@
 import type { SeasonStat, WeeklyMatchupDetail, HeroReceiptCard, ManagerRow } from "./types";
+import {
+  getPlayoffDroughtCopy,
+  getBridesmaidCopy,
+  getWoodenSpoonCopy,
+  getPlayoffChokerCopy,
+  getBiggestBlowoutCopy,
+  getHeartbreakerCopy,
+} from "./copyVariants";
 
 const shouldDebugHeroReceipts =
   import.meta.env?.DEV &&
@@ -25,6 +33,7 @@ export function computeHeroReceipts(
   weeklyMatchups: WeeklyMatchupDetail[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  leagueId: string = "",
 ): HeroReceiptCard[] {
   const receipts: HeroReceiptCard[] = [];
   const selectedMatchupKeys = new Set<string>();
@@ -36,17 +45,17 @@ export function computeHeroReceipts(
     console.log("[HeroReceipts] weeklyMatchups is empty");
   }
 
-  const woodenSpoon = computeWoodenSpoonMerchant(seasonStats, managers, avatarByKey);
+  const woodenSpoon = computeWoodenSpoonMerchant(seasonStats, managers, avatarByKey, leagueId);
   if (woodenSpoon) receipts.push(woodenSpoon);
   else logHeroReceiptSkip("Wooden Spoon Merchant", "no qualifying last-place manager");
 
-  const playoffDrought = computePlayoffDrought(seasonStats, managers, avatarByKey);
+  const playoffDrought = computePlayoffDrought(seasonStats, managers, avatarByKey, leagueId);
   if (playoffDrought) receipts.push(playoffDrought);
   else logHeroReceiptSkip("Playoff Drought", "no multi-season playoff drought found");
 
-  const championshipDrought = computeChampionshipDrought(seasonStats, managers, avatarByKey);
-  if (championshipDrought) receipts.push(championshipDrought);
-  else logHeroReceiptSkip("Championship Drought", "no multi-season title drought found");
+  const bridesmaid = computeBridesmaid(seasonStats, managers, avatarByKey, leagueId);
+  if (bridesmaid) receipts.push(bridesmaid);
+  else logHeroReceiptSkip("Bridesmaid", "no 2+ runner-up finishes without a title");
 
   const missedIt = computeMissedItByThatMuch(seasonStats, managers, avatarByKey);
   if (missedIt) receipts.push(missedIt);
@@ -119,6 +128,7 @@ function computePlayoffDrought(
   seasonStats: SeasonStat[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  leagueId: string,
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
@@ -150,17 +160,21 @@ function computePlayoffDrought(
   const manager = managers.find((m) => m.key === best.managerKey);
   if (!manager) return null;
 
+  // Use copy variants system
+  const copy = getPlayoffDroughtCopy(leagueId, best.length, best.start);
+  if (!copy) return null; // Below threshold
+
   return {
     id: "playoff-drought",
     badge: "NEMESIS",
-    title: "PLAYOFF DROUGHT 🏜️",
+    title: copy.headline,
     name: manager.name,
     avatarUrl: avatarByKey[best.managerKey] ?? null,
     primaryStat: {
       value: String(best.length),
       label: best.length === 1 ? "SEASON" : "SEASONS",
     },
-    punchline: `${manager.name} missed the playoffs ${best.length} straight season${best.length === 1 ? "" : "s"}.`,
+    punchline: copy.punchline,
     lines: [
       { label: "Drought", value: best.start && best.end ? `${best.start}–${best.end}` : "—" },
     ],
@@ -168,13 +182,24 @@ function computePlayoffDrought(
   };
 }
 
-function computeChampionshipDrought(
+/**
+ * "Always the Bridesmaid" card - finds managers who:
+ * - Have 2+ second-place (runner-up) finishes
+ * - Have NEVER won a championship (rank === 1)
+ * 
+ * This is more targeted than the old "championship drought" which
+ * counted any non-1st finish. A 2nd place finish is emotionally
+ * different from a 10th place finish.
+ */
+function computeBridesmaid(
   seasonStats: SeasonStat[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  leagueId: string,
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
+  // Group stats by manager
   const statsByManager = new Map<string, SeasonStat[]>();
   for (const stat of seasonStats) {
     const list = statsByManager.get(stat.managerKey) || [];
@@ -182,42 +207,61 @@ function computeChampionshipDrought(
     statsByManager.set(stat.managerKey, list);
   }
 
-  let best: { managerKey: string; length: number; start: string; end: string } | null = null;
+  // Find the biggest bridesmaid (most 2nd place finishes, never won)
+  let best: { managerKey: string; runnerUpCount: number; seasons: string[] } | null = null;
 
   for (const [managerKey, stats] of statsByManager) {
-    if (stats.length < MIN_DROUGHT_SEASONS) continue;
-    const streak = getLongestStreak(stats, (s) => s.rank !== 1);
-    if (streak.length >= MIN_DROUGHT_SEASONS) {
-      if (
-        !best ||
-        streak.length > best.length ||
-        (streak.length === best.length && seasonToNumber(streak.end) > seasonToNumber(best.end))
-      ) {
-        best = { managerKey, ...streak };
-      }
+    // Skip anyone who's ever won a championship
+    const hasEverWon = stats.some(s => s.rank === 1);
+    if (hasEverWon) continue;
+
+    // Count runner-up (2nd place) finishes
+    const runnerUps = stats.filter(s => s.rank === 2);
+    if (runnerUps.length < 2) continue; // Need at least 2 runner-up finishes
+
+    // Find the best (most runner-ups, or most recent if tied)
+    if (
+      !best || 
+      runnerUps.length > best.runnerUpCount ||
+      (runnerUps.length === best.runnerUpCount && 
+        Math.max(...runnerUps.map(s => seasonToNumber(s.season))) > 
+        Math.max(...best.seasons.map(s => seasonToNumber(s))))
+    ) {
+      best = {
+        managerKey,
+        runnerUpCount: runnerUps.length,
+        seasons: runnerUps.map(s => s.season).sort((a, b) => seasonToNumber(a) - seasonToNumber(b)),
+      };
     }
   }
 
   if (!best) return null;
 
-  const manager = managers.find((m) => m.key === best.managerKey);
+  const manager = managers.find(m => m.key === best.managerKey);
   if (!manager) return null;
 
+  // Use copy variants system
+  const copy = getBridesmaidCopy(leagueId, best.runnerUpCount);
+  if (!copy) return null; // Below threshold
+
   return {
-    id: "championship-drought",
+    id: "bridesmaid",
     badge: "NEMESIS",
-    title: "CHAMPIONSHIP DROUGHT 🏆❌",
+    title: copy.headline,
     name: manager.name,
     avatarUrl: avatarByKey[best.managerKey] ?? null,
     primaryStat: {
-      value: String(best.length),
-      label: best.length === 1 ? "SEASON" : "SEASONS",
+      value: String(best.runnerUpCount),
+      label: best.runnerUpCount === 1 ? "RUNNER-UP" : "RUNNER-UPS",
     },
-    punchline: `${manager.name} has gone ${best.length} season${best.length === 1 ? "" : "s"} without a title.`,
+    punchline: copy.punchline,
     lines: [
-      { label: "Drought", value: best.start && best.end ? `${best.start}–${best.end}` : "—" },
+      { label: "Titles", value: "0" },
+      { label: "Finals", value: best.seasons.join(", ") },
     ],
-    season: best.start && best.end ? `${best.end}–${best.start}` : undefined,
+    season: best.seasons.length > 1 
+      ? `${best.seasons[best.seasons.length - 1]}–${best.seasons[0]}` 
+      : best.seasons[0],
   };
 }
 
@@ -225,6 +269,7 @@ function computeWoodenSpoonMerchant(
   seasonStats: SeasonStat[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  leagueId: string,
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
@@ -267,17 +312,20 @@ function computeWoodenSpoonMerchant(
   const manager = managers.find((m) => m.key === winner.key);
   if (!manager) return null;
 
+  // Use copy variants system
+  const copy = getWoodenSpoonCopy(leagueId, maxCount);
+
   return {
     id: "wooden-spoon",
     badge: "NEMESIS",
-    title: "WOODEN SPOON MERCHANT 🥄",
+    title: copy.headline,
     name: manager.name,
     avatarUrl: avatarByKey[winner.key] ?? null,
     primaryStat: {
       value: String(maxCount),
       label: maxCount === 1 ? "WOODEN SPOON" : "WOODEN SPOONS",
     },
-    punchline: `Finished last ${maxCount} time${maxCount === 1 ? "" : "s"}. The basement is home.`,
+    punchline: copy.punchline,
     lines: [
       { label: "Seasons", value: winner.seasons.join(", ") },
     ],

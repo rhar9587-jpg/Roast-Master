@@ -61,7 +61,6 @@ export function LeagueAutopsyCard({ data, isPremium = false }: LeagueAutopsyCard
             onClick={goPrev}
             className="h-10 w-10 rounded-xl border bg-white hover:bg-gray-50 flex items-center justify-center"
             aria-label="Previous card"
-            disabled={isExporting}
             data-testid="button-autopsy-prev"
           >
             ‹
@@ -70,7 +69,6 @@ export function LeagueAutopsyCard({ data, isPremium = false }: LeagueAutopsyCard
             onClick={goNext}
             className="h-10 w-10 rounded-xl border bg-white hover:bg-gray-50 flex items-center justify-center"
             aria-label="Next card"
-            disabled={isExporting}
             data-testid="button-autopsy-next"
           >
             ›

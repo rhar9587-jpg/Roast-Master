@@ -132,10 +132,13 @@ export function clamp(n: number, min: number, max: number) {
 }
 
 export function scoreToBg(score: number, games: number): string {
-  if (games < 4) return "bg-slate-100/30 dark:bg-slate-800/20";
-
   const s = clamp(score, -1, 1);
   const abs = Math.abs(s);
+  
+  // Perfect records (3-0, 0-3) bypass small sample gray - they deserve full color
+  const isPerfectRecord = abs >= 1.0 && games >= 3;
+  if (games < 4 && !isPerfectRecord) return "bg-slate-100/30 dark:bg-slate-800/20";
+
   const tier =
     abs >= 0.75 ? 5 : abs >= 0.55 ? 4 : abs >= 0.35 ? 3 : abs >= 0.15 ? 2 : 1;
 

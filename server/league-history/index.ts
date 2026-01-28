@@ -96,27 +96,33 @@ function computeDominanceExtras(base: {
 
   let badge: Badge = "EDGE";
 
-  if (games < 4) {
+  // ✅ Perfect records bypass small sample check (3-0 is OWNED, 0-3 is NEMESIS)
+  if (wins >= 3 && losses === 0) {
+    badge = "OWNED";
+  } else if (wins === 0 && losses >= 3) {
+    badge = "NEMESIS";
+  } else if (games < 4) {
+    // Small sample for non-perfect records
     badge = "SMALL SAMPLE";
   } else if (games >= 5 && Math.abs(score) <= 0.20) {
     badge = "RIVAL";
   } else {
-    if (wins >= 3 && losses === 0) {
-      badge = "OWNED";
-    } else if (wins === 0 && losses >= 3) {
-      badge = "NEMESIS";
-    } else if (wins === 3 && losses === 1) {
+    if (wins === 3 && losses === 1) {
+      badge = "EDGE";
+    } else if (wins === 1 && losses === 3) {
       badge = "EDGE";
     } else if (wins === 2 && losses === 0) {
       badge = "EDGE";
+    } else if (wins === 0 && losses === 2) {
+      badge = "EDGE";
     } else if (wins === 2 && losses === 1) {
+      badge = "SMALL SAMPLE";
+    } else if (wins === 1 && losses === 2) {
       badge = "SMALL SAMPLE";
     } else if (wins === 2 && losses === 2) {
       badge = "SMALL SAMPLE";
     } else if (wins === 1 && losses === 1) {
       badge = "SMALL SAMPLE";
-    } else if (wins === 1 && losses === 2) {
-      badge = "EDGE";
     } else {
       badge = "EDGE";
     }

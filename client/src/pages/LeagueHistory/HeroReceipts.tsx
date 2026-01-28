@@ -80,7 +80,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock, lockedTotalCou
     "monday-night-miracle": "MIRACLE",
     "paper-champion": "PAPER",
     "playoff-drought": "DROUGHT",
-    "championship-drought": "NO TITLE",
+    "bridesmaid": "RUNNER-UP",
   };
 
   const cards = heroReceipts.map((receipt) => (

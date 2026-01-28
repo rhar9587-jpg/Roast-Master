@@ -343,7 +343,6 @@ export default function Home() {
             <div className="mb-4">
               <h2 className="text-lg font-semibold">Get Started</h2>
               <p className="text-sm text-muted-foreground mt-1">Enter your league to generate your roasts</p>
-              <p className="text-xs text-muted-foreground mt-1">Want this week's roast? Enter your username below.</p>
             </div>
             <div className="space-y-4">
               <div>

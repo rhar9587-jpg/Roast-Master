@@ -35,34 +35,39 @@ export function badgeForCell(cell: Omit<Cell, "badge">): Badge {
   const games = cell.games ?? 0;
   const wins = cell.wins ?? 0;
   const losses = cell.losses ?? 0;
-  // small sample
-  if (games < 4) return "SMALL SAMPLE";
 
   // (wins-losses)/games (use computed if already present)
   const score =
     typeof cell.score === "number" ? cell.score : games ? (wins - losses) / games : 0;
+
+  // ✅ Perfect records bypass small sample check (3-0 is OWNED, 0-3 is NEMESIS)
+  if (wins >= 3 && losses === 0) return "OWNED";
+  if (wins === 0 && losses >= 3) return "NEMESIS";
+
+  // Small sample for non-perfect records
+  if (games < 4) return "SMALL SAMPLE";
 
   // ✅ Rival: games >= 5 and close score
   if (games >= 5 && Math.abs(score) <= 0.20) return "RIVAL";
 
   let badge: Badge = "EDGE";
 
-  if (wins >= 3 && losses === 0) {
-    badge = "OWNED";
-  } else if (wins === 0 && losses >= 3) {
-    badge = "NEMESIS";
-  } else if (wins === 3 && losses === 1) {
+  if (wins === 3 && losses === 1) {
+    badge = "EDGE";
+  } else if (wins === 1 && losses === 3) {
     badge = "EDGE";
   } else if (wins === 2 && losses === 0) {
     badge = "EDGE";
+  } else if (wins === 0 && losses === 2) {
+    badge = "EDGE";
   } else if (wins === 2 && losses === 1) {
+    badge = "SMALL SAMPLE";
+  } else if (wins === 1 && losses === 2) {
     badge = "SMALL SAMPLE";
   } else if (wins === 2 && losses === 2) {
     badge = "SMALL SAMPLE";
   } else if (wins === 1 && losses === 1) {
     badge = "SMALL SAMPLE";
-  } else if (wins === 1 && losses === 2) {
-    badge = "EDGE";
   }
 
   if (badge === "SMALL SAMPLE" && score >= 1.0) {

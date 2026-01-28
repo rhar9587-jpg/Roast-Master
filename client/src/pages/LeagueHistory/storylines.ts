@@ -22,11 +22,12 @@ type TotalsByManagerEntry = {
 
 // Credibility guardrails
 const MIN_GAMES_FOR_STORYLINE = 5;
-const MIN_GAMES_FOR_PERSONAL = 5;
+const MIN_GAMES_FOR_PERSONAL = 3; // Lowered from 5 to show more personal roasts
 const MIN_WINS_FOR_UNTOUCHABLE = 3;
 const SEVERE_OWNED_SCORE = 0.4;
 const SEVERE_NEMESIS_SCORE = -0.4;
 const MIN_LEAGUE_GAMES_FOR_PUNCHING_BAG = 20;
+const MAX_CHOKE_JOBS = 5; // Cap to avoid spam
 
 function meetsStoryline(c: DominanceCellDTO): boolean {
   return (c?.games ?? 0) >= MIN_GAMES_FOR_STORYLINE;
@@ -244,14 +245,96 @@ export function computeLeagueStorylines(
   return cards;
 }
 
-/** Your Roast: 3 mini cards. Only when viewerKey set; games >= MIN_GAMES_FOR_PERSONAL. */
+/** Your Roast: 5 mini cards. Only when viewerKey set; games >= MIN_GAMES_FOR_PERSONAL. */
 export function computeYourRoast(
   viewerKey: string,
   allCells: DominanceCellDTO[],
-  managers: ManagerRow[]
+  managers: ManagerRow[],
+  weeklyMatchups: WeeklyMatchupDetail[] = []
 ): MiniCard[] {
   if (!viewerKey) return [];
   const cards: MiniCard[] = [];
+
+  // YOUR BIGGEST WIN - largest margin victory
+  const myWins = weeklyMatchups.filter(
+    (m) => m.managerKey === viewerKey && m.won && m.margin > 0
+  );
+  const biggestWin = [...myWins].sort((a, b) => b.margin - a.margin)[0];
+  if (biggestWin) {
+    const opponent = managers.find((m) => m.key === biggestWin.opponentKey);
+    cards.push({
+      id: "your-biggest-win",
+      title: "YOUR BIGGEST WIN",
+      statPrimary: `+${biggestWin.margin.toFixed(1)}`,
+      statSecondary: `Week ${biggestWin.week}`,
+      meta: biggestWin.season,
+      line: `Dropped ${biggestWin.points.toFixed(1)} on ${opponent?.name ?? "opponent"}.`,
+      detail: opponent?.name,
+      managerKey: viewerKey,
+    });
+  }
+
+  // YOUR CHOKE JOBS - losses where you beat the weekly median
+  // Calculate weekly medians
+  const weeklyScores = new Map<string, number[]>();
+  for (const m of weeklyMatchups) {
+    const key = `${m.season}-${m.week}`;
+    const scores = weeklyScores.get(key) || [];
+    scores.push(m.points);
+    weeklyScores.set(key, scores);
+  }
+
+  // Find losses where you beat the weekly median, flag top-3 as nuclear
+  const chokeJobs: Array<WeeklyMatchupDetail & { isNuclear: boolean; rank: number }> = [];
+  for (const m of weeklyMatchups) {
+    if (m.managerKey !== viewerKey || m.won) continue;
+
+    const key = `${m.season}-${m.week}`;
+    const scores = weeklyScores.get(key) || [];
+    const sorted = [...scores].sort((a, b) => b - a);
+    const medianIndex = Math.floor(sorted.length / 2);
+    const median = sorted[medianIndex];
+    const rank = sorted.indexOf(m.points) + 1; // 1-indexed rank
+    const isTop3 = rank <= 3;
+
+    if (m.points > median) {
+      chokeJobs.push({ ...m, isNuclear: isTop3, rank });
+    }
+  }
+
+  // Cap at MAX_CHOKE_JOBS, prioritize nuclear tier then highest score
+  const cappedChokes = [...chokeJobs]
+    .sort((a, b) => (b.isNuclear ? 1 : 0) - (a.isNuclear ? 1 : 0) || b.points - a.points)
+    .slice(0, MAX_CHOKE_JOBS);
+
+  if (cappedChokes.length > 0) {
+    const nuclearCount = cappedChokes.filter((c) => c.isNuclear).length;
+    const worstChoke = cappedChokes[0]; // Highest priority choke
+    const opponent = managers.find((m) => m.key === worstChoke.opponentKey);
+
+    // Dynamic punchline based on severity
+    let punchline: string;
+    if (nuclearCount > 0 && worstChoke.isNuclear) {
+      punchline = nuclearCount === 1
+        ? `Top ${worstChoke.rank} scorer. Still lost to ${opponent?.name ?? "opponent"}.`
+        : `${nuclearCount} times you were a top 3 scorer and still lost.`;
+    } else {
+      punchline = cappedChokes.length === 1
+        ? `Beat half the league and lost to ${opponent?.name ?? "opponent"}.`
+        : `${cappedChokes.length} times you beat half the league and lost.`;
+    }
+
+    cards.push({
+      id: "your-choke-jobs",
+      title: "YOUR CHOKE JOBS",
+      statPrimary: String(cappedChokes.length),
+      statSecondary: nuclearCount > 0 ? `${nuclearCount} nuclear` : cappedChokes.length === 1 ? "choke" : "chokes",
+      meta: `Worst: ${worstChoke.points.toFixed(1)} pts (Week ${worstChoke.week})`,
+      line: punchline,
+      detail: opponent?.name,
+      managerKey: viewerKey,
+    });
+  }
 
   const myOwned = allCells.filter(
     (c) =>

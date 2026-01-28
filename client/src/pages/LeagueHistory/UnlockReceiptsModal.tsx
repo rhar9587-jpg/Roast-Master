@@ -59,10 +59,10 @@ export function UnlockReceiptsModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">
-            Unlock the full roast for {leagueName?.trim() ? leagueName : "this league"}
+            Your league has receipts. Time to collect.
           </DialogTitle>
           <DialogDescription className="pt-2">
-            {leagueName?.trim() ? leagueName : "This league"} — ${PRICE_ONE_TIME} (one-time)
+            Unlock all roasts for {leagueName?.trim() ? leagueName : "this league"}. ${PRICE_ONE_TIME} one-time — split it, less than $3 each.
           </DialogDescription>
         </DialogHeader>
 

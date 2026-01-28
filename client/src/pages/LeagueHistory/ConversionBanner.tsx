@@ -48,7 +48,7 @@ export function ConversionBanner({
     >
       <CardHeader className="text-center pb-4">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          Unlock the full roast for {leagueName?.trim() ? leagueName : "this league"} — ${PRICE_ONE_TIME} one-time
+          {leagueName?.trim() ? leagueName : "This league"} has receipts waiting. ${PRICE_ONE_TIME} — less than $3 per person.
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">

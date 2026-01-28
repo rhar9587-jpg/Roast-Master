@@ -582,6 +582,10 @@ async function handleWrapped(params: RoastRequest) {
     null;
   let worstLoss: { week: number; margin: number; oppRid: number; you: number; opp: number } | null =
     null;
+  // Track record vs each opponent for "Your Worst Enemy" card
+  const recordVsOpponent = new Map<number, { wins: number; losses: number }>();
+  // Track high-score losses for "Your Choke Jobs" card
+  const highScoreLosses: Array<{ week: number; you: number; opp: number; oppRid: number }> = [];
 
   for (let w = startWeek; w <= endWeek; w++) {
     let weekMatchups: SleeperMatchup[] = [];
@@ -615,14 +619,35 @@ async function handleWrapped(params: RoastRequest) {
     const opp = safeNumber(oppRow.points);
     const margin = you - opp;
 
+    // Track record vs each opponent
+    const oppRid = oppRow.roster_id;
+    const rec = recordVsOpponent.get(oppRid) || { wins: 0, losses: 0 };
+
     if (margin > 0) {
+      rec.wins++;
       if (!bestWin || margin > bestWin.margin) {
-        bestWin = { week: w, margin, oppRid: oppRow.roster_id, you, opp };
+        bestWin = { week: w, margin, oppRid, you, opp };
       }
     } else if (margin < 0) {
+      rec.losses++;
       if (!worstLoss || margin < worstLoss.margin) {
-        worstLoss = { week: w, margin, oppRid: oppRow.roster_id, you, opp };
+        worstLoss = { week: w, margin, oppRid, you, opp };
       }
+      // Track high-score losses (scored above average but still lost)
+      // Use 90 as threshold since many leagues have lower scoring
+      if (you >= 90) {
+        highScoreLosses.push({ week: w, you, opp, oppRid });
+      }
+    }
+    recordVsOpponent.set(oppRid, rec);
+  }
+
+  // Find worst enemy (opponent with best record against user)
+  let worstEnemy: { rosterId: number; wins: number; losses: number } | null = null;
+  for (const [oppId, rec] of Array.from(recordVsOpponent.entries())) {
+    const theirWins = rec.losses; // Their wins against user = user's losses to them
+    if (theirWins > 0 && (!worstEnemy || theirWins > worstEnemy.wins)) {
+      worstEnemy = { rosterId: oppId, wins: theirWins, losses: rec.wins };
     }
   }
 
@@ -684,6 +709,46 @@ async function handleWrapped(params: RoastRequest) {
             opp: Number(formatPts(bestWin.opp)),
           }
         : null,
+    },
+    // Your Worst Enemy card - always show
+    {
+      type: "worst_enemy",
+      title: "Your Worst Enemy",
+      subtitle: worstEnemy
+        ? `${rosterName(worstEnemy.rosterId)} owns you this season.`
+        : "No one owns you. You ran the table.",
+      stat: worstEnemy ? `${worstEnemy.wins}-${worstEnemy.losses}` : "0-0",
+      meta: worstEnemy
+        ? {
+            opponent: rosterName(worstEnemy.rosterId),
+            opponentWins: worstEnemy.wins,
+            opponentLosses: worstEnemy.losses,
+          }
+        : null,
+    },
+    // Your Choke Jobs card - always show
+    {
+      type: "choke_jobs",
+      title: "Your Choke Jobs",
+      subtitle:
+        highScoreLosses.length === 0
+          ? "Zero choke jobs. You show up when it matters."
+          : highScoreLosses.length === 1
+            ? `You scored ${highScoreLosses[0].you.toFixed(1)} and still lost.`
+            : `${highScoreLosses.length} times you put up a big score and still lost.`,
+      stat: `${highScoreLosses.length}`,
+      meta:
+        highScoreLosses.length > 0
+          ? {
+              count: highScoreLosses.length,
+              games: highScoreLosses.map((g) => ({
+                week: g.week,
+                you: g.you,
+                opp: g.opp,
+                opponent: rosterName(g.oppRid),
+              })),
+            }
+          : null,
     },
   ];
 

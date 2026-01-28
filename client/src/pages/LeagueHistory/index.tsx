@@ -54,6 +54,7 @@ import type {
 import type { RoastResponse, WrappedResponse, LeagueAutopsyResponse } from "@shared/schema";
 
 const EXAMPLE_LEAGUE_ID = "1204010682635255808";
+const WEEKLY_ENABLED = false; // Disabled for Super Bowl V1 - re-enable post-Super Bowl
 type Mode = "history" | "weekly" | "season" | "end";
 type TeamOption = { roster_id: number; name: string };
 
@@ -649,18 +650,18 @@ export default function LeagueHistoryPage() {
   const yourRoastCards = useMemo(
     () =>
       viewerKey
-        ? computeYourRoast(viewerKey, allCells, managers)
+        ? computeYourRoast(viewerKey, allCells, managers, data?.weeklyMatchups ?? [])
         : [],
-    [viewerKey, allCells, managers]
+    [viewerKey, allCells, managers, data?.weeklyMatchups]
   );
 
   // Compute hero receipts from seasonStats and weeklyMatchups
   const heroReceipts = useMemo(
     () =>
       data?.seasonStats && data?.weeklyMatchups
-        ? computeHeroReceipts(data.seasonStats, data.weeklyMatchups, managers, avatarByKey)
+        ? computeHeroReceipts(data.seasonStats, data.weeklyMatchups, managers, avatarByKey, leagueId)
         : [],
-    [data?.seasonStats, data?.weeklyMatchups, managers, avatarByKey]
+    [data?.seasonStats, data?.weeklyMatchups, managers, avatarByKey, leagueId]
   );
 
   // Compute additional mini cards from seasonStats and weeklyMatchups
@@ -1210,7 +1211,7 @@ export default function LeagueHistoryPage() {
         <div className="flex flex-wrap gap-2 rounded-xl border bg-muted/20 p-1">
           {[
             { id: "history", label: "History" },
-            { id: "weekly", label: "Weekly" },
+            ...(WEEKLY_ENABLED ? [{ id: "weekly", label: "Weekly" }] : []),
             { id: "season", label: "Your Season" },
             { id: "end", label: "Recap" },
           ].map((tab) => (
@@ -1231,10 +1232,10 @@ export default function LeagueHistoryPage() {
 
       {hasData && (
         <p className="text-sm text-muted-foreground">
-          {activeMode === "history" && "All-time dominance + the biggest moments. Built for the group chat."}
-          {activeMode === "weekly" && "Pick a week. Get the chaos from that matchup slate."}
-          {activeMode === "season" && "Pick a manager. See their season wrapped."}
-          {activeMode === "end" && "Pick a season. Get the league recap."}
+          {activeMode === "history" && "Every argument your league has ever had — with receipts."}
+          {WEEKLY_ENABLED && activeMode === "weekly" && "Pick a week. Get the chaos from that matchup slate."}
+          {activeMode === "season" && "Your season. Your wins. Your choke jobs. No hiding."}
+          {activeMode === "end" && "The final verdict on this season. Someone's getting exposed."}
         </p>
       )}
 
@@ -1278,7 +1279,7 @@ export default function LeagueHistoryPage() {
         />
       </div>
 
-      {hasData && activeMode === "weekly" && !isPremiumState && (
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && !isPremiumState && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="flex-1">
@@ -1301,7 +1302,7 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {hasData && activeMode === "weekly" && !isPremiumState && (
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && !isPremiumState && (
         <LockedModePreview
           title="Weekly Roast"
           description="Pick any week and generate the chaos from that slate."
@@ -1315,7 +1316,7 @@ export default function LeagueHistoryPage() {
         />
       )}
 
-      {hasData && activeMode === "weekly" && isPremiumState && (
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && isPremiumState && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="flex-1">
@@ -1339,11 +1340,11 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {hasData && activeMode === "weekly" && isPremiumState && weeklyRoastData && (
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && isPremiumState && weeklyRoastData && (
         <RoastCard data={weeklyRoastData} isPremium={isPremiumState} />
       )}
 
-      {hasData && activeMode === "weekly" && isPremiumState && !weeklyRoastData && !weeklyRoastLoading && (
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && isPremiumState && !weeklyRoastData && !weeklyRoastLoading && (
         <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
           <p className="text-sm text-muted-foreground">Choose a week to generate the roast.</p>
           <p className="text-xs text-muted-foreground mt-1">History is always available.</p>

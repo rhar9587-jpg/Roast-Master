@@ -33,8 +33,8 @@ export function SeasonWrappedCard({ data, isPremium = false }: SeasonWrappedCard
 
   const accentFor = (type: string): Accent => {
     const t = (type || "").toLowerCase();
-    if (t.includes("mvp") || t.includes("season")) return "green";
-    if (t.includes("worst") || t.includes("regret")) return "pink";
+    if (t.includes("mvp") || t.includes("season") || t.includes("best")) return "green";
+    if (t.includes("worst") || t.includes("regret") || t.includes("enemy") || t.includes("choke")) return "pink";
     if (t.includes("style")) return "blue";
     return "orange";
   };
@@ -60,7 +60,6 @@ export function SeasonWrappedCard({ data, isPremium = false }: SeasonWrappedCard
             onClick={goPrev}
             className="h-10 w-10 rounded-xl border bg-white hover:bg-gray-50 flex items-center justify-center"
             aria-label="Previous card"
-            disabled={isExporting}
           >
             ‹
           </button>
@@ -68,7 +67,6 @@ export function SeasonWrappedCard({ data, isPremium = false }: SeasonWrappedCard
             onClick={goNext}
             className="h-10 w-10 rounded-xl border bg-white hover:bg-gray-50 flex items-center justify-center"
             aria-label="Next card"
-            disabled={isExporting}
           >
             ›
           </button>
