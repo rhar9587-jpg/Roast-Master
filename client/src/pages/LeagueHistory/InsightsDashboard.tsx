@@ -39,6 +39,7 @@ type Props = {
   onOpenCell: (cellKey: string | null) => void;
   isPremium: boolean;
   onUnlock?: () => void;
+  lockedTotalCount?: number;
 };
 
 // Helper component to wrap blurred cards
@@ -88,6 +89,7 @@ export function InsightsDashboard({
   onOpenCell,
   isPremium,
   onUnlock,
+  lockedTotalCount,
 }: Props) {
   const landlordCard = (
     <BaseballCard
@@ -229,6 +231,11 @@ export function InsightsDashboard({
       </RoastDeckCarousel>
       <div className="rounded-lg border border-dashed bg-muted/20 p-4 space-y-3 text-center">
         <p className="text-sm font-medium text-foreground">More roasts are waiting.</p>
+        {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Your league has {lockedTotalCount} roasts waiting.
+          </p>
+        )}
         <ul className="text-xs text-muted-foreground space-y-1">
           <li>Weekly roasts for every matchup</li>
           <li>Your Season wrapped</li>

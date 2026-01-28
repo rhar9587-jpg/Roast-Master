@@ -9,6 +9,7 @@ type Props = {
   heroReceipts: HeroReceiptCard[];
   isPremium: boolean;
   onUnlock?: () => void;
+  lockedTotalCount?: number;
 };
 
 type CardWrapperProps = {
@@ -65,7 +66,7 @@ function CardWithHeading({
   );
 }
 
-export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
+export function HeroReceipts({ heroReceipts, isPremium, onUnlock, lockedTotalCount }: Props) {
   if (heroReceipts.length === 0) return null;
 
   const badgeTextById: Record<string, string> = {
@@ -78,6 +79,8 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
     "playoff-choker": "CHOKED",
     "monday-night-miracle": "MIRACLE",
     "paper-champion": "PAPER",
+    "playoff-drought": "DROUGHT",
+    "championship-drought": "NO TITLE",
   };
 
   const cards = heroReceipts.map((receipt) => (
@@ -119,6 +122,11 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock }: Props) {
         <p className="text-xs text-muted-foreground mt-1">
           The moments your league will never forget.
         </p>
+        {!isPremium && typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Your league has {lockedTotalCount} roasts waiting.
+          </p>
+        )}
       </div>
       <RoastDeckCarousel>
         {heroReceipts.map((receipt, index) => {

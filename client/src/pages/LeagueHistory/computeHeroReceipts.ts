@@ -40,6 +40,14 @@ export function computeHeroReceipts(
   if (woodenSpoon) receipts.push(woodenSpoon);
   else logHeroReceiptSkip("Wooden Spoon Merchant", "no qualifying last-place manager");
 
+  const playoffDrought = computePlayoffDrought(seasonStats, managers, avatarByKey);
+  if (playoffDrought) receipts.push(playoffDrought);
+  else logHeroReceiptSkip("Playoff Drought", "no multi-season playoff drought found");
+
+  const championshipDrought = computeChampionshipDrought(seasonStats, managers, avatarByKey);
+  if (championshipDrought) receipts.push(championshipDrought);
+  else logHeroReceiptSkip("Championship Drought", "no multi-season title drought found");
+
   const missedIt = computeMissedItByThatMuch(seasonStats, managers, avatarByKey);
   if (missedIt) receipts.push(missedIt);
   else logHeroReceiptSkip("Missed It By That Much", "no non-playoff high scorer");
@@ -73,6 +81,144 @@ export function computeHeroReceipts(
   else logHeroReceiptSkip("Paper Champion", "no qualifying paper champion found");
 
   return receipts;
+}
+
+const MIN_DROUGHT_SEASONS = 2;
+
+function seasonToNumber(season?: string) {
+  const n = Number(season);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getLongestStreak(
+  stats: SeasonStat[],
+  isBadSeason: (stat: SeasonStat) => boolean,
+) {
+  const sorted = [...stats].sort((a, b) => seasonToNumber(a.season) - seasonToNumber(b.season));
+  let best = { length: 0, start: "", end: "" };
+  let current = { length: 0, start: "", end: "" };
+
+  for (const stat of sorted) {
+    if (isBadSeason(stat)) {
+      if (current.length === 0) {
+        current.start = stat.season;
+      }
+      current.length += 1;
+      current.end = stat.season;
+    } else {
+      if (current.length > best.length) best = { ...current };
+      current = { length: 0, start: "", end: "" };
+    }
+  }
+
+  if (current.length > best.length) best = { ...current };
+  return best;
+}
+
+function computePlayoffDrought(
+  seasonStats: SeasonStat[],
+  managers: ManagerRow[],
+  avatarByKey: Record<string, string | null>,
+): HeroReceiptCard | null {
+  if (seasonStats.length === 0) return null;
+
+  const statsByManager = new Map<string, SeasonStat[]>();
+  for (const stat of seasonStats) {
+    const list = statsByManager.get(stat.managerKey) || [];
+    list.push(stat);
+    statsByManager.set(stat.managerKey, list);
+  }
+
+  let best: { managerKey: string; length: number; start: string; end: string } | null = null;
+
+  for (const [managerKey, stats] of statsByManager) {
+    if (stats.length < MIN_DROUGHT_SEASONS) continue;
+    const streak = getLongestStreak(stats, (s) => !s.playoffQualified);
+    if (streak.length >= MIN_DROUGHT_SEASONS) {
+      if (
+        !best ||
+        streak.length > best.length ||
+        (streak.length === best.length && seasonToNumber(streak.end) > seasonToNumber(best.end))
+      ) {
+        best = { managerKey, ...streak };
+      }
+    }
+  }
+
+  if (!best) return null;
+
+  const manager = managers.find((m) => m.key === best.managerKey);
+  if (!manager) return null;
+
+  return {
+    id: "playoff-drought",
+    badge: "NEMESIS",
+    title: "PLAYOFF DROUGHT 🏜️",
+    name: manager.name,
+    avatarUrl: avatarByKey[best.managerKey] ?? null,
+    primaryStat: {
+      value: String(best.length),
+      label: best.length === 1 ? "SEASON" : "SEASONS",
+    },
+    punchline: `${manager.name} missed the playoffs ${best.length} straight season${best.length === 1 ? "" : "s"}.`,
+    lines: [
+      { label: "Drought", value: best.start && best.end ? `${best.start}–${best.end}` : "—" },
+    ],
+    season: best.start && best.end ? `${best.end}–${best.start}` : undefined,
+  };
+}
+
+function computeChampionshipDrought(
+  seasonStats: SeasonStat[],
+  managers: ManagerRow[],
+  avatarByKey: Record<string, string | null>,
+): HeroReceiptCard | null {
+  if (seasonStats.length === 0) return null;
+
+  const statsByManager = new Map<string, SeasonStat[]>();
+  for (const stat of seasonStats) {
+    const list = statsByManager.get(stat.managerKey) || [];
+    list.push(stat);
+    statsByManager.set(stat.managerKey, list);
+  }
+
+  let best: { managerKey: string; length: number; start: string; end: string } | null = null;
+
+  for (const [managerKey, stats] of statsByManager) {
+    if (stats.length < MIN_DROUGHT_SEASONS) continue;
+    const streak = getLongestStreak(stats, (s) => s.rank !== 1);
+    if (streak.length >= MIN_DROUGHT_SEASONS) {
+      if (
+        !best ||
+        streak.length > best.length ||
+        (streak.length === best.length && seasonToNumber(streak.end) > seasonToNumber(best.end))
+      ) {
+        best = { managerKey, ...streak };
+      }
+    }
+  }
+
+  if (!best) return null;
+
+  const manager = managers.find((m) => m.key === best.managerKey);
+  if (!manager) return null;
+
+  return {
+    id: "championship-drought",
+    badge: "NEMESIS",
+    title: "CHAMPIONSHIP DROUGHT 🏆❌",
+    name: manager.name,
+    avatarUrl: avatarByKey[best.managerKey] ?? null,
+    primaryStat: {
+      value: String(best.length),
+      label: best.length === 1 ? "SEASON" : "SEASONS",
+    },
+    punchline: `${manager.name} has gone ${best.length} season${best.length === 1 ? "" : "s"} without a title.`,
+    lines: [
+      { label: "Drought", value: best.start && best.end ? `${best.start}–${best.end}` : "—" },
+    ],
+    season: best.start && best.end ? `${best.end}–${best.start}` : undefined,
+  };
 }
 
 function computeWoodenSpoonMerchant(

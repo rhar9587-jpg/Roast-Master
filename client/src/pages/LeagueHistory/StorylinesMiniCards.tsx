@@ -99,6 +99,7 @@ type Props = {
   exportTimestamp?: string;
   isPremium: boolean;
   onUnlock?: () => void;
+  lockedTotalCount?: number;
 };
 
 const YOUR_ROAST_EMPTY_MESSAGE =
@@ -166,11 +167,17 @@ export function StorylinesMiniCards({
   exportTimestamp,
   isPremium,
   onUnlock,
+  lockedTotalCount,
 }: Props) {
   const ts = exportTimestamp ?? new Date().toLocaleString();
 
   return (
     <div className="space-y-8">
+      {!isPremium && typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
+        <p className="text-xs text-muted-foreground text-center">
+          Your league has {lockedTotalCount} roasts waiting.
+        </p>
+      )}
       {leagueCards.length > 0 && (
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-3">

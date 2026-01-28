@@ -10,6 +10,7 @@ type Props = {
   leagueName?: string;
   lockedReceiptsCount?: number;
   lockedStorylinesCount?: number;
+  lockedTotalCount?: number;
 };
 
 function isDismissed(): boolean {
@@ -32,6 +33,7 @@ export function StickyUpgradeBar({
   leagueName,
   lockedReceiptsCount,
   lockedStorylinesCount,
+  lockedTotalCount,
 }: Props) {
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissedState, setIsDismissedState] = useState(false);
@@ -123,6 +125,11 @@ export function StickyUpgradeBar({
               <p className="text-xs text-muted-foreground text-center mt-1">
                 Split with your league — less than $3 each.
               </p>
+              {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
+                <p className="text-xs text-muted-foreground text-center mt-1">
+                  Your league has {lockedTotalCount} roasts waiting.
+                </p>
+              )}
             </div>
             <Button
               variant="ghost"

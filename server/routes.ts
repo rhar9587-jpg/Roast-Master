@@ -685,23 +685,6 @@ async function handleWrapped(params: RoastRequest) {
           }
         : null,
     },
-    {
-      type: "worst_loss",
-      title: "Worst Loss",
-      subtitle: worstLoss
-        ? `Week ${worstLoss.week}: ${rosterName(worstLoss.oppRid)} sent you to the shadow realm.`
-        : "No losses found in this season range.",
-      stat: worstLoss ? `-${formatPts(bestLossAbs(worstLoss.margin))} pts` : "—",
-      meta: worstLoss
-        ? {
-            week: worstLoss.week,
-            margin: Number(formatPts(bestLossAbs(worstLoss.margin))),
-            opponent: rosterName(worstLoss.oppRid),
-            you: Number(formatPts(worstLoss.you)),
-            opp: Number(formatPts(worstLoss.opp)),
-          }
-        : null,
-    },
   ];
 
   return {

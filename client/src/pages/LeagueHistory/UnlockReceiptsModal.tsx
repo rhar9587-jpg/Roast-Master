@@ -20,6 +20,7 @@ type Props = {
   leagueName?: string;
   lockedReceiptsCount?: number;
   lockedStorylinesCount?: number;
+  lockedTotalCount?: number;
 };
 
 export function UnlockReceiptsModal({
@@ -31,6 +32,7 @@ export function UnlockReceiptsModal({
   leagueName,
   lockedReceiptsCount,
   lockedStorylinesCount,
+  lockedTotalCount,
 }: Props) {
   const handleUnlock = () => {
     if (onUnlock) {
@@ -121,6 +123,11 @@ export function UnlockReceiptsModal({
             <p className="text-xs text-muted-foreground text-center mt-2">
               Split with your league — less than $3 each.
             </p>
+            {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
+              <p className="text-xs text-muted-foreground text-center mt-1">
+                Your league has {lockedTotalCount} roasts waiting.
+              </p>
+            )}
           </div>
         </DialogFooter>
 

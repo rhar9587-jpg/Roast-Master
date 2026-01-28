@@ -673,13 +673,22 @@ export default function LeagueHistoryPage() {
   );
 
   const lockedReceiptsCount = useMemo(() => {
-    return Math.max(heroReceipts.length - 2, 0);
+    return Math.max(heroReceipts.length - 1, 0);
   }, [heroReceipts.length]);
 
   const lockedStorylinesCount = useMemo(() => {
     const totalStorylines = leagueStorylines.length + additionalMiniCards.length;
     return Math.max(totalStorylines - 1, 0);
   }, [leagueStorylines.length, additionalMiniCards.length]);
+
+  const lockedYourRoastCount = useMemo(() => {
+    if (!viewerKey) return 0;
+    return Math.max(yourRoastCards.length - 1, 0);
+  }, [viewerKey, yourRoastCards.length]);
+
+  const lockedTotalCount = useMemo(() => {
+    return lockedReceiptsCount + lockedStorylinesCount + lockedYourRoastCount;
+  }, [lockedReceiptsCount, lockedStorylinesCount, lockedYourRoastCount]);
 
   // Compute ownedCount for contextual copy
   const ownedCount = useMemo(() => {
@@ -1302,6 +1311,7 @@ export default function LeagueHistoryPage() {
             "Shareable roast cards for the group chat",
           ]}
           onUnlock={handleUpgrade}
+          lockedTotalCount={lockedTotalCount}
         />
       )}
 
@@ -1379,6 +1389,7 @@ export default function LeagueHistoryPage() {
             "A roast-worthy recap for the group chat",
           ]}
           onUnlock={handleUpgrade}
+          lockedTotalCount={lockedTotalCount}
         />
       )}
 
@@ -1452,6 +1463,7 @@ export default function LeagueHistoryPage() {
             "Shareable recap cards for the league",
           ]}
           onUnlock={handleUpgrade}
+          lockedTotalCount={lockedTotalCount}
         />
       )}
 
@@ -1496,6 +1508,7 @@ export default function LeagueHistoryPage() {
             onOpenCell={openCell}
             isPremium={isPremiumState}
             onUnlock={handleUpgrade}
+            lockedTotalCount={lockedTotalCount}
           />
           {hasData && hasEnoughData && (
             <p className="text-xs text-muted-foreground text-center mt-2">
@@ -1559,6 +1572,7 @@ export default function LeagueHistoryPage() {
             heroReceipts={heroReceipts}
             isPremium={isPremiumState}
             onUnlock={handleUpgrade}
+            lockedTotalCount={lockedTotalCount}
           />
         </section>
       )}
@@ -1672,6 +1686,7 @@ export default function LeagueHistoryPage() {
               }
               isPremium={isPremiumState}
               onUnlock={handleUpgrade}
+              lockedTotalCount={lockedTotalCount}
             />
           </section>
         )}
@@ -1687,6 +1702,7 @@ export default function LeagueHistoryPage() {
             leagueId={leagueId}
             lockedReceiptsCount={lockedReceiptsCount}
             lockedStorylinesCount={lockedStorylinesCount}
+            lockedTotalCount={lockedTotalCount}
           />
         </section>
       )}
@@ -1710,6 +1726,7 @@ export default function LeagueHistoryPage() {
           leagueName={data?.league?.name}
           lockedReceiptsCount={lockedReceiptsCount}
           lockedStorylinesCount={lockedStorylinesCount}
+          lockedTotalCount={lockedTotalCount}
         />
       )}
 
@@ -1724,6 +1741,7 @@ export default function LeagueHistoryPage() {
           leagueName={data?.league?.name}
           lockedReceiptsCount={lockedReceiptsCount}
           lockedStorylinesCount={lockedStorylinesCount}
+          lockedTotalCount={lockedTotalCount}
         />
       )}
 

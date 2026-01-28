@@ -83,20 +83,40 @@ export function RoastCard({ data, isPremium = false }: RoastCardProps) {
     if (data.matchup) {
       const a = data.matchup.you;
       const b = data.matchup.opponent;
+      const aScore = safeNum(a.score);
+      const bScore = safeNum(b.score);
+      const margin = Math.abs(aScore - bScore);
+      const isBlowout = margin >= 25;
+      const isNailBiter = margin <= 5;
+      const result = data.matchup.result;
+      const punchline =
+        result === "WIN"
+          ? isBlowout
+            ? "You obliterated them."
+            : isNailBiter
+              ? "You stole it."
+              : "You handled business."
+          : result === "LOSS"
+            ? isBlowout
+              ? "You got erased."
+              : isNailBiter
+                ? "Heartbreaker."
+                : "You got clipped."
+            : "Dead even. The league will argue about this.";
       deck.push({
         kicker: "YOUR MATCHUP",
         title: `${a.username.toUpperCase()} vs ${b.username.toUpperCase()}`,
-        subtitle: `Result: ${data.matchup.result}`,
-        bigValue: `${safeNum(a.score).toFixed(2)}–${safeNum(b.score).toFixed(2)}`,
+        subtitle: `Result: ${result} • ${punchline}`,
+        bigValue: `${aScore.toFixed(2)}–${bScore.toFixed(2)}`,
         tagline: "Receipts attached.",
         footer: "fantasyroast.net",
         accent: "green",
         isMatchup: true,
         matchupData: {
           teamA: a.username,
-          scoreA: safeNum(a.score),
+          scoreA: aScore,
           teamB: b.username,
-          scoreB: safeNum(b.score),
+          scoreB: bScore,
         }
       });
     } else {

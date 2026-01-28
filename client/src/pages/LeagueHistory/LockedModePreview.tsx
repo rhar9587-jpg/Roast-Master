@@ -6,6 +6,7 @@ type LockedModePreviewProps = {
   description: string;
   previewItems: string[];
   onUnlock: () => void;
+  lockedTotalCount?: number;
 };
 
 export function LockedModePreview({
@@ -13,6 +14,7 @@ export function LockedModePreview({
   description,
   previewItems,
   onUnlock,
+  lockedTotalCount,
 }: LockedModePreviewProps) {
   return (
     <div className="rounded-lg border border-dashed bg-muted/20 p-6 space-y-4">
@@ -23,6 +25,11 @@ export function LockedModePreview({
           <p className="text-xs text-muted-foreground">{description}</p>
         </div>
       </div>
+      {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
+        <p className="text-xs text-muted-foreground text-center">
+          Your league has {lockedTotalCount} roasts waiting.
+        </p>
+      )}
       <ul className="text-xs text-muted-foreground space-y-1">
         {previewItems.map((item) => (
           <li key={item} className="flex items-center gap-2">

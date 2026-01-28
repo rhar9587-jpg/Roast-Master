@@ -13,6 +13,7 @@ type Props = {
   leagueId?: string;
   lockedReceiptsCount?: number;
   lockedStorylinesCount?: number;
+  lockedTotalCount?: number;
 };
 
 export function ConversionBanner({
@@ -23,6 +24,7 @@ export function ConversionBanner({
   leagueId,
   lockedReceiptsCount,
   lockedStorylinesCount,
+  lockedTotalCount,
 }: Props) {
   const handleUpgrade = () => {
     if (onUpgrade) {
@@ -89,6 +91,11 @@ export function ConversionBanner({
           <p className="text-xs text-muted-foreground text-center mt-2">
             Split with your league — less than $3 each.
           </p>
+          {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
+            <p className="text-xs text-muted-foreground text-center mt-1">
+              Your league has {lockedTotalCount} roasts waiting.
+            </p>
+          )}
         </div>
         <p className="text-sm font-semibold text-center">
           Risk-free • 30-day money-back guarantee
