@@ -30,7 +30,7 @@ export default function Home() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const EXAMPLE_LEAGUE_ID = "1204010682635255808";
+  const EXAMPLE_LEAGUE_ID = "demo-group-chat-dynasty";
 
   // Track home visit once on mount
   const hasTrackedVisit = useRef(false);
@@ -157,7 +157,7 @@ export default function Home() {
       window.location.href = `/league-history/dominance?${params.toString()}`;
       return;
     }
-    const exampleLeagueId = "1204010682635255808";
+    const exampleLeagueId = "demo-group-chat-dynasty";
     window.location.href = `/league-history/dominance?league_id=${exampleLeagueId}&start_week=1&end_week=17`;
   }
 

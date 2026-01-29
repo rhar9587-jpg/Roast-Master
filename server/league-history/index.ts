@@ -1,6 +1,7 @@
 // server/league-history/index.ts
 import { getLeague, getRosters, getUsers, getMatchups } from "./sleeper";
 import { computeSeasonWeekRange, getPlayoffStartWeek } from "./weekFilter";
+import { DEMO_LEAGUE_ID, getDemoLeagueData } from "./demoLeague";
 
 function nameForRoster(
   roster_id: number,
@@ -296,6 +297,11 @@ export async function handleLeagueHistoryDominance(params: {
 }) {
   const league_id = String(params.league_id || "").trim();
   if (!league_id) throw new Error("league_id is required");
+
+  // Demo league intercept - return static fictional data (no Sleeper API call)
+  if (league_id === DEMO_LEAGUE_ID) {
+    return getDemoLeagueData();
+  }
 
   const start_week = Number(params.start_week ?? 1);
   const end_week = Number(params.end_week ?? 17);

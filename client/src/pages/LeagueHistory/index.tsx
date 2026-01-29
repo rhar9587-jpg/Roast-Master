@@ -53,7 +53,7 @@ import type {
 } from "./types";
 import type { RoastResponse, WrappedResponse, LeagueAutopsyResponse } from "@shared/schema";
 
-const EXAMPLE_LEAGUE_ID = "1204010682635255808";
+const EXAMPLE_LEAGUE_ID = "demo-group-chat-dynasty";
 const WEEKLY_ENABLED = false; // Disabled for Super Bowl V1 - re-enable post-Super Bowl
 type Mode = "history" | "weekly" | "season" | "end";
 type TeamOption = { roster_id: number; name: string };
@@ -361,6 +361,14 @@ export default function LeagueHistoryPage() {
     const m: Record<string, string | null> = {};
     for (const t of data?.totalsByManager ?? []) {
       m[t.key] = t.avatarUrl ?? null;
+    }
+    return m;
+  }, [data?.totalsByManager]);
+
+  const emojiByKey = useMemo(() => {
+    const m: Record<string, string | null> = {};
+    for (const t of data?.totalsByManager ?? []) {
+      m[t.key] = (t as any).emoji ?? null;
     }
     return m;
   }, [data?.totalsByManager]);
@@ -917,7 +925,7 @@ export default function LeagueHistoryPage() {
   }
 
   function handleTryExampleLeague() {
-    const exampleLeagueId = "1204010682635255808";
+    const exampleLeagueId = "demo-group-chat-dynasty";
     setLeagueId(exampleLeagueId);
     setStartWeek(1);
     setEndWeek(17);
@@ -1267,14 +1275,11 @@ export default function LeagueHistoryPage() {
       {leagueId === EXAMPLE_LEAGUE_ID && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <span>
-            This is an example league. Load your league to see your roasts →
+            📺 <strong>Fictional demo league.</strong> Load your league to see your real roasts →
           </span>
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={handleUpgrade}>
-              Unlock full roast — $19
-            </Button>
             <Button size="sm" variant="outline" onClick={handleLoadYourLeagueFromExample}>
-              Load your league
+              Enter your league
             </Button>
           </div>
         </div>
@@ -1527,6 +1532,7 @@ export default function LeagueHistoryPage() {
             mostOwned={mostOwned}
             biggestRivalry={biggestRivalry}
             avatarByKey={avatarByKey}
+            emojiByKey={emojiByKey}
             onOpenCell={openCell}
             isPremium={isPremiumState}
             onUnlock={handleUpgrade}

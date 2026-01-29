@@ -6,7 +6,7 @@ import { Check } from "lucide-react";
 const PRICE_FULL = 29;
 const PRICE_PROMO = 19;
 const PROMO_DEADLINE = "Feb 10";
-const EXAMPLE_LEAGUE_ID = "1204010682635255808";
+const EXAMPLE_LEAGUE_ID = "demo-group-chat-dynasty";
 
 type Props = {
   onUpgrade?: () => void;
