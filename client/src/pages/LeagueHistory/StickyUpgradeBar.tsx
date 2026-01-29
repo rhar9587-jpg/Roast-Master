@@ -3,7 +3,10 @@ import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 
 const STORAGE_KEY = "fantasy-roast-upgradeDismissedUntil";
-const PRICE_ONE_TIME = 29;
+// Super Bowl Promo Pricing
+const PRICE_FULL = 29;
+const PRICE_PROMO = 19;
+const PROMO_DEADLINE = "Feb 10";
 
 type Props = {
   onUpgrade?: () => void;
@@ -110,7 +113,9 @@ export function StickyUpgradeBar({
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">
-              Unlock the full roast for {leagueName?.trim() ? leagueName : "this league"} • $29 one-time
+              Unlock the full roast for {leagueName?.trim() ? leagueName : "this league"} •{" "}
+              <span className="line-through text-muted-foreground">${PRICE_FULL}</span>{" "}
+              <span className="font-bold">${PRICE_PROMO}</span>
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -120,10 +125,10 @@ export function StickyUpgradeBar({
                 size="sm"
                 className="font-semibold whitespace-nowrap"
               >
-                Unlock Full Roast ($29)
+                Unlock — ${PRICE_PROMO}
               </Button>
               <p className="text-xs text-muted-foreground text-center mt-1">
-                Split with your league — less than $3 each.
+                Ends {PROMO_DEADLINE}
               </p>
               {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
                 <p className="text-xs text-muted-foreground text-center mt-1">

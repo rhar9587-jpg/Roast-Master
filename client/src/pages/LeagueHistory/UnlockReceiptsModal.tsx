@@ -9,7 +9,10 @@ import {
 } from "@/components/ui/dialog";
 import { Check } from "lucide-react";
 
-const PRICE_ONE_TIME = 29;
+// Super Bowl Promo Pricing
+const PRICE_FULL = 29;
+const PRICE_PROMO = 19;
+const PROMO_DEADLINE = "Feb 10";
 
 type Props = {
   open: boolean;
@@ -62,7 +65,9 @@ export function UnlockReceiptsModal({
             Your league has receipts. Time to collect.
           </DialogTitle>
           <DialogDescription className="pt-2">
-            Unlock all roasts for {leagueName?.trim() ? leagueName : "this league"}. ${PRICE_ONE_TIME} one-time — split it, less than $3 each.
+            Unlock all roasts for {leagueName?.trim() ? leagueName : "this league"}.{" "}
+            <span className="line-through text-muted-foreground">${PRICE_FULL}</span>{" "}
+            <span className="font-bold text-foreground">${PRICE_PROMO}</span> — Super Bowl price ends {PROMO_DEADLINE}.
           </DialogDescription>
         </DialogHeader>
 
@@ -118,10 +123,13 @@ export function UnlockReceiptsModal({
               onClick={handleUnlock}
               className="w-full sm:w-auto font-semibold"
             >
-              Unlock Full Roast ($29)
+              Unlock Full Roast — ${PRICE_PROMO}
             </Button>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Split with your league — less than $3 each.
+              Split with your league — usually ~$2 each.
+            </p>
+            <p className="text-xs font-medium text-primary text-center mt-1">
+              Super Bowl price ends {PROMO_DEADLINE}
             </p>
             {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
               <p className="text-xs text-muted-foreground text-center mt-1">

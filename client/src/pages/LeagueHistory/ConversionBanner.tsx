@@ -2,7 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check } from "lucide-react";
 
-const PRICE_ONE_TIME = 29;
+// Super Bowl Promo Pricing
+const PRICE_FULL = 29;
+const PRICE_PROMO = 19;
+const PROMO_DEADLINE = "Feb 10";
 const EXAMPLE_LEAGUE_ID = "1204010682635255808";
 
 type Props = {
@@ -48,7 +51,9 @@ export function ConversionBanner({
     >
       <CardHeader className="text-center pb-4">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          {leagueName?.trim() ? leagueName : "This league"} has receipts waiting. ${PRICE_ONE_TIME} — less than $3 per person.
+          {leagueName?.trim() ? leagueName : "This league"} has receipts waiting.{" "}
+          <span className="line-through text-muted-foreground font-normal">${PRICE_FULL}</span>{" "}
+          <span className="text-primary">${PRICE_PROMO}</span> — Super Bowl price.
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -86,10 +91,13 @@ export function ConversionBanner({
             size="lg"
             className="font-semibold px-8"
           >
-            Unlock Full Roast ($29)
+            Unlock Full Roast — ${PRICE_PROMO}
           </Button>
           <p className="text-xs text-muted-foreground text-center mt-2">
-            Split with your league — less than $3 each.
+            Split with your league — usually ~$2 each.
+          </p>
+          <p className="text-xs font-medium text-primary text-center mt-1">
+            Super Bowl price ends {PROMO_DEADLINE}
           </p>
           {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
             <p className="text-xs text-muted-foreground text-center mt-1">
@@ -104,7 +112,7 @@ export function ConversionBanner({
         {leagueId === EXAMPLE_LEAGUE_ID && (
           <div className="text-center text-xs text-muted-foreground">
             <button onClick={handleUpgrade} className="text-primary hover:underline font-medium">
-              Unlock Full Roast ($29)
+              Unlock Full Roast — ${PRICE_PROMO}
             </button>
             {" "}or{" "}
             <button

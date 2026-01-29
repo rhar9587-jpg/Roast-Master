@@ -113,7 +113,7 @@ export function GridToolbar({
             </TooltipTrigger>
             {!isPremium && (
               <TooltipContent>
-                <p>Unlock the full roast for this league — $29 one-time</p>
+                <p>Unlock the full roast — $19 (ends Feb 10)</p>
               </TooltipContent>
             )}
           </Tooltip>
@@ -149,7 +149,7 @@ export function GridToolbar({
             </TooltipTrigger>
             {!isPremium && (
               <TooltipContent>
-                <p>Unlock the full roast for this league — $29 one-time</p>
+                <p>Unlock the full roast — $19 (ends Feb 10)</p>
               </TooltipContent>
             )}
           </Tooltip>

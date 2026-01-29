@@ -16,7 +16,7 @@ interface WatermarkOverlayProps {
  * - Creates friction for free users without being ugly
  */
 export function WatermarkOverlay({
-  text = "UNLOCK FOR $29 • fantasyroast.app",
+  text = "UNLOCK FOR $19 • fantasyroast.app",
   show,
   theme = "light",
 }: WatermarkOverlayProps) {
@@ -44,7 +44,7 @@ export function WatermarkOverlay({
         ))}
       </div>
       <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-[0.2em] font-semibold text-muted-foreground/70">
-        Unlock for $29 • fantasyroast.app
+        Unlock for $19 • fantasyroast.app
       </div>
     </div>
   );

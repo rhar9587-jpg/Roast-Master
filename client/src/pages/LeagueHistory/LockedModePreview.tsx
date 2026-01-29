@@ -1,6 +1,10 @@
 import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+// Super Bowl Promo Pricing
+const PRICE_PROMO = 19;
+const PROMO_DEADLINE = "Feb 10";
+
 type LockedModePreviewProps = {
   title: string;
   description: string;
@@ -39,8 +43,11 @@ export function LockedModePreview({
         ))}
       </ul>
       <Button onClick={onUnlock} size="sm">
-        Unlock This League ($29)
+        Unlock — ${PRICE_PROMO}
       </Button>
+      <p className="text-xs text-muted-foreground">
+        Super Bowl price ends {PROMO_DEADLINE}
+      </p>
     </div>
   );
 }

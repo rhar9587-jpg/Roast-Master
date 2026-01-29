@@ -173,41 +173,7 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 space-y-6 md:space-y-8">
-      {/* Sport Selector */}
-      <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
-        <button
-          onClick={() => { 
-            setSport("nfl"); 
-            setActiveView("none"); 
-            setError(null); 
-            setFplData(null);
-          }}
-          className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-colors ${
-            sport === "nfl" 
-              ? "bg-white text-black shadow-sm" 
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-          data-testid="tab-nfl"
-        >
-          NFL (Sleeper)
-        </button>
-        <button
-          onClick={() => { 
-            setSport("fpl"); 
-            setActiveView("none"); 
-            setError(null);
-          }}
-          className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-colors ${
-            sport === "fpl" 
-              ? "bg-white text-black shadow-sm" 
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-          data-testid="tab-fpl"
-        >
-          FPL
-        </button>
-      </div>
-
+      {/* NFL Only for Super Bowl Launch - FPL hidden */}
       {sport === "nfl" && (
         <>
           {/* Hero Section */}
@@ -216,13 +182,18 @@ export default function Home() {
               Who owns your league?
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-              Turn your Sleeper league into shareable roasts. Find the moments. Tag your nemesis. Own the group chat.
+              See who owns who. Roast accordingly.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" onClick={handleViewLeagueHistory} className="font-semibold">
-                See Who Owns Your League
+                Get Your League's Receipts
               </Button>
             </div>
+            <p className="text-sm text-muted-foreground">
+              <span className="line-through">$29</span>{" "}
+              <span className="font-bold text-foreground">$19</span>{" "}
+              — Super Bowl price ends Feb 10
+            </p>
           </section>
 
           {/* Example Cards */}
@@ -335,6 +306,59 @@ export default function Home() {
                 Try an example league →
               </Button>
               <p className="text-xs text-muted-foreground mt-1">No login. 1 click.</p>
+            </div>
+          </section>
+
+          {/* What's Inside Section */}
+          <section className="rounded-xl border-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 p-6 md:p-8 space-y-4">
+            <h2 className="text-xl md:text-2xl font-bold text-center">
+              What's Inside Your League's Roast
+            </h2>
+            <ul className="max-w-xl mx-auto space-y-2 text-sm md:text-base">
+              <li className="flex items-start gap-2">
+                <span className="text-primary font-bold">✓</span>
+                <span><strong>All-time dominance grid</strong> — who owns who, every season</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary font-bold">✓</span>
+                <span><strong>THE LANDLORD</strong> — the manager who runs the league</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary font-bold">✓</span>
+                <span><strong>BIGGEST VICTIM</strong> — the one who gets owned</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary font-bold">✓</span>
+                <span><strong>PLAYOFF CHOKER</strong> — great record, no trophy</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary font-bold">✓</span>
+                <span><strong>HEARTBREAKER</strong> — lost by inches, repeatedly</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary font-bold">✓</span>
+                <span><strong>Personal storylines</strong> — your nemesis, your choke jobs</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary font-bold">✓</span>
+                <span><strong>Season-by-season receipts</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary font-bold">✓</span>
+                <span><strong>Screenshot-ready cards</strong> for the group chat</span>
+              </li>
+            </ul>
+            <div className="text-center pt-4 border-t border-primary/10">
+              <p className="text-lg font-bold">
+                <span className="line-through text-muted-foreground font-normal">$29</span>{" "}
+                <span className="text-primary">$19</span> for your league
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Super Bowl price ends Feb 10
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Designed for fantasy leagues that talk trash.
+              </p>
             </div>
           </section>
 

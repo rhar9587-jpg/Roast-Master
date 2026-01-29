@@ -1001,7 +1001,7 @@ export default function LeagueHistoryPage() {
       setUnlockShownThisSession(true);
     } else {
       toast({
-        title: "Unlock the full roast for this league — $29 one-time",
+        title: "Unlock the full roast — $19 (Super Bowl price ends Feb 10)",
         description: "Headlines, storylines, and all exports.",
       });
     }
@@ -1271,7 +1271,7 @@ export default function LeagueHistoryPage() {
           </span>
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={handleUpgrade}>
-              Unlock full roast ($29)
+              Unlock full roast — $19
             </Button>
             <Button size="sm" variant="outline" onClick={handleLoadYourLeagueFromExample}>
               Load your league

@@ -242,7 +242,7 @@ export function InsightsDashboard({
           <li>More hero cards your league will argue about</li>
         </ul>
         <Button size="sm" onClick={onUnlock}>
-          Unlock Full Roast ($29)
+          Unlock Full Roast — $19
         </Button>
       </div>
     </div>
