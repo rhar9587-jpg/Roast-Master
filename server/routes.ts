@@ -23,6 +23,12 @@ import {
 import { handleLeagueHistoryDominance } from "./league-history";
 import { selectTagline } from "./lib/seasonTagline";
 import { selectCardCopy, interpolateTagline } from "./lib/cardCopy";
+import {
+  DEMO_LEAGUE_ID as STATIC_DEMO_LEAGUE_ID,
+  getDemoWeeklyRoast,
+  getDemoWrapped,
+  getDemoAutopsy,
+} from "./league-history/demoLeague";
 
 // -------------------------
 // Analytics (PostgreSQL-backed with in-memory fallback)
@@ -1206,6 +1212,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ message: "Invalid query params", issues: parsed.error.issues });
     }
 
+    // Demo league intercept - return static fictional data (no Sleeper API call)
+    if (league_id === STATIC_DEMO_LEAGUE_ID) {
+      return res.json(getDemoWeeklyRoast({ week, roster_id }));
+    }
+
     try {
       const payload = await handleRoastWithFallback(parsed.data);
       return res.json(payload);
@@ -1219,6 +1230,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const parsed = roastRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid request body", issues: parsed.error.issues });
+    }
+
+    // Demo league intercept - return static fictional data (no Sleeper API call)
+    if (parsed.data.league_id === STATIC_DEMO_LEAGUE_ID) {
+      trackEvent("nfl_roast_demo", "/api/roast", "POST", { week: parsed.data.week });
+      return res.json(getDemoWeeklyRoast({ week: parsed.data.week, roster_id: parsed.data.roster_id }));
     }
 
     try {
@@ -1244,6 +1261,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ message: "Invalid query params", issues: parsed.error.issues });
     }
 
+    // Demo league intercept - return static fictional data (no Sleeper API call)
+    if (league_id === STATIC_DEMO_LEAGUE_ID) {
+      return res.json(getDemoWrapped({ roster_id }));
+    }
+
     try {
       const payload = await handleWrapped(parsed.data);
       return res.json(payload);
@@ -1257,6 +1279,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const parsed = roastRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid request body", issues: parsed.error.issues });
+    }
+
+    // Demo league intercept - return static fictional data (no Sleeper API call)
+    if (parsed.data.league_id === STATIC_DEMO_LEAGUE_ID) {
+      trackEvent("season_wrapped_demo", "/api/wrapped", "POST");
+      return res.json(getDemoWrapped({ roster_id: parsed.data.roster_id }));
     }
 
     try {
@@ -1273,6 +1301,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const parsed = leagueAutopsyRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid request body", issues: parsed.error.issues });
+    }
+
+    // Demo league intercept - return static fictional data (no Sleeper API call)
+    if (parsed.data.league_id === STATIC_DEMO_LEAGUE_ID) {
+      trackEvent("league_autopsy_demo", "/api/league-autopsy", "POST");
+      return res.json(getDemoAutopsy());
     }
 
     try {

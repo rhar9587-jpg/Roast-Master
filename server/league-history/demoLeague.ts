@@ -55,7 +55,7 @@ const MANAGERS = [
 ] as const;
 
 // Emoji lookup by manager key
-const EMOJI_BY_KEY = new Map(MANAGERS.map(m => [m.key, m.emoji]));
+const EMOJI_BY_KEY = new Map<string, string>(MANAGERS.map(m => [m.key, m.emoji]));
 
 // Head-to-head records designed for compelling grid
 // Format: [wins, losses, pf, pa] - 6 seasons × ~2 games per matchup = ~12 games max
@@ -532,5 +532,503 @@ export function getDemoLeagueData() {
       "2020": 15,
       "2019": 15,
     },
+  };
+}
+
+// -------------------------
+// Roster ID <-> Manager Key Mapping
+// -------------------------
+// The client sends roster_id (1-12) for Season Wrapped
+const ROSTER_ID_TO_KEY: Record<number, string> = {
+  1: "mgr:landlord",
+  2: "mgr:choker",
+  3: "mgr:waiver",
+  4: "mgr:chaos",
+  5: "mgr:sleeper",
+  6: "mgr:trade",
+  7: "mgr:injury",
+  8: "mgr:trash",
+  9: "mgr:bye",
+  10: "mgr:heartbreak",
+  11: "mgr:autodraft",
+  12: "mgr:rebuild",
+};
+
+const KEY_TO_ROSTER_ID = new Map(
+  Object.entries(ROSTER_ID_TO_KEY).map(([rid, key]) => [key, Number(rid)])
+);
+
+function managerName(key: string): string {
+  return MANAGERS.find(m => m.key === key)?.name ?? key;
+}
+
+function formatPts(n: number): string {
+  return n.toFixed(1);
+}
+
+function pct(ratio: number): string {
+  return `${Math.round(ratio * 100)}%`;
+}
+
+// -------------------------
+// getDemoWeeklyRoast: matches /api/roast response schema
+// -------------------------
+export function getDemoWeeklyRoast(params: { week?: number; roster_id?: number }) {
+  const week = params.week ?? 8; // Default to week 8 for the iconic blowout
+  
+  // Get all matchups for the requested week in 2024
+  const weekMatchups = WEEKLY_MATCHUPS.filter(m => m.season === "2024" && m.week === week);
+  
+  // Build score map (each manager's score that week)
+  const scoreByKey = new Map<string, number>();
+  for (const m of weekMatchups) {
+    scoreByKey.set(m.managerKey, m.points);
+  }
+  
+  // Build entries for stats
+  const entries = Array.from(scoreByKey.entries()).map(([key, score]) => ({
+    roster_id: KEY_TO_ROSTER_ID.get(key) ?? 0,
+    username: managerName(key),
+    score,
+  }));
+  
+  const total = entries.reduce((acc, e) => acc + e.score, 0);
+  const averageScore = entries.length ? total / entries.length : 115.0; // Fallback average
+  
+  const sorted = [...entries].sort((a, b) => b.score - a.score);
+  const highestScorer = sorted[0] || { roster_id: 1, username: "The Landlord", score: 167.4 };
+  const lowestScorer = sorted[sorted.length - 1] || { roster_id: 12, username: "Rebuild Forever", score: 62.1 };
+  
+  // Headline
+  const headline = `${highestScorer.username} went nuclear. ${lowestScorer.username} went missing.`;
+  
+  // Find biggest blowout for this week
+  let biggestBlowout: { winner: string; loser: string; winnerScore: number; loserScore: number; margin: number } | null = null;
+  const processed = new Set<string>();
+  
+  for (const m of weekMatchups) {
+    if (m.won && !processed.has(`${m.managerKey}-${m.opponentKey}`)) {
+      processed.add(`${m.managerKey}-${m.opponentKey}`);
+      processed.add(`${m.opponentKey}-${m.managerKey}`);
+      
+      if (!biggestBlowout || m.margin > biggestBlowout.margin) {
+        biggestBlowout = {
+          winner: m.managerKey,
+          loser: m.opponentKey,
+          winnerScore: m.points,
+          loserScore: m.opponentPoints,
+          margin: m.margin,
+        };
+      }
+    }
+  }
+  
+  // Build cards
+  const cards: any[] = [];
+  
+  if (biggestBlowout) {
+    const winnerName = managerName(biggestBlowout.winner);
+    const loserName = managerName(biggestBlowout.loser);
+    cards.push({
+      type: "biggest_blowout",
+      title: "Biggest Blowout",
+      subtitle: `${winnerName} put ${loserName} in a body bag.`,
+      stat: `+${formatPts(biggestBlowout.margin)} pts`,
+      meta: {
+        winner_roster_id: KEY_TO_ROSTER_ID.get(biggestBlowout.winner) ?? 0,
+        loser_roster_id: KEY_TO_ROSTER_ID.get(biggestBlowout.loser) ?? 0,
+        winner_score: biggestBlowout.winnerScore,
+        loser_score: biggestBlowout.loserScore,
+        margin: biggestBlowout.margin,
+      },
+    });
+  }
+  
+  // Carry job card (fictional - use highest scorer with fictional player)
+  const carryRosterId = highestScorer.roster_id;
+  const carryPlayerName = carryRosterId === 1 ? "Ja'Marr Chase" : "CeeDee Lamb";
+  const carryPlayerPoints = highestScorer.score * 0.35; // ~35% of team points
+  const carryRatio = carryPlayerPoints / highestScorer.score;
+  
+  cards.push({
+    type: "carry_job",
+    title: "Carry Job",
+    subtitle: `${highestScorer.username} was basically ${carryPlayerName} + vibes.`,
+    stat: `${pct(carryRatio)} of team points`,
+    meta: {
+      roster_id: carryRosterId,
+      roster_points: highestScorer.score,
+      player_id: "demo_player",
+      player_name: carryPlayerName,
+      player_points: carryPlayerPoints,
+      ratio: carryRatio,
+    },
+  });
+  
+  const payload: any = {
+    league: {
+      league_id: DEMO_LEAGUE_ID,
+      name: "Group Chat Dynasty",
+      season: "2024",
+    },
+    week,
+    headline,
+    stats: {
+      averageScore,
+      highestScorer,
+      lowestScorer,
+    },
+    cards,
+    mode: "DEMO" as const,
+    fallback_reason: null,
+  };
+  
+  // Optional matchup section if roster_id provided
+  if (typeof params.roster_id === "number") {
+    const rosterKey = ROSTER_ID_TO_KEY[params.roster_id];
+    if (rosterKey) {
+      const yourMatchup = weekMatchups.find(m => m.managerKey === rosterKey);
+      if (yourMatchup) {
+        const oppRosterId = KEY_TO_ROSTER_ID.get(yourMatchup.opponentKey) ?? 0;
+        const result: "WIN" | "LOSS" | "TIE" = yourMatchup.won ? "WIN" : "LOSS";
+        
+        payload.matchup = {
+          roster_id: params.roster_id,
+          opponent_roster_id: oppRosterId,
+          you: { username: managerName(rosterKey), score: yourMatchup.points },
+          opponent: { username: managerName(yourMatchup.opponentKey), score: yourMatchup.opponentPoints },
+          result,
+        };
+      }
+    }
+  }
+  
+  return payload;
+}
+
+// -------------------------
+// getDemoWrapped: matches /api/wrapped response schema
+// -------------------------
+export function getDemoWrapped(params: { roster_id?: number }) {
+  const rosterId = params.roster_id ?? 1;
+  const managerKey = ROSTER_ID_TO_KEY[rosterId] ?? "mgr:landlord";
+  const name = managerName(managerKey);
+  
+  // Get 2024 season stats for this manager
+  const seasonStat = SEASON_STATS.find(s => s.season === "2024" && s.managerKey === managerKey);
+  const wins = seasonStat?.wins ?? 10;
+  const losses = seasonStat?.losses ?? 4;
+  const rank = seasonStat?.rank ?? 2;
+  const pointsFor = seasonStat?.totalPF ?? 1823.1;
+  const pointsAgainst = pointsFor * 0.95; // Approximate PA
+  const record = `${wins}-${losses}`;
+  
+  // Get matchups for this manager in 2024
+  const managerMatchups = WEEKLY_MATCHUPS.filter(
+    m => m.season === "2024" && m.managerKey === managerKey
+  );
+  
+  // Find best win
+  const winMatchups = managerMatchups.filter(m => m.won);
+  const bestWinMatchup = winMatchups.reduce<typeof managerMatchups[0] | null>(
+    (best, m) => (!best || m.margin > best.margin ? m : best),
+    null
+  );
+  
+  // Find worst enemy (opponent with most wins against this manager)
+  const recordVsOpp = new Map<string, { wins: number; losses: number }>();
+  for (const m of managerMatchups) {
+    const rec = recordVsOpp.get(m.opponentKey) || { wins: 0, losses: 0 };
+    if (m.won) {
+      rec.wins++;
+    } else {
+      rec.losses++;
+    }
+    recordVsOpp.set(m.opponentKey, rec);
+  }
+  
+  let worstEnemy: { key: string; theirWins: number; theirLosses: number } | null = null;
+  for (const [oppKey, rec] of Array.from(recordVsOpp.entries())) {
+    const theirWins = rec.losses; // Their wins = our losses
+    const theirLosses = rec.wins; // Their losses = our wins
+    if (theirWins > theirLosses && (!worstEnemy || theirWins > worstEnemy.theirWins)) {
+      worstEnemy = { key: oppKey, theirWins, theirLosses };
+    }
+  }
+  
+  // Count choke jobs (losses where scored above average ~115)
+  const chokeJobs = managerMatchups.filter(m => !m.won && m.points > 115);
+  const cappedChokes = chokeJobs.slice(0, 5);
+  
+  // Build tagline based on rank
+  let tagline = "Solid season. Nothing to complain about.";
+  let taglineBucket = "mid_pack";
+  if (rank === 1) {
+    tagline = "Regular season royalty. Playoffs are a different story.";
+    taglineBucket = "top_seed";
+  } else if (rank <= 3) {
+    tagline = "Top tier performance. The receipts are real.";
+    taglineBucket = "contender";
+  } else if (rank >= 10) {
+    tagline = "A season to forget. Time to rebuild.";
+    taglineBucket = "bottom";
+  }
+  
+  // MVP player (fictional)
+  const mvpPlayers: Record<string, { name: string; points: number }> = {
+    "mgr:landlord": { name: "Ja'Marr Chase", points: 312.4 },
+    "mgr:choker": { name: "Tyreek Hill", points: 298.7 },
+    "mgr:waiver": { name: "Amon-Ra St. Brown", points: 287.3 },
+    "mgr:heartbreak": { name: "Davante Adams", points: 245.6 },
+    "mgr:rebuild": { name: "Jaylen Waddle", points: 189.2 },
+  };
+  const mvp = mvpPlayers[managerKey] ?? { name: "CeeDee Lamb", points: 267.8 };
+  
+  const cards = [
+    {
+      type: "season_summary",
+      title: "Season Summary",
+      subtitle: `#${rank} of 12 teams`,
+      stat: record,
+      meta: {
+        rank,
+        leagueSize: 12,
+        pointsFor: Math.round(pointsFor),
+        pointsAgainst: Math.round(pointsAgainst),
+        tagline,
+        taglineBucket,
+      },
+    },
+    {
+      type: "season_mvp",
+      title: "Team MVP",
+      subtitle: mvp.name,
+      stat: `${mvp.points.toFixed(1)} pts`,
+      meta: {
+        tagline: "Carried the load all season.",
+      },
+    },
+    {
+      type: "best_win",
+      title: "Biggest Win",
+      subtitle: bestWinMatchup
+        ? `Week ${bestWinMatchup.week}: Demolished ${managerName(bestWinMatchup.opponentKey)}.`
+        : "No wins found in this season range.",
+      stat: bestWinMatchup ? `+${formatPts(bestWinMatchup.margin)} pts` : "—",
+      meta: bestWinMatchup
+        ? {
+            week: bestWinMatchup.week,
+            margin: Number(formatPts(bestWinMatchup.margin)),
+            opponent: managerName(bestWinMatchup.opponentKey),
+            you: Number(formatPts(bestWinMatchup.points)),
+            opp: Number(formatPts(bestWinMatchup.opponentPoints)),
+          }
+        : null,
+    },
+    {
+      type: "worst_enemy",
+      title: "Your Worst Enemy",
+      subtitle: worstEnemy
+        ? `${managerName(worstEnemy.key)} owns you. Accept it.`
+        : "No one owns you. You ran the table.",
+      stat: worstEnemy ? `${worstEnemy.theirWins}-${worstEnemy.theirLosses}` : "0-0",
+      meta: worstEnemy
+        ? {
+            opponent: managerName(worstEnemy.key),
+            opponentWins: worstEnemy.theirWins,
+            opponentLosses: worstEnemy.theirLosses,
+          }
+        : null,
+    },
+    {
+      type: "choke_jobs",
+      title: "Your Choke Jobs",
+      subtitle: cappedChokes.length === 0
+        ? "Zero choke jobs. Clutch gene confirmed."
+        : cappedChokes.length === 1
+          ? `Beat half the league and lost to ${managerName(cappedChokes[0].opponentKey)}.`
+          : `${cappedChokes.length} times you beat half the league and lost.`,
+      stat: `${cappedChokes.length}`,
+      meta: cappedChokes.length > 0
+        ? {
+            count: cappedChokes.length,
+            nuclearCount: cappedChokes.filter(c => c.points > 130).length,
+            games: cappedChokes.map(g => ({
+              week: g.week,
+              you: g.points,
+              opp: g.opponentPoints,
+              opponent: managerName(g.opponentKey),
+              isNuclear: g.points > 130,
+              rank: 4, // Approximate
+            })),
+          }
+        : null,
+    },
+  ];
+  
+  return {
+    league_id: DEMO_LEAGUE_ID,
+    roster_id: rosterId,
+    league: {
+      league_id: DEMO_LEAGUE_ID,
+      name: "Group Chat Dynasty",
+      season: "2024",
+    },
+    wrapped: {
+      season: {
+        record,
+        rank,
+        points_for: Math.round(pointsFor),
+        points_against: Math.round(pointsAgainst),
+      },
+      cards,
+    },
+    mode: "DEMO" as const,
+    fallback_reason: null,
+  };
+}
+
+// -------------------------
+// getDemoAutopsy: matches /api/league-autopsy response schema
+// -------------------------
+export function getDemoAutopsy() {
+  // Use 2024 season stats
+  const season2024 = SEASON_STATS.filter(s => s.season === "2024");
+  
+  // Last place: Rebuild Forever (rank 12)
+  const lastPlace = season2024.find(s => s.rank === 12);
+  const lastPlaceName = lastPlace ? managerName(lastPlace.managerKey) : "Rebuild Forever";
+  const lastPlaceRecord = lastPlace ? `${lastPlace.wins}-${lastPlace.losses}` : "3-11";
+  const lastPlaceRosterId = lastPlace ? KEY_TO_ROSTER_ID.get(lastPlace.managerKey) ?? 12 : 12;
+  
+  // Season high: Landlord's 167.4 in Week 8
+  const seasonHighMatchup = WEEKLY_MATCHUPS.filter(m => m.season === "2024")
+    .reduce<typeof WEEKLY_MATCHUPS[0] | null>(
+      (best, m) => (!best || m.points > best.points ? m : best),
+      null
+    );
+  const seasonHighName = seasonHighMatchup ? managerName(seasonHighMatchup.managerKey) : "The Landlord";
+  const seasonHighPoints = seasonHighMatchup?.points ?? 167.4;
+  const seasonHighWeek = seasonHighMatchup?.week ?? 8;
+  const seasonHighRosterId = seasonHighMatchup ? KEY_TO_ROSTER_ID.get(seasonHighMatchup.managerKey) ?? 1 : 1;
+  
+  // Season low: Rebuild Forever's 62.1 in Week 8
+  const seasonLowMatchup = WEEKLY_MATCHUPS.filter(m => m.season === "2024")
+    .reduce<typeof WEEKLY_MATCHUPS[0] | null>(
+      (best, m) => (!best || m.points < best.points ? m : best),
+      null
+    );
+  const seasonLowName = seasonLowMatchup ? managerName(seasonLowMatchup.managerKey) : "Rebuild Forever";
+  const seasonLowPoints = seasonLowMatchup?.points ?? 62.1;
+  const seasonLowWeek = seasonLowMatchup?.week ?? 8;
+  const seasonLowRosterId = seasonLowMatchup ? KEY_TO_ROSTER_ID.get(seasonLowMatchup.managerKey) ?? 12 : 12;
+  
+  // Biggest blowout: Landlord 167.4 vs Rebuild Forever 62.1 (Week 8)
+  const blowoutMatchups = WEEKLY_MATCHUPS.filter(m => m.season === "2024" && m.won);
+  const biggestBlowout = blowoutMatchups.reduce<typeof WEEKLY_MATCHUPS[0] | null>(
+    (best, m) => (!best || m.margin > best.margin ? m : best),
+    null
+  );
+  const blowoutWinner = biggestBlowout ? managerName(biggestBlowout.managerKey) : "The Landlord";
+  const blowoutLoser = biggestBlowout ? managerName(biggestBlowout.opponentKey) : "Rebuild Forever";
+  const blowoutMargin = biggestBlowout?.margin ?? 105.3;
+  const blowoutWinnerScore = biggestBlowout?.points ?? 167.4;
+  const blowoutLoserScore = biggestBlowout?.opponentPoints ?? 62.1;
+  const blowoutWeek = biggestBlowout?.week ?? 8;
+  
+  // Highest score in a loss: Find a high-scoring loss
+  const lossMatchups = WEEKLY_MATCHUPS.filter(m => m.season === "2024" && !m.won);
+  const highestLoss = lossMatchups.reduce<typeof WEEKLY_MATCHUPS[0] | null>(
+    (best, m) => (!best || m.points > best.points ? m : best),
+    null
+  );
+  const highestLossName = highestLoss ? managerName(highestLoss.managerKey) : "Heartbreak Hotel";
+  const highestLossPoints = highestLoss?.points ?? 141.2;
+  const highestLossOppName = highestLoss ? managerName(highestLoss.opponentKey) : "Playoff Choker";
+  const highestLossOppPoints = highestLoss?.opponentPoints ?? 144.7;
+  const highestLossWeek = highestLoss?.week ?? 9;
+  const highestLossRosterId = highestLoss ? KEY_TO_ROSTER_ID.get(highestLoss.managerKey) ?? 10 : 10;
+  
+  const cards = [
+    {
+      type: "last_place",
+      title: "THE BODY",
+      subtitle: `${lastPlaceName} finished #12`,
+      tagline: "Another season, another last place finish.",
+      stat: lastPlaceRecord,
+      meta: {
+        roster_id: lastPlaceRosterId,
+        rank: 12,
+        record: lastPlaceRecord,
+        team: lastPlaceName,
+      },
+    },
+    {
+      type: "season_high",
+      title: "PEAK DELUSION",
+      subtitle: `${seasonHighName} in Week ${seasonHighWeek}`,
+      tagline: "This is what elite looks like.",
+      stat: formatPts(seasonHighPoints),
+      meta: {
+        roster_id: seasonHighRosterId,
+        week: seasonHighWeek,
+        points: seasonHighPoints,
+        team: seasonHighName,
+      },
+    },
+    {
+      type: "season_low",
+      title: "CRIME SCENE",
+      subtitle: `${seasonLowName} in Week ${seasonLowWeek}`,
+      tagline: "We need to talk about what happened here.",
+      stat: formatPts(seasonLowPoints),
+      meta: {
+        roster_id: seasonLowRosterId,
+        week: seasonLowWeek,
+        points: seasonLowPoints,
+        team: seasonLowName,
+      },
+    },
+    {
+      type: "biggest_blowout_season",
+      title: "MERCY RULE",
+      subtitle: `${blowoutWinner} ${formatPts(blowoutWinnerScore)} vs ${blowoutLoser} ${formatPts(blowoutLoserScore)}`,
+      tagline: "This wasn't a game. It was an execution.",
+      stat: `+${formatPts(blowoutMargin)}`,
+      meta: {
+        week: blowoutWeek,
+        winner: blowoutWinner,
+        loser: blowoutLoser,
+        winner_score: blowoutWinnerScore,
+        loser_score: blowoutLoserScore,
+        margin: blowoutMargin,
+      },
+    },
+    {
+      type: "highest_loss",
+      title: "FANTASY INJUSTICE",
+      subtitle: `${highestLossName} (${formatPts(highestLossPoints)}) lost to ${highestLossOppName} (${formatPts(highestLossOppPoints)}) in Week ${highestLossWeek}`,
+      tagline: "Some weeks, the fantasy gods just hate you.",
+      stat: formatPts(highestLossPoints),
+      meta: {
+        roster_id: highestLossRosterId,
+        week: highestLossWeek,
+        points: highestLossPoints,
+        team: highestLossName,
+        opponent: highestLossOppName,
+        opponent_score: highestLossOppPoints,
+      },
+    },
+  ];
+  
+  return {
+    league_id: DEMO_LEAGUE_ID,
+    league: {
+      league_id: DEMO_LEAGUE_ID,
+      name: "Group Chat Dynasty",
+      season: "2024",
+    },
+    cards,
+    mode: "DEMO" as const,
   };
 }
