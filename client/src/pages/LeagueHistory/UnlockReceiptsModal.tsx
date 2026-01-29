@@ -121,7 +121,7 @@ export function UnlockReceiptsModal({
             )}
             <Button
               onClick={handleUnlock}
-              className="w-full sm:w-auto font-semibold"
+              className="w-full sm:w-auto font-semibold interact-cta"
             >
               Unlock Full Roast — ${PRICE_PROMO}
             </Button>

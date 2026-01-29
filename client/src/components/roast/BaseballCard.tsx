@@ -421,12 +421,12 @@ export function BaseballCard(props: LegacyProps | V2Props) {
                 data-no-flip="true"
                 variant="ghost"
                 size="sm"
-                className="h-7 w-7 p-0 shrink-0 transition-all duration-300 hover:scale-110 hover:bg-primary/10"
+                className="h-7 w-7 p-0 shrink-0 interact-icon hover:bg-primary/10 active:bg-primary/20"
                 onClick={handleShare}
                 disabled={isSharing}
                 title="Share this card"
               >
-                <Share2 className="h-3.5 w-3.5 transition-transform group-hover:scale-110" />
+                <Share2 className="h-3.5 w-3.5" />
               </Button>
               <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
                 <div className="bg-foreground text-background text-[10px] px-2 py-1 rounded shadow-lg">
@@ -558,7 +558,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
           <button
             type="button"
             data-no-flip="true"
-            className="mt-4 w-full rounded-md border bg-background/90 px-3 py-2 text-sm font-semibold hover:bg-background transition"
+            className="mt-4 w-full rounded-md border bg-background/90 px-3 py-2 text-sm font-semibold interact-secondary"
             onPointerUp={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
@@ -591,6 +591,8 @@ export function BaseballCard(props: LegacyProps | V2Props) {
         "cursor-pointer select-none",
         "touch-manipulation",
         "shadow-lg",
+        // Interaction feedback: lift on hover, press on active
+        "interact-hero",
       ].join(" ")}
       onPointerUp={handlePointerUp}
       onKeyDown={(e) => {

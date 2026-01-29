@@ -4,13 +4,35 @@ import { fmtScore } from "./utils";
 export type MiniCard = {
   id: string;
   title: string;
+  emoji: string; // Semantic emoji for the card type
   statPrimary: string;
   statSecondary?: string;
+  metricLabel?: string; // Clarifying label under metric (e.g., "total losses", "H2H record")
   meta?: string;
   line: string;
   detail?: string;
   cellKey?: string;
   managerKey?: string;
+};
+
+// Emoji mapping for all mini card types
+const CARD_EMOJI: Record<string, string> = {
+  "everybodys-victim": "😭",
+  "point-diff-king": "📈",
+  "punching-bag": "🥊",
+  "untouchable": "🛡️",
+  "rival-central": "⚔️",
+  "your-biggest-win": "🏆",
+  "your-choke-jobs": "😰",
+  "your-favorite-victim": "👑",
+  "your-kryptonite": "💀",
+  "your-unfinished-business": "🔥",
+  "most-played-opponent": "🔄",
+  "closest-matchup": "⚖️",
+  "most-even-rival": "🤝",
+  "heartbreaker": "💔",
+  "blowout-artist": "💥",
+  "giant-slayer": "🗡️",
 };
 
 type TotalsByManagerEntry = {
@@ -110,8 +132,10 @@ export function computeLeagueStorylines(
     cards.push({
       id: "everybodys-victim",
       title: "EVERYBODY'S VICTIM",
+      emoji: CARD_EMOJI["everybodys-victim"],
       statPrimary: String(everybodyVictim.count),
-      line: "Everyone has receipts.",
+      metricLabel: everybodyVictim.count === 1 ? "owner" : "owners",
+      line: "Everyone has receipts on this one.",
       detail: everybodyVictim.name,
       cellKey: everybodyVictim.cellKey,
     });
@@ -129,7 +153,9 @@ export function computeLeagueStorylines(
       cards.push({
         id: "point-diff-king",
         title: "POINT DIFFERENTIAL KING",
-        statPrimary: `${sign}${Math.round(best.diff)} pts`,
+        emoji: CARD_EMOJI["point-diff-king"],
+        statPrimary: `${sign}${Math.round(best.diff)}`,
+        metricLabel: "point differential",
         line: "Biggest flex in the league.",
         detail: best.name,
         managerKey: best.key,
@@ -151,7 +177,9 @@ export function computeLeagueStorylines(
       cards.push({
         id: "punching-bag",
         title: "PUNCHING BAG",
+        emoji: CARD_EMOJI["punching-bag"],
         statPrimary: String(punchingBag.losses),
+        metricLabel: "total losses",
         line: "Took more L's than anyone.",
         detail: punchingBag.name,
         managerKey: punchingBag.key,
@@ -208,8 +236,10 @@ export function computeLeagueStorylines(
     cards.push({
       id: "untouchable",
       title: "UNTOUCHABLE",
+      emoji: CARD_EMOJI["untouchable"],
       statPrimary: String(untouchable.count),
-      line: "Never lost. Rent is due.",
+      metricLabel: untouchable.count === 1 ? "perfect record" : "perfect records",
+      line: "Never lost to these managers.",
       detail: untouchable.name,
       cellKey: untouchable.cellKey,
     });
@@ -232,10 +262,12 @@ export function computeLeagueStorylines(
       cards.push({
         id: "rival-central",
         title: "RIVAL CENTRAL",
+        emoji: CARD_EMOJI["rival-central"],
         statPrimary: top.record,
-        statSecondary: `Ownership score ${fmtScore(top.score)}`,
+        metricLabel: "H2H record",
+        statSecondary: `Score ${fmtScore(top.score)}`,
         meta: `${games} games`,
-        line: "Still can't settle it.",
+        line: "Still can't settle this one.",
         detail: `${top.aName} vs ${top.bName}`,
         cellKey: `${top.a}-${top.b}`,
       });
@@ -265,7 +297,9 @@ export function computeYourRoast(
     cards.push({
       id: "your-biggest-win",
       title: "YOUR BIGGEST WIN",
+      emoji: CARD_EMOJI["your-biggest-win"],
       statPrimary: `+${biggestWin.margin.toFixed(1)}`,
+      metricLabel: "win margin",
       statSecondary: `Week ${biggestWin.week}`,
       meta: biggestWin.season,
       line: `Dropped ${biggestWin.points.toFixed(1)} on ${opponent?.name ?? "opponent"}.`,
@@ -327,8 +361,10 @@ export function computeYourRoast(
     cards.push({
       id: "your-choke-jobs",
       title: "YOUR CHOKE JOBS",
+      emoji: CARD_EMOJI["your-choke-jobs"],
       statPrimary: String(cappedChokes.length),
-      statSecondary: nuclearCount > 0 ? `${nuclearCount} nuclear` : cappedChokes.length === 1 ? "choke" : "chokes",
+      metricLabel: cappedChokes.length === 1 ? "choke job" : "choke jobs",
+      statSecondary: nuclearCount > 0 ? `${nuclearCount} nuclear` : undefined,
       meta: `Worst: ${worstChoke.points.toFixed(1)} pts (Week ${worstChoke.week})`,
       line: punchline,
       detail: opponent?.name,
@@ -351,10 +387,12 @@ export function computeYourRoast(
     cards.push({
       id: "your-favorite-victim",
       title: "YOUR FAVORITE VICTIM",
+      emoji: CARD_EMOJI["your-favorite-victim"],
       statPrimary: bestOwned.record,
-      statSecondary: `Ownership score ${fmtScore(bestOwned.score)}`,
+      metricLabel: "H2H record",
+      statSecondary: `Score ${fmtScore(bestOwned.score)}`,
       meta: `${bestOwned.games} games`,
-      line: "You own them.",
+      line: "Rent is always due.",
       detail: bestOwned.bName,
       cellKey: `${bestOwned.a}-${bestOwned.b}`,
     });
@@ -375,10 +413,12 @@ export function computeYourRoast(
     cards.push({
       id: "your-kryptonite",
       title: "YOUR KRYPTONITE",
+      emoji: CARD_EMOJI["your-kryptonite"],
       statPrimary: worstNemesis.record,
-      statSecondary: `Ownership score ${fmtScore(worstNemesis.score)}`,
+      metricLabel: "H2H record",
+      statSecondary: `Score ${fmtScore(worstNemesis.score)}`,
       meta: `${worstNemesis.games} games`,
-      line: "They cook you.",
+      line: "They cook you every time.",
       detail: worstNemesis.bName,
       cellKey: `${worstNemesis.a}-${worstNemesis.b}`,
     });
@@ -402,10 +442,12 @@ export function computeYourRoast(
     cards.push({
       id: "your-unfinished-business",
       title: "YOUR UNFINISHED BUSINESS",
+      emoji: CARD_EMOJI["your-unfinished-business"],
       statPrimary: longestRival.record,
-      statSecondary: `Ownership score ${fmtScore(longestRival.score)}`,
+      metricLabel: "H2H record",
+      statSecondary: `Score ${fmtScore(longestRival.score)}`,
       meta: `${longestRival.games} games`,
-      line: "This one's personal.",
+      line: "This rivalry runs deep.",
       detail: other,
       cellKey: `${longestRival.a}-${longestRival.b}`,
     });
@@ -429,10 +471,12 @@ export function computeYourRoast(
       cards.push({
         id: "most-played-opponent",
         title: "MOST PLAYED OPPONENT",
+        emoji: CARD_EMOJI["most-played-opponent"],
         statPrimary: mostPlayed.record,
-        statSecondary: `Ownership score ${fmtScore(mostPlayed.score)}`,
+        metricLabel: "H2H record",
+        statSecondary: `Score ${fmtScore(mostPlayed.score)}`,
         meta: `${mostPlayed.games} games`,
-        line: "You've faced them the most.",
+        line: "You see this one a lot.",
         detail: other,
         cellKey: `${mostPlayed.a}-${mostPlayed.b}`,
       });
@@ -454,8 +498,10 @@ export function computeYourRoast(
       cards.push({
         id: "closest-matchup",
         title: "CLOSEST MATCHUP",
+        emoji: CARD_EMOJI["closest-matchup"],
         statPrimary: closest.record,
-        statSecondary: `Ownership score ${fmtScore(closest.score)}`,
+        metricLabel: "H2H record",
+        statSecondary: `Score ${fmtScore(closest.score)}`,
         meta: `${closest.games} games`,
         line: "Too close to call.",
         detail: other,
@@ -482,10 +528,12 @@ export function computeYourRoast(
       cards.push({
         id: "most-even-rival",
         title: "MOST EVEN RIVAL",
+        emoji: CARD_EMOJI["most-even-rival"],
         statPrimary: mostEven.record,
-        statSecondary: `Ownership score ${fmtScore(mostEven.score)}`,
+        metricLabel: "H2H record",
+        statSecondary: `Score ${fmtScore(mostEven.score)}`,
         meta: `${mostEven.games} games`,
-        line: "This one's dead even.",
+        line: "Dead even. No one owns anyone.",
         detail: other,
         cellKey: `${mostEven.a}-${mostEven.b}`,
       });
@@ -552,10 +600,12 @@ function computeHeartbreaker(
 
   return {
     id: "heartbreaker",
-    title: "HEARTBREAKER 💔",
+    title: "HEARTBREAKER",
+    emoji: CARD_EMOJI["heartbreaker"],
     statPrimary: String(maxCount),
-    statSecondary: "close losses",
-    line: `${manager.name} lost ${maxCount} game${maxCount === 1 ? "" : "s"} by less than 5 points.`,
+    metricLabel: maxCount === 1 ? "close loss" : "close losses",
+    line: `Lost by less than 5 points ${maxCount} time${maxCount === 1 ? "" : "s"}.`,
+    detail: manager.name,
     managerKey: winnerKey,
   };
 }
@@ -594,10 +644,12 @@ function computeBlowoutArtist(
 
   return {
     id: "blowout-artist",
-    title: "BLOWOUT ARTIST 💥",
+    title: "BLOWOUT ARTIST",
+    emoji: CARD_EMOJI["blowout-artist"],
     statPrimary: String(maxCount),
-    statSecondary: "blowouts",
-    line: `${manager.name} won ${maxCount} game${maxCount === 1 ? "" : "s"} by 30+ points.`,
+    metricLabel: maxCount === 1 ? "blowout win" : "blowout wins",
+    line: `Won by 30+ points ${maxCount} time${maxCount === 1 ? "" : "s"}.`,
+    detail: manager.name,
     managerKey: winnerKey,
   };
 }
@@ -651,10 +703,12 @@ function computeGiantSlayer(
 
   return {
     id: "giant-slayer",
-    title: "GIANT SLAYER 🗡️",
+    title: "GIANT SLAYER",
+    emoji: CARD_EMOJI["giant-slayer"],
     statPrimary: String(maxCount),
-    statSecondary: "wins vs champ",
-    line: `${manager.name} beat the #1 seed ${maxCount} time${maxCount === 1 ? "" : "s"}.`,
+    metricLabel: maxCount === 1 ? "upset win" : "upset wins",
+    line: `Beat the #1 seed ${maxCount} time${maxCount === 1 ? "" : "s"}.`,
+    detail: manager.name,
     managerKey: winnerKey,
   };
 }

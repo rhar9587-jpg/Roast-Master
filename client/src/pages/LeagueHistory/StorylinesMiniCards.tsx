@@ -19,13 +19,13 @@ function MiniCardItem({
   const hasClickAction =
     !forExport && (Boolean(card.cellKey) || Boolean(card.managerKey));
   const base =
-    "w-full text-left rounded-2xl border border-border bg-card text-card-foreground shadow-sm p-4 flex flex-col h-full";
+    "w-full text-left rounded-2xl border border-border bg-card text-card-foreground shadow-sm p-4 flex flex-col h-full transition-all duration-150 motion-reduce:transition-none";
   const interactive =
-    "hover:shadow-md transition-shadow focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer";
+    "hover:shadow-md hover:border-primary/20 motion-safe:hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer active:scale-[0.98] motion-reduce:active:scale-100";
 
   const detailClass = forExport
-    ? "text-xs text-muted-foreground mt-auto break-words overflow-visible"
-    : "text-xs text-muted-foreground mt-auto truncate";
+    ? "text-[11px] text-muted-foreground/80 mt-auto break-words overflow-visible"
+    : "text-[11px] text-muted-foreground/80 mt-auto truncate";
 
   const handleClick = () => {
     if (forExport) return;
@@ -36,6 +36,7 @@ function MiniCardItem({
     }
   };
 
+  // Build secondary line: statSecondary and meta combined
   const secondaryMetaLine =
     card.statSecondary && card.meta
       ? `${card.statSecondary} · ${card.meta}`
@@ -43,23 +44,48 @@ function MiniCardItem({
 
   const body = (
     <>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
-        {card.title}
-      </p>
-      <p className="text-xl md:text-2xl font-bold tracking-tight leading-tight mb-1">
-        {card.statPrimary}
-      </p>
-      {secondaryMetaLine ? (
-        <p className="text-xs text-muted-foreground mb-1.5">
+      {/* Header row: emoji + title */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <span 
+          className="text-sm opacity-80" 
+          role="img" 
+          aria-label={card.title.toLowerCase()}
+        >
+          {card.emoji}
+        </span>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {card.title}
+        </p>
+      </div>
+      
+      {/* Primary metric + label */}
+      <div className="mb-1.5">
+        <p className="text-xl md:text-2xl font-bold tracking-tight leading-tight">
+          {card.statPrimary}
+        </p>
+        {card.metricLabel && (
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mt-0.5">
+            {card.metricLabel}
+          </p>
+        )}
+      </div>
+      
+      {/* Secondary stats / meta */}
+      {secondaryMetaLine && (
+        <p className="text-xs text-muted-foreground mb-1">
           {secondaryMetaLine}
         </p>
-      ) : null}
-      <p className="text-sm text-muted-foreground mb-1.5">{card.line}</p>
-      {card.detail ? (
+      )}
+      
+      {/* Punchline - slightly more prominent */}
+      <p className="text-sm text-foreground/80 mb-1.5">{card.line}</p>
+      
+      {/* Detail - manager name, muted */}
+      {card.detail && (
         <p className={detailClass} title={forExport ? undefined : card.detail}>
           {card.detail}
         </p>
-      ) : null}
+      )}
     </>
   );
 

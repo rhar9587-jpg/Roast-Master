@@ -185,7 +185,7 @@ export default function Home() {
               See who owns who. Roast accordingly.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" onClick={handleViewLeagueHistory} className="font-semibold">
+              <Button size="lg" onClick={handleViewLeagueHistory} className="font-semibold interact-cta">
                 Get Your League's Receipts
               </Button>
             </div>
@@ -302,7 +302,7 @@ export default function Home() {
             </div>
 
             <div className="text-center">
-              <Button variant="outline" onClick={handleTryExampleLeague} className="font-semibold">
+              <Button variant="outline" onClick={handleTryExampleLeague} className="font-semibold interact-secondary">
                 Try an example league →
               </Button>
               <p className="text-xs text-muted-foreground mt-1">No login. 1 click.</p>

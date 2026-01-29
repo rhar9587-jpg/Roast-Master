@@ -91,6 +91,7 @@ export function GridToolbar({
             size="sm"
             onClick={handleCopyLink}
             disabled={isCopying || isDownloading || isSharing}
+            className="interact-secondary"
           >
             <LinkIcon className="h-4 w-4 mr-2" />
             {isCopying ? "Copying…" : "Copy Roast Link"}
@@ -106,6 +107,7 @@ export function GridToolbar({
                   size="sm"
                   onClick={handleDownloadClick}
                   disabled={!hasData || isDownloading || isSharing}
+                  className="interact-secondary"
                 >
                   {isDownloading ? "Saving…" : "Save Roast"}
                 </Button>
@@ -142,6 +144,7 @@ export function GridToolbar({
                   size="sm"
                   onClick={handleShareClick}
                   disabled={!hasData || isDownloading || isSharing}
+                  className="interact-secondary"
                 >
                   {isSharing ? "Sending…" : "Send to Group Chat"}
                 </Button>

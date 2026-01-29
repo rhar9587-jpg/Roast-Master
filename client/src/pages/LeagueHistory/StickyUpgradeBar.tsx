@@ -123,7 +123,7 @@ export function StickyUpgradeBar({
               <Button
                 onClick={handleUpgrade}
                 size="sm"
-                className="font-semibold whitespace-nowrap"
+                className="font-semibold whitespace-nowrap interact-cta"
               >
                 Unlock — ${PRICE_PROMO}
               </Button>
@@ -139,7 +139,7 @@ export function StickyUpgradeBar({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0"
+              className="h-8 w-8 p-0 interact-icon"
               onClick={handleDismiss}
               aria-label="Dismiss"
             >

@@ -42,7 +42,7 @@ export function LockedModePreview({
           </li>
         ))}
       </ul>
-      <Button onClick={onUnlock} size="sm">
+      <Button onClick={onUnlock} size="sm" className="interact-cta">
         Unlock — ${PRICE_PROMO}
       </Button>
       <p className="text-xs text-muted-foreground">

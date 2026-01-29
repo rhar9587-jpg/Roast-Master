@@ -47,7 +47,7 @@ export function FplRoastCard({ data }: { data: FplRoastResponse }) {
         <div className="flex gap-2">
           <button
             onClick={goPrev}
-            className="h-10 w-10 rounded-xl border bg-white hover:bg-gray-50 flex items-center justify-center"
+            className="h-10 w-10 rounded-xl border bg-white flex items-center justify-center interact-icon"
             aria-label="Previous card"
             data-testid="button-fpl-prev"
           >
@@ -55,7 +55,7 @@ export function FplRoastCard({ data }: { data: FplRoastResponse }) {
           </button>
           <button
             onClick={goNext}
-            className="h-10 w-10 rounded-xl border bg-white hover:bg-gray-50 flex items-center justify-center"
+            className="h-10 w-10 rounded-xl border bg-white flex items-center justify-center interact-icon"
             aria-label="Next card"
             data-testid="button-fpl-next"
           >

@@ -67,14 +67,14 @@ export function SeasonWrappedCard({ data, isPremium = false }: SeasonWrappedCard
         <div className="flex gap-2">
           <button
             onClick={goPrev}
-            className="h-10 w-10 rounded-xl border bg-white hover:bg-gray-50 flex items-center justify-center"
+            className="h-10 w-10 rounded-xl border bg-white flex items-center justify-center interact-icon"
             aria-label="Previous card"
           >
             ‹
           </button>
           <button
             onClick={goNext}
-            className="h-10 w-10 rounded-xl border bg-white hover:bg-gray-50 flex items-center justify-center"
+            className="h-10 w-10 rounded-xl border bg-white flex items-center justify-center interact-icon"
             aria-label="Next card"
           >
             ›

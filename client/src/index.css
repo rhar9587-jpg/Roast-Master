@@ -66,3 +66,73 @@
   -webkit-box-orient: vertical;
   word-break: break-word;
 }
+
+/* ─────────────────────────────────────────────────────────
+   Interaction Feedback Utilities
+   Tiered system: hero (lift+press), secondary (border), icon (opacity)
+   ───────────────────────────────────────────────────────── */
+
+/* Tier 1: Hero cards - lift on hover, press on active */
+.interact-hero {
+  @apply transition-all duration-200 ease-out;
+}
+.interact-hero:hover {
+  @apply -translate-y-1 shadow-xl;
+}
+.interact-hero:active {
+  @apply translate-y-0 shadow-lg scale-[0.98];
+}
+
+/* Tier 2: Secondary cards - border/bg shift */
+.interact-secondary {
+  @apply transition-all duration-150 ease-out;
+}
+.interact-secondary:hover {
+  @apply border-primary/30 bg-primary/[0.02];
+}
+.interact-secondary:active {
+  @apply border-primary/40 bg-primary/[0.04];
+}
+
+/* Tier 3: Icons/small buttons - opacity + micro-scale */
+.interact-icon {
+  @apply transition-all duration-150 ease-out;
+}
+.interact-icon:hover {
+  @apply opacity-80 scale-105;
+}
+.interact-icon:active {
+  @apply opacity-100 scale-95;
+}
+
+/* Primary CTA emphasis */
+.interact-cta {
+  @apply transition-all duration-200 ease-out;
+}
+.interact-cta:hover {
+  @apply -translate-y-0.5 shadow-lg brightness-105;
+}
+.interact-cta:active {
+  @apply translate-y-0 shadow-md brightness-95 scale-[0.98];
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .interact-hero,
+  .interact-secondary,
+  .interact-icon,
+  .interact-cta {
+    @apply transition-none;
+  }
+  .interact-hero:hover,
+  .interact-hero:active,
+  .interact-secondary:hover,
+  .interact-secondary:active,
+  .interact-icon:hover,
+  .interact-icon:active,
+  .interact-cta:hover,
+  .interact-cta:active {
+    transform: none !important;
+    box-shadow: inherit !important;
+  }
+}

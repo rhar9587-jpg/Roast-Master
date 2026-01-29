@@ -89,7 +89,7 @@ export function ConversionBanner({
           <Button
             onClick={handleUpgrade}
             size="lg"
-            className="font-semibold px-8"
+            className="font-semibold px-8 interact-cta"
           >
             Unlock Full Roast — ${PRICE_PROMO}
           </Button>
