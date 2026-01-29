@@ -6,6 +6,7 @@ import * as React from "react";
 type MiniCardProps = {
   card: MiniCard;
   onOpenCell?: (cellKey: string) => void;
+  onOpenMiniCard?: (card: MiniCard) => void;
   onHighlightManager?: (managerKey: string) => void;
   forExport?: boolean;
 };
@@ -13,11 +14,14 @@ type MiniCardProps = {
 function MiniCardItem({
   card,
   onOpenCell,
+  onOpenMiniCard,
   onHighlightManager,
   forExport,
 }: MiniCardProps) {
+  // Cards with detailGames can open the modal for game breakdown
+  const hasDetailGames = Boolean(card.detailGames?.length);
   const hasClickAction =
-    !forExport && (Boolean(card.cellKey) || Boolean(card.managerKey));
+    !forExport && (hasDetailGames || Boolean(card.cellKey) || Boolean(card.managerKey));
   const base =
     "w-full text-left rounded-2xl border border-border bg-card text-card-foreground shadow-sm p-4 flex flex-col h-full transition-all duration-150 motion-reduce:transition-none";
   const interactive =
@@ -29,7 +33,10 @@ function MiniCardItem({
 
   const handleClick = () => {
     if (forExport) return;
-    if (card.cellKey && onOpenCell) {
+    // Priority: detailGames modal > cellKey modal > highlight manager
+    if (hasDetailGames && onOpenMiniCard) {
+      onOpenMiniCard(card);
+    } else if (card.cellKey && onOpenCell) {
       onOpenCell(card.cellKey);
     } else if (card.managerKey && onHighlightManager) {
       onHighlightManager(card.managerKey);
@@ -119,6 +126,7 @@ type Props = {
   yourRoastCards: MiniCard[];
   viewerChosen: boolean;
   onOpenCell?: (cellKey: string) => void;
+  onOpenMiniCard?: (card: MiniCard) => void;
   onHighlightManager?: (managerKey: string) => void;
   storylinesExportRef?: React.RefObject<HTMLDivElement | null>;
   yourRoastExportRef?: React.RefObject<HTMLDivElement | null>;
@@ -187,6 +195,7 @@ export function StorylinesMiniCards({
   yourRoastCards,
   viewerChosen,
   onOpenCell,
+  onOpenMiniCard,
   onHighlightManager,
   storylinesExportRef,
   yourRoastExportRef,
@@ -216,6 +225,7 @@ export function StorylinesMiniCards({
                   key={c.id}
                   card={c}
                   onOpenCell={onOpenCell}
+                  onOpenMiniCard={onOpenMiniCard}
                   onHighlightManager={onHighlightManager}
                 />
               );
@@ -258,6 +268,7 @@ export function StorylinesMiniCards({
                     key={c.id}
                     card={c}
                     onOpenCell={onOpenCell}
+                    onOpenMiniCard={onOpenMiniCard}
                     onHighlightManager={onHighlightManager}
                   />
                 );

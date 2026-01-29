@@ -1,6 +1,17 @@
 import type { DominanceCellDTO, ManagerRow, RowTotal, WeeklyMatchupDetail, SeasonStat } from "./types";
 import { fmtScore } from "./utils";
 
+// Individual game detail for modal breakdowns
+export type GameDetail = {
+  season: string;
+  week: number;
+  opponent: string;
+  yourPoints: number;
+  theirPoints: number;
+  margin: number;
+  won: boolean;
+};
+
 export type MiniCard = {
   id: string;
   title: string;
@@ -13,6 +24,8 @@ export type MiniCard = {
   detail?: string;
   cellKey?: string;
   managerKey?: string;
+  // Individual game breakdowns for modal display
+  detailGames?: GameDetail[];
 };
 
 // Emoji mapping for all mini card types
@@ -67,13 +80,71 @@ function parseRecord(record: string): [number, number] {
   return [w, l];
 }
 
+/** Get H2H games between two managers from weeklyMatchups */
+function getH2HGames(
+  weeklyMatchups: WeeklyMatchupDetail[],
+  managerA: string,
+  managerB: string,
+  managers: ManagerRow[],
+  limit = 8
+): GameDetail[] {
+  const games = weeklyMatchups.filter(
+    (m) => m.managerKey === managerA && m.opponentKey === managerB
+  );
+  return games
+    .map((g) => {
+      const oppManager = managers.find((m) => m.key === g.opponentKey);
+      return {
+        season: g.season,
+        week: g.week,
+        opponent: oppManager?.name || g.opponentKey,
+        yourPoints: g.points,
+        theirPoints: g.opponentPoints,
+        margin: g.margin,
+        won: g.won,
+      };
+    })
+    .sort((a, b) => Math.abs(b.margin) - Math.abs(a.margin)) // Most impactful games first
+    .slice(0, limit);
+}
+
+/** Get all games for a manager from weeklyMatchups */
+function getManagerGames(
+  weeklyMatchups: WeeklyMatchupDetail[],
+  managerKey: string,
+  managers: ManagerRow[],
+  filter: (m: WeeklyMatchupDetail) => boolean,
+  sortFn: (a: GameDetail, b: GameDetail) => number,
+  limit = 8
+): GameDetail[] {
+  const games = weeklyMatchups.filter(
+    (m) => m.managerKey === managerKey && filter(m)
+  );
+  return games
+    .map((g) => {
+      const oppManager = managers.find((m) => m.key === g.opponentKey);
+      return {
+        season: g.season,
+        week: g.week,
+        opponent: oppManager?.name || g.opponentKey,
+        yourPoints: g.points,
+        theirPoints: g.opponentPoints,
+        margin: g.margin,
+        won: g.won,
+      };
+    })
+    .sort(sortFn)
+    .slice(0, limit);
+}
+
 /** League Storylines: 5 mini cards from league-wide data. */
 export function computeLeagueStorylines(
   allCells: DominanceCellDTO[],
   managers: ManagerRow[],
   rowTotals: Map<string, RowTotal>,
   totalsByManager: TotalsByManagerEntry[] | null,
-  totalLeagueGames: number
+  totalLeagueGames: number,
+  weeklyMatchups: WeeklyMatchupDetail[] = []
 ): MiniCard[] {
   const cards: MiniCard[] = [];
   const nameByKey = new Map(managers.map((m) => [m.key, m.name]));
@@ -129,6 +200,15 @@ export function computeLeagueStorylines(
     }
   }
   if (everybodyVictim && everybodyVictim.count > 0) {
+    // Get their worst losses across all managers
+    const detailGames = getManagerGames(
+      weeklyMatchups,
+      everybodyVictim.key,
+      managers,
+      (m) => !m.won,
+      (a, b) => a.margin - b.margin, // Worst losses first (most negative margin)
+      8
+    );
     cards.push({
       id: "everybodys-victim",
       title: "EVERYBODY'S VICTIM",
@@ -138,6 +218,7 @@ export function computeLeagueStorylines(
       line: "Everyone has receipts on this one.",
       detail: everybodyVictim.name,
       cellKey: everybodyVictim.cellKey,
+      detailGames,
     });
   }
 
@@ -174,6 +255,15 @@ export function computeLeagueStorylines(
         punchingBag = { key: m.key, name: m.name, losses: rt.l };
     }
     if (punchingBag && punchingBag.losses > 0) {
+      // Get their biggest losses
+      const detailGames = getManagerGames(
+        weeklyMatchups,
+        punchingBag.key,
+        managers,
+        (m) => !m.won,
+        (a, b) => a.margin - b.margin, // Worst losses first
+        8
+      );
       cards.push({
         id: "punching-bag",
         title: "PUNCHING BAG",
@@ -183,6 +273,7 @@ export function computeLeagueStorylines(
         line: "Took more L's than anyone.",
         detail: punchingBag.name,
         managerKey: punchingBag.key,
+        detailGames,
       });
     }
   }
@@ -233,6 +324,15 @@ export function computeLeagueStorylines(
     }
   }
   if (untouchable && untouchable.count > 0) {
+    // Get their wins (they're untouchable so all games vs certain managers are wins)
+    const detailGames = getManagerGames(
+      weeklyMatchups,
+      untouchable.key,
+      managers,
+      (m) => m.won,
+      (a, b) => b.margin - a.margin, // Biggest wins first
+      8
+    );
     cards.push({
       id: "untouchable",
       title: "UNTOUCHABLE",
@@ -242,6 +342,7 @@ export function computeLeagueStorylines(
       line: "Never lost to these managers.",
       detail: untouchable.name,
       cellKey: untouchable.cellKey,
+      detailGames,
     });
   }
 
@@ -259,6 +360,8 @@ export function computeLeagueStorylines(
     const top = byGames[0];
     const games = top?.games ?? 0;
     if (games > 0 && top) {
+      // Get games between these two rivals
+      const detailGames = getH2HGames(weeklyMatchups, top.a, top.b, managers, 8);
       cards.push({
         id: "rival-central",
         title: "RIVAL CENTRAL",
@@ -270,6 +373,7 @@ export function computeLeagueStorylines(
         line: "Still can't settle this one.",
         detail: `${top.aName} vs ${top.bName}`,
         cellKey: `${top.a}-${top.b}`,
+        detailGames,
       });
     }
   }
@@ -291,9 +395,23 @@ export function computeYourRoast(
   const myWins = weeklyMatchups.filter(
     (m) => m.managerKey === viewerKey && m.won && m.margin > 0
   );
-  const biggestWin = [...myWins].sort((a, b) => b.margin - a.margin)[0];
+  const sortedWins = [...myWins].sort((a, b) => b.margin - a.margin);
+  const biggestWin = sortedWins[0];
   if (biggestWin) {
     const opponent = managers.find((m) => m.key === biggestWin.opponentKey);
+    // Show top 8 biggest wins
+    const detailGames: GameDetail[] = sortedWins.slice(0, 8).map((g) => {
+      const opp = managers.find((m) => m.key === g.opponentKey);
+      return {
+        season: g.season,
+        week: g.week,
+        opponent: opp?.name || g.opponentKey,
+        yourPoints: g.points,
+        theirPoints: g.opponentPoints,
+        margin: g.margin,
+        won: g.won,
+      };
+    });
     cards.push({
       id: "your-biggest-win",
       title: "YOUR BIGGEST WIN",
@@ -305,6 +423,7 @@ export function computeYourRoast(
       line: `Dropped ${biggestWin.points.toFixed(1)} on ${opponent?.name ?? "opponent"}.`,
       detail: opponent?.name,
       managerKey: viewerKey,
+      detailGames,
     });
   }
 
@@ -358,6 +477,20 @@ export function computeYourRoast(
         : `${cappedChokes.length} times you beat half the league and lost.`;
     }
 
+    // Convert choke jobs to GameDetail format
+    const detailGames: GameDetail[] = cappedChokes.map((g) => {
+      const opp = managers.find((m) => m.key === g.opponentKey);
+      return {
+        season: g.season,
+        week: g.week,
+        opponent: opp?.name || g.opponentKey,
+        yourPoints: g.points,
+        theirPoints: g.opponentPoints,
+        margin: g.margin,
+        won: g.won,
+      };
+    });
+
     cards.push({
       id: "your-choke-jobs",
       title: "YOUR CHOKE JOBS",
@@ -369,6 +502,7 @@ export function computeYourRoast(
       line: punchline,
       detail: opponent?.name,
       managerKey: viewerKey,
+      detailGames,
     });
   }
 
@@ -384,6 +518,7 @@ export function computeYourRoast(
     (a, b) => (b?.score ?? 0) - (a?.score ?? 0)
   )[0];
   if (bestOwned) {
+    const detailGames = getH2HGames(weeklyMatchups, viewerKey, bestOwned.b, managers, 8);
     cards.push({
       id: "your-favorite-victim",
       title: "YOUR FAVORITE VICTIM",
@@ -395,6 +530,7 @@ export function computeYourRoast(
       line: "Rent is always due.",
       detail: bestOwned.bName,
       cellKey: `${bestOwned.a}-${bestOwned.b}`,
+      detailGames,
     });
   }
 
@@ -410,6 +546,7 @@ export function computeYourRoast(
     (a, b) => (a?.score ?? 0) - (b?.score ?? 0)
   )[0];
   if (worstNemesis) {
+    const detailGames = getH2HGames(weeklyMatchups, viewerKey, worstNemesis.b, managers, 8);
     cards.push({
       id: "your-kryptonite",
       title: "YOUR KRYPTONITE",
@@ -421,6 +558,7 @@ export function computeYourRoast(
       line: "They cook you every time.",
       detail: worstNemesis.bName,
       cellKey: `${worstNemesis.a}-${worstNemesis.b}`,
+      detailGames,
     });
   }
 
@@ -439,6 +577,8 @@ export function computeYourRoast(
       longestRival.a === viewerKey
         ? longestRival.bName
         : longestRival.aName;
+    const otherKey = longestRival.a === viewerKey ? longestRival.b : longestRival.a;
+    const detailGames = getH2HGames(weeklyMatchups, viewerKey, otherKey, managers, 8);
     cards.push({
       id: "your-unfinished-business",
       title: "YOUR UNFINISHED BUSINESS",
@@ -450,6 +590,7 @@ export function computeYourRoast(
       line: "This rivalry runs deep.",
       detail: other,
       cellKey: `${longestRival.a}-${longestRival.b}`,
+      detailGames,
     });
   }
 
@@ -468,6 +609,8 @@ export function computeYourRoast(
     if (mostPlayed) {
       const other =
         mostPlayed.a === viewerKey ? mostPlayed.bName : mostPlayed.aName;
+      const otherKey = mostPlayed.a === viewerKey ? mostPlayed.b : mostPlayed.a;
+      const detailGames = getH2HGames(weeklyMatchups, viewerKey, otherKey, managers, 8);
       cards.push({
         id: "most-played-opponent",
         title: "MOST PLAYED OPPONENT",
@@ -479,6 +622,7 @@ export function computeYourRoast(
         line: "You see this one a lot.",
         detail: other,
         cellKey: `${mostPlayed.a}-${mostPlayed.b}`,
+        detailGames,
       });
     }
 
@@ -495,6 +639,8 @@ export function computeYourRoast(
     )[0];
     if (closest && closest !== mostPlayed) {
       const other = closest.a === viewerKey ? closest.bName : closest.aName;
+      const otherKey = closest.a === viewerKey ? closest.b : closest.a;
+      const detailGames = getH2HGames(weeklyMatchups, viewerKey, otherKey, managers, 8);
       cards.push({
         id: "closest-matchup",
         title: "CLOSEST MATCHUP",
@@ -506,6 +652,7 @@ export function computeYourRoast(
         line: "Too close to call.",
         detail: other,
         cellKey: `${closest.a}-${closest.b}`,
+        detailGames,
       });
     }
 
@@ -525,6 +672,8 @@ export function computeYourRoast(
       mostEven !== closest
     ) {
       const other = mostEven.a === viewerKey ? mostEven.bName : mostEven.aName;
+      const otherKey = mostEven.a === viewerKey ? mostEven.b : mostEven.a;
+      const detailGames = getH2HGames(weeklyMatchups, viewerKey, otherKey, managers, 8);
       cards.push({
         id: "most-even-rival",
         title: "MOST EVEN RIVAL",
@@ -536,6 +685,7 @@ export function computeYourRoast(
         line: "Dead even. No one owns anyone.",
         detail: other,
         cellKey: `${mostEven.a}-${mostEven.b}`,
+        detailGames,
       });
     }
   }
@@ -572,23 +722,24 @@ function computeHeartbreaker(
 ): MiniCard | null {
   if (weeklyMatchups.length === 0) return null;
 
-  // Count close losses (<5 points) per manager
-  const closeLossCounts = new Map<string, number>();
+  // Collect close losses (<5 points) per manager with game details
+  const closeLossGames = new Map<string, WeeklyMatchupDetail[]>();
   for (const matchup of weeklyMatchups) {
     if (!matchup.won && Math.abs(matchup.margin) < 5) {
-      const current = closeLossCounts.get(matchup.managerKey) || 0;
-      closeLossCounts.set(matchup.managerKey, current + 1);
+      const games = closeLossGames.get(matchup.managerKey) || [];
+      games.push(matchup);
+      closeLossGames.set(matchup.managerKey, games);
     }
   }
 
-  if (closeLossCounts.size === 0) return null;
+  if (closeLossGames.size === 0) return null;
 
   // Find manager with most close losses
   let maxCount = 0;
   let winnerKey: string | null = null;
-  for (const [key, count] of closeLossCounts) {
-    if (count > maxCount) {
-      maxCount = count;
+  for (const [key, games] of closeLossGames) {
+    if (games.length > maxCount) {
+      maxCount = games.length;
       winnerKey = key;
     }
   }
@@ -597,6 +748,24 @@ function computeHeartbreaker(
 
   const manager = managers.find((m) => m.key === winnerKey);
   if (!manager) return null;
+
+  // Get the games and convert to GameDetail format, sorted by closest margin
+  const games = closeLossGames.get(winnerKey) || [];
+  const detailGames: GameDetail[] = games
+    .map((g) => {
+      const oppManager = managers.find((m) => m.key === g.opponentKey);
+      return {
+        season: g.season,
+        week: g.week,
+        opponent: oppManager?.name || g.opponentKey,
+        yourPoints: g.points,
+        theirPoints: g.opponentPoints,
+        margin: g.margin,
+        won: g.won,
+      };
+    })
+    .sort((a, b) => Math.abs(a.margin) - Math.abs(b.margin)) // Closest first
+    .slice(0, 8); // Limit to 8 games
 
   return {
     id: "heartbreaker",
@@ -607,6 +776,7 @@ function computeHeartbreaker(
     line: `Lost by less than 5 points ${maxCount} time${maxCount === 1 ? "" : "s"}.`,
     detail: manager.name,
     managerKey: winnerKey,
+    detailGames,
   };
 }
 
@@ -616,23 +786,24 @@ function computeBlowoutArtist(
 ): MiniCard | null {
   if (weeklyMatchups.length === 0) return null;
 
-  // Count blowout wins (30+ point margin) per manager
-  const blowoutCounts = new Map<string, number>();
+  // Collect blowout wins (30+ point margin) per manager with game details
+  const blowoutGames = new Map<string, WeeklyMatchupDetail[]>();
   for (const matchup of weeklyMatchups) {
     if (matchup.won && matchup.margin >= 30) {
-      const current = blowoutCounts.get(matchup.managerKey) || 0;
-      blowoutCounts.set(matchup.managerKey, current + 1);
+      const games = blowoutGames.get(matchup.managerKey) || [];
+      games.push(matchup);
+      blowoutGames.set(matchup.managerKey, games);
     }
   }
 
-  if (blowoutCounts.size === 0) return null;
+  if (blowoutGames.size === 0) return null;
 
   // Find manager with most blowouts
   let maxCount = 0;
   let winnerKey: string | null = null;
-  for (const [key, count] of blowoutCounts) {
-    if (count > maxCount) {
-      maxCount = count;
+  for (const [key, games] of blowoutGames) {
+    if (games.length > maxCount) {
+      maxCount = games.length;
       winnerKey = key;
     }
   }
@@ -641,6 +812,24 @@ function computeBlowoutArtist(
 
   const manager = managers.find((m) => m.key === winnerKey);
   if (!manager) return null;
+
+  // Get the games and convert to GameDetail format, sorted by largest margin
+  const games = blowoutGames.get(winnerKey) || [];
+  const detailGames: GameDetail[] = games
+    .map((g) => {
+      const oppManager = managers.find((m) => m.key === g.opponentKey);
+      return {
+        season: g.season,
+        week: g.week,
+        opponent: oppManager?.name || g.opponentKey,
+        yourPoints: g.points,
+        theirPoints: g.opponentPoints,
+        margin: g.margin,
+        won: g.won,
+      };
+    })
+    .sort((a, b) => b.margin - a.margin) // Largest margin first
+    .slice(0, 8); // Limit to 8 games
 
   return {
     id: "blowout-artist",
@@ -651,6 +840,7 @@ function computeBlowoutArtist(
     line: `Won by 30+ points ${maxCount} time${maxCount === 1 ? "" : "s"}.`,
     detail: manager.name,
     managerKey: winnerKey,
+    detailGames,
   };
 }
 
@@ -672,26 +862,27 @@ function computeGiantSlayer(
     }
   }
 
-  // Count wins vs #1 seed per manager
-  const winsVsTopSeed = new Map<string, number>();
+  // Collect wins vs #1 seed per manager with game details
+  const giantSlayerGames = new Map<string, WeeklyMatchupDetail[]>();
   for (const matchup of weeklyMatchups) {
     if (matchup.won) {
       const topSeed = topSeedsBySeason.get(matchup.season);
       if (topSeed && matchup.opponentKey === topSeed) {
-        const current = winsVsTopSeed.get(matchup.managerKey) || 0;
-        winsVsTopSeed.set(matchup.managerKey, current + 1);
+        const games = giantSlayerGames.get(matchup.managerKey) || [];
+        games.push(matchup);
+        giantSlayerGames.set(matchup.managerKey, games);
       }
     }
   }
 
-  if (winsVsTopSeed.size === 0) return null;
+  if (giantSlayerGames.size === 0) return null;
 
   // Find manager with most wins vs #1 seed
   let maxCount = 0;
   let winnerKey: string | null = null;
-  for (const [key, count] of winsVsTopSeed) {
-    if (count > maxCount) {
-      maxCount = count;
+  for (const [key, games] of giantSlayerGames) {
+    if (games.length > maxCount) {
+      maxCount = games.length;
       winnerKey = key;
     }
   }
@@ -700,6 +891,24 @@ function computeGiantSlayer(
 
   const manager = managers.find((m) => m.key === winnerKey);
   if (!manager) return null;
+
+  // Get the games and convert to GameDetail format
+  const games = giantSlayerGames.get(winnerKey) || [];
+  const detailGames: GameDetail[] = games
+    .map((g) => {
+      const oppManager = managers.find((m) => m.key === g.opponentKey);
+      return {
+        season: g.season,
+        week: g.week,
+        opponent: oppManager?.name || g.opponentKey,
+        yourPoints: g.points,
+        theirPoints: g.opponentPoints,
+        margin: g.margin,
+        won: g.won,
+      };
+    })
+    .sort((a, b) => b.margin - a.margin) // Largest win first
+    .slice(0, 8); // Limit to 8 games
 
   return {
     id: "giant-slayer",
@@ -710,5 +919,6 @@ function computeGiantSlayer(
     line: `Beat the #1 seed ${maxCount} time${maxCount === 1 ? "" : "s"}.`,
     detail: manager.name,
     managerKey: winnerKey,
+    detailGames,
   };
 }

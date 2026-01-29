@@ -40,7 +40,7 @@ import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
 import { LockedModePreview } from "./LockedModePreview";
 import { isPremium, setPremium } from "./premium";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername } from "./utils";
-import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards } from "./storylines";
+import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards, type MiniCard } from "./storylines";
 import { computeHeroReceipts } from "./computeHeroReceipts";
 import { trackFunnel } from "@/lib/track";
 import type {
@@ -69,6 +69,7 @@ export default function LeagueHistoryPage() {
   const [includePlayoffs, setIncludePlayoffs] = useState(false);
   const [defaultRegularSeasonEnd, setDefaultRegularSeasonEnd] = useState<number | null>(null);
   const [selected, setSelected] = useState<DominanceCellDTO | null>(null);
+  const [selectedMiniCard, setSelectedMiniCard] = useState<MiniCard | null>(null);
   const [activeBadge, setActiveBadge] = useState<Badge | null>(null);
   const [isSelectorCollapsed, setIsSelectorCollapsed] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -669,9 +670,10 @@ export default function LeagueHistoryPage() {
         managers,
         rowTotals,
         totalsByManager,
-        grandTotals.games
+        grandTotals.games,
+        data?.weeklyMatchups ?? []
       ),
-    [allCells, managers, rowTotals, totalsByManager, grandTotals.games]
+    [allCells, managers, rowTotals, totalsByManager, grandTotals.games, data?.weeklyMatchups]
   );
 
   const yourRoastCards = useMemo(
@@ -1705,6 +1707,7 @@ export default function LeagueHistoryPage() {
               yourRoastCards={yourRoastCards}
               viewerChosen={!!viewerKey}
               onOpenCell={(key) => openCell(key)}
+              onOpenMiniCard={(card) => setSelectedMiniCard(card)}
               onHighlightManager={onHighlightManager}
               storylinesExportRef={storylinesExportRef}
               yourRoastExportRef={yourRoastExportRef}
@@ -1802,8 +1805,14 @@ export default function LeagueHistoryPage() {
       {activeMode === "history" && (
         <MatchupDetailModal
           selected={selected}
-          open={!!selected}
-          onOpenChange={(open) => !open && setSelected(null)}
+          miniCardDetail={selectedMiniCard}
+          open={!!selected || !!selectedMiniCard}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelected(null);
+              setSelectedMiniCard(null);
+            }
+          }}
         />
       )}
     </div>
