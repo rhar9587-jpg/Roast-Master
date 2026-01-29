@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
@@ -22,9 +23,11 @@ type Props = {
   leagueId: string;
   startWeek: number;
   endWeek: number;
+  includePlayoffs: boolean;
   onLeagueIdChange: (v: string) => void;
   onStartWeekChange: (v: number) => void;
   onEndWeekChange: (v: number) => void;
+  onIncludePlayoffsChange: (v: boolean) => void;
   onAnalyze: () => void;
   isFetching: boolean;
   error: Error | null;
@@ -38,9 +41,11 @@ export function LeagueSelector({
   leagueId,
   startWeek,
   endWeek,
+  includePlayoffs,
   onLeagueIdChange,
   onStartWeekChange,
   onEndWeekChange,
+  onIncludePlayoffsChange,
   onAnalyze,
   isFetching,
   error,
@@ -184,6 +189,21 @@ export function LeagueSelector({
                 {isFetching ? "Finding roasts…" : "Show Me The Roasts"}
               </Button>
             </div>
+          </div>
+
+          {/* Include playoffs toggle */}
+          <div className="flex items-center gap-2 mt-3">
+            <Checkbox
+              id="include-playoffs"
+              checked={includePlayoffs}
+              onCheckedChange={(checked) => onIncludePlayoffsChange(checked === true)}
+            />
+            <Label 
+              htmlFor="include-playoffs" 
+              className="text-sm text-muted-foreground cursor-pointer"
+            >
+              Include playoff weeks
+            </Label>
           </div>
 
           {error ? (

@@ -1072,15 +1072,24 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       req.query.start_week !== undefined ? Number(req.query.start_week) : 1;
     const end_week =
       req.query.end_week !== undefined ? Number(req.query.end_week) : 17;
+    // Parse include_playoffs: "true" or "1" means true, default is false
+    const include_playoffs = 
+      req.query.include_playoffs === "true" || req.query.include_playoffs === "1";
 
     if (!league_id) return res.status(400).json({ error: "league_id is required" });
 
     try {
-      const payload = await handleLeagueHistoryDominance({ league_id, start_week, end_week });
+      const payload = await handleLeagueHistoryDominance({ 
+        league_id, 
+        start_week, 
+        end_week,
+        include_playoffs,
+      });
 
       trackEvent("league_history_dominance", "/api/league-history/dominance", "GET", {
         start_week,
         end_week,
+        include_playoffs,
       });
 
       // payload.cells already has correct DTO shape: { a, b, aName, bName, games, score, badge, record, pf, pa }
@@ -1092,6 +1101,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         totalsByManager: payload.totalsByManager,
         seasonStats: payload.seasonStats,
         weeklyMatchups: payload.weeklyMatchups,
+        // Metadata for playoff filtering
+        defaultRegularSeasonEnd: payload.defaultRegularSeasonEnd,
+        playoffStartBySeason: payload.playoffStartBySeason,
       });
     } catch (err: any) {
       return res.status(400).json({ error: err?.message || "Failed to build dominance grid" });

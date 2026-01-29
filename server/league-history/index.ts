@@ -1,5 +1,6 @@
 // server/league-history/index.ts
 import { getLeague, getRosters, getUsers, getMatchups } from "./sleeper";
+import { computeSeasonWeekRange, getPlayoffStartWeek } from "./weekFilter";
 
 function nameForRoster(
   roster_id: number,
@@ -291,17 +292,19 @@ export async function handleLeagueHistoryDominance(params: {
   league_id: string;
   start_week?: number;
   end_week?: number;
+  include_playoffs?: boolean;
 }) {
   const league_id = String(params.league_id || "").trim();
   if (!league_id) throw new Error("league_id is required");
 
   const start_week = Number(params.start_week ?? 1);
   const end_week = Number(params.end_week ?? 17);
+  const include_playoffs = params.include_playoffs ?? false;
 
   if (!Number.isFinite(start_week) || start_week < 1) throw new Error("start_week must be >= 1");
   if (!Number.isFinite(end_week) || end_week < start_week) throw new Error("end_week must be >= start_week");
 
-  // ✅ NEW: full history chain (newest -> oldest)
+  // Full history chain (newest -> oldest)
   const chain = await getLeagueChain(league_id, 15);
 
   // We'll build canonical manager keys across seasons:
@@ -318,11 +321,13 @@ export async function handleLeagueHistoryDominance(params: {
     league: Awaited<ReturnType<typeof getLeague>>;
     rosterToManagerKey: Map<number, { key: string; name: string }>;
     weekMatchups: WeekMatchups[];
+    playoffStartWeek: number;
+    regularSeasonEnd: number;
   }>();
 
-  // NOTE: we keep week numbers 1..end_week per season; you can later expand to
-  // auto-using playoff_week_end per season if you want.
-  const weeks = Array.from({ length: end_week - start_week + 1 }, (_, i) => start_week + i);
+  // Track playoff info across seasons for metadata
+  const playoffStartBySeason: Record<string, number> = {};
+  const regularSeasonEndValues: number[] = [];
 
   for (const seasonLeague of chain) {
     const season = seasonLeague.season || String(new Date().getFullYear());
@@ -355,15 +360,23 @@ export async function handleLeagueHistoryDominance(params: {
 
       rosterToManagerKey.set(r.roster_id, { key, name });
 
-  if (!managerByKey.has(key)) {
-    managerByKey.set(key, { key, name, avatarUrl });
-  } else {
-    const existing = managerByKey.get(key)!;
-    if (!existing.avatarUrl && avatarUrl) existing.avatarUrl = avatarUrl;
-  }
-  }
+      if (!managerByKey.has(key)) {
+        managerByKey.set(key, { key, name, avatarUrl });
+      } else {
+        const existing = managerByKey.get(key)!;
+        if (!existing.avatarUrl && avatarUrl) existing.avatarUrl = avatarUrl;
+      }
+    }
 
-    // Store season data for later processing (before week loop so we can track weekMatchups)
+    // Compute playoff start week for this season BEFORE fetching matchups
+    const playoffStartWeek = getPlayoffStartWeek(league?.settings as any);
+    const regularSeasonEnd = Math.max(1, playoffStartWeek - 1);
+    
+    // Track for metadata
+    playoffStartBySeason[season] = playoffStartWeek;
+    regularSeasonEndValues.push(regularSeasonEnd);
+
+    // Store season data for later processing
     seasonDataMap.set(season, {
       season,
       league_id: seasonLeague.league_id,
@@ -372,9 +385,29 @@ export async function handleLeagueHistoryDominance(params: {
       league,
       rosterToManagerKey,
       weekMatchups: [], // Will be populated as we process weeks
+      playoffStartWeek,
+      regularSeasonEnd,
     });
 
-    // Fetch matchups per week for this season league
+    // Compute effective week range for this season (respects include_playoffs)
+    const weekRange = computeSeasonWeekRange({
+      requestedStart: start_week,
+      requestedEnd: end_week,
+      playoffStartWeek,
+      includePlayoffs: include_playoffs,
+    });
+
+    // If no valid weeks for this season (e.g., user requested only playoff weeks but include_playoffs=false)
+    if (!weekRange) {
+      continue;
+    }
+
+    // Fetch matchups for the computed week range
+    const weeks = Array.from(
+      { length: weekRange.end - weekRange.start + 1 },
+      (_, i) => weekRange.start + i
+    );
+
     for (const w of weeks) {
       let raw: Array<{ matchup_id: number; roster_id: number; points: number }> = [];
       try {
@@ -409,6 +442,11 @@ export async function handleLeagueHistoryDominance(params: {
     }
   }
 
+  // Compute default regular season end (minimum across all seasons)
+  const defaultRegularSeasonEnd = regularSeasonEndValues.length > 0
+    ? Math.min(...regularSeasonEndValues)
+    : 14; // Fallback if no seasons found
+
   // Compute seasonStats and weeklyMatchups from stored season data
   const seasonStats: Array<{
     season: string;
@@ -435,7 +473,7 @@ export async function handleLeagueHistoryDominance(params: {
   }> = [];
 
   for (const [season, seasonData] of seasonDataMap) {
-    const { league, rosters, rosterToManagerKey, weekMatchups } = seasonData;
+    const { league, rosters, rosterToManagerKey, weekMatchups, playoffStartWeek } = seasonData;
 
     // Get playoff_teams from league settings
     const playoffTeams = league?.settings?.playoff_teams;
@@ -444,22 +482,8 @@ export async function handleLeagueHistoryDominance(params: {
       console.warn(`[LeagueHistory] playoff_teams missing for season ${season}; using inferred playoff qualification`);
     }
 
-    // Compute playoff week range
+    // Get playoff week end from league settings
     const playoffWeekEnd = league?.settings?.playoff_week_end;
-    let playoffStartWeek: number | undefined;
-    // Prefer playoff_start_week or playoff_week_start if present
-    const settings = league?.settings as any;
-    if (settings?.playoff_start_week !== undefined) {
-      playoffStartWeek = settings.playoff_start_week;
-    } else if (settings?.playoff_week_start !== undefined) {
-      playoffStartWeek = settings.playoff_week_start;
-    } else if (playoffWeekEnd !== undefined) {
-      // If start missing but end present: assume 2-round playoffs (end - 1)
-      playoffStartWeek = Math.max(15, playoffWeekEnd - 1);
-    } else {
-      // If both missing: fallback to 15
-      playoffStartWeek = 15;
-    }
 
     // Compute totalPF per manager from matchups for this season
     const totalPFByManager = new Map<string, number>();
@@ -597,7 +621,7 @@ export async function handleLeagueHistoryDominance(params: {
     league: {
       league_id: newest.league_id,
       name: newest.name,
-      season: seasonRange, // ✅ now displays range like "2019–2025" if available
+      season: seasonRange, // displays range like "2019–2025" if available
     },
     history: {
       league_ids: chain.map((c) => c.league_id),
@@ -609,5 +633,8 @@ export async function handleLeagueHistoryDominance(params: {
     totalsByManager,
     seasonStats,
     weeklyMatchups,
+    // Metadata for playoff filtering
+    defaultRegularSeasonEnd,
+    playoffStartBySeason,
   };
 }

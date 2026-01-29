@@ -57,6 +57,9 @@ export type DominanceApiResponse = {
   cells?: DominanceCellDTO[];
   seasonStats?: SeasonStat[];
   weeklyMatchups?: WeeklyMatchupDetail[];
+  // Metadata for playoff filtering
+  defaultRegularSeasonEnd?: number;
+  playoffStartBySeason?: Record<string, number>;
 };
 
 export type VictimRow = {

@@ -66,6 +66,8 @@ export default function LeagueHistoryPage() {
   const [leagueId, setLeagueId] = useState("");
   const [startWeek, setStartWeek] = useState(1);
   const [endWeek, setEndWeek] = useState(17);
+  const [includePlayoffs, setIncludePlayoffs] = useState(false);
+  const [defaultRegularSeasonEnd, setDefaultRegularSeasonEnd] = useState<number | null>(null);
   const [selected, setSelected] = useState<DominanceCellDTO | null>(null);
   const [activeBadge, setActiveBadge] = useState<Badge | null>(null);
   const [isSelectorCollapsed, setIsSelectorCollapsed] = useState(false);
@@ -109,7 +111,7 @@ export default function LeagueHistoryPage() {
   const hasScrolledToPicker = useRef(false);
 
   const { data, isFetching, error, refetch } = useQuery({
-    queryKey: ["league-history-dominance", leagueId, startWeek, endWeek],
+    queryKey: ["league-history-dominance", leagueId, startWeek, endWeek, includePlayoffs],
     enabled: false,
     queryFn: async (): Promise<DominanceApiResponse> => {
       try {
@@ -117,6 +119,7 @@ export default function LeagueHistoryPage() {
           league_id: leagueId.trim(),
           start_week: String(startWeek),
           end_week: String(endWeek),
+          include_playoffs: includePlayoffs ? "true" : "false",
         });
         const res = await fetch(`/api/league-history/dominance?${qs.toString()}`);
         if (!res.ok) {
@@ -143,8 +146,13 @@ export default function LeagueHistoryPage() {
         ) {
           console.log("[LeagueHistory] seasonStats:", json?.seasonStats?.length ?? 0);
           console.log("[LeagueHistory] weeklyMatchups:", json?.weeklyMatchups?.length ?? 0);
+          console.log("[LeagueHistory] defaultRegularSeasonEnd:", json?.defaultRegularSeasonEnd);
         }
         setLastAnalyzedAt(new Date());
+        // Update default regular season end from response
+        if (json?.defaultRegularSeasonEnd !== undefined) {
+          setDefaultRegularSeasonEnd(json.defaultRegularSeasonEnd);
+        }
         return json;
       } catch (e) {
         // fetch() threw (e.g. "Failed to fetch") — server down, network unreachable, CORS
@@ -191,6 +199,17 @@ export default function LeagueHistoryPage() {
     }
     
     return null;
+  }
+
+  // Handler for toggling "Include playoffs" checkbox
+  function handleIncludePlayoffsChange(newValue: boolean) {
+    setIncludePlayoffs(newValue);
+    
+    // When toggling OFF playoffs and we have a default regular season end,
+    // clamp endWeek if it's currently above the regular season
+    if (!newValue && defaultRegularSeasonEnd !== null && endWeek > defaultRegularSeasonEnd) {
+      setEndWeek(defaultRegularSeasonEnd);
+    }
   }
 
   // Read URL params on mount
@@ -1266,9 +1285,11 @@ export default function LeagueHistoryPage() {
           leagueId={leagueId}
           startWeek={startWeek}
           endWeek={endWeek}
+          includePlayoffs={includePlayoffs}
           onLeagueIdChange={setLeagueId}
           onStartWeekChange={setStartWeek}
           onEndWeekChange={setEndWeek}
+          onIncludePlayoffsChange={handleIncludePlayoffsChange}
           onAnalyze={() => refetch()}
           isFetching={isFetching}
           error={error as Error | null}
