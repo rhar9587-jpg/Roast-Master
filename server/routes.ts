@@ -584,8 +584,19 @@ async function handleWrapped(params: RoastRequest) {
     null;
   // Track record vs each opponent for "Your Worst Enemy" card
   const recordVsOpponent = new Map<number, { wins: number; losses: number }>();
-  // Track high-score losses for "Your Choke Jobs" card
-  const highScoreLosses: Array<{ week: number; you: number; opp: number; oppRid: number }> = [];
+  // Track choke jobs (lost while scoring above weekly median) - aligned with storylines.ts
+  const MAX_CHOKE_JOBS = 5;
+  const chokeJobs: Array<{
+    week: number;
+    you: number;
+    opp: number;
+    oppRid: number;
+    isNuclear: boolean;
+    rank: number;
+  }> = [];
+  // Store weekly scores and user losses for post-processing
+  const weeklyScores = new Map<number, number[]>();
+  const userLosses: Array<{ week: number; you: number; opp: number; oppRid: number }> = [];
 
   for (let w = startWeek; w <= endWeek; w++) {
     let weekMatchups: SleeperMatchup[] = [];
@@ -597,6 +608,16 @@ async function handleWrapped(params: RoastRequest) {
       continue;
     }
     if (!weekMatchups?.length) continue;
+
+    // Collect all scores for this week to calculate median
+    const allScores: number[] = [];
+    for (const m of weekMatchups) {
+      const pts = safeNumber(m.points);
+      if (pts > 0) allScores.push(pts);
+    }
+    if (allScores.length > 0) {
+      weeklyScores.set(w, allScores);
+    }
 
     const yourRow = weekMatchups.find((m) => m.roster_id === rid);
     if (!yourRow) continue;
@@ -633,21 +654,43 @@ async function handleWrapped(params: RoastRequest) {
       if (!worstLoss || margin < worstLoss.margin) {
         worstLoss = { week: w, margin, oppRid, you, opp };
       }
-      // Track high-score losses (scored above average but still lost)
-      // Use 90 as threshold since many leagues have lower scoring
-      if (you >= 90) {
-        highScoreLosses.push({ week: w, you, opp, oppRid });
-      }
+      // Track loss for choke job analysis
+      userLosses.push({ week: w, you, opp, oppRid });
     }
     recordVsOpponent.set(oppRid, rec);
   }
 
+  // Process choke jobs: lost while scoring above weekly median
+  for (const loss of userLosses) {
+    const scores = weeklyScores.get(loss.week);
+    if (!scores || scores.length === 0) continue;
+
+    const sorted = [...scores].sort((a, b) => b - a);
+    const medianIndex = Math.floor(sorted.length / 2);
+    const median = sorted[medianIndex];
+    const rank = sorted.indexOf(loss.you) + 1; // 1-indexed rank
+    const isTop3 = rank <= 3;
+
+    // Choke job = lost while scoring above the weekly median
+    if (loss.you > median) {
+      chokeJobs.push({ ...loss, isNuclear: isTop3, rank });
+    }
+  }
+
+  // Cap at MAX_CHOKE_JOBS, prioritize nuclear tier then highest score
+  const cappedChokes = [...chokeJobs]
+    .sort((a, b) => (b.isNuclear ? 1 : 0) - (a.isNuclear ? 1 : 0) || b.you - a.you)
+    .slice(0, MAX_CHOKE_JOBS);
+
   // Find worst enemy (opponent with best record against user)
+  // Must have a WINNING record against user to qualify (aligned with grid NEMESIS logic)
   let worstEnemy: { rosterId: number; wins: number; losses: number } | null = null;
   for (const [oppId, rec] of Array.from(recordVsOpponent.entries())) {
     const theirWins = rec.losses; // Their wins against user = user's losses to them
-    if (theirWins > 0 && (!worstEnemy || theirWins > worstEnemy.wins)) {
-      worstEnemy = { rosterId: oppId, wins: theirWins, losses: rec.wins };
+    const theirLosses = rec.wins; // Their losses to user = user's wins against them
+    // Only qualify if they have a winning record against user (no ties like 1-1)
+    if (theirWins > theirLosses && (!worstEnemy || theirWins > worstEnemy.wins)) {
+      worstEnemy = { rosterId: oppId, wins: theirWins, losses: theirLosses };
     }
   }
 
@@ -726,26 +769,38 @@ async function handleWrapped(params: RoastRequest) {
           }
         : null,
     },
-    // Your Choke Jobs card - always show
+    // Your Choke Jobs card - aligned with storylines.ts (weekly median + nuclear tier)
     {
       type: "choke_jobs",
       title: "Your Choke Jobs",
-      subtitle:
-        highScoreLosses.length === 0
-          ? "Zero choke jobs. You show up when it matters."
-          : highScoreLosses.length === 1
-            ? `You scored ${highScoreLosses[0].you.toFixed(1)} and still lost.`
-            : `${highScoreLosses.length} times you put up a big score and still lost.`,
-      stat: `${highScoreLosses.length}`,
+      subtitle: (() => {
+        if (cappedChokes.length === 0) {
+          return "Zero choke jobs. You show up when it matters.";
+        }
+        const nuclearCount = cappedChokes.filter((c) => c.isNuclear).length;
+        const worstChoke = cappedChokes[0];
+        if (nuclearCount > 0 && worstChoke.isNuclear) {
+          return nuclearCount === 1
+            ? `Top ${worstChoke.rank} scorer. Still lost to ${rosterName(worstChoke.oppRid)}.`
+            : `${nuclearCount} times you were a top 3 scorer and still lost.`;
+        }
+        return cappedChokes.length === 1
+          ? `Beat half the league and lost to ${rosterName(worstChoke.oppRid)}.`
+          : `${cappedChokes.length} times you beat half the league and lost.`;
+      })(),
+      stat: `${cappedChokes.length}`,
       meta:
-        highScoreLosses.length > 0
+        cappedChokes.length > 0
           ? {
-              count: highScoreLosses.length,
-              games: highScoreLosses.map((g) => ({
+              count: cappedChokes.length,
+              nuclearCount: cappedChokes.filter((c) => c.isNuclear).length,
+              games: cappedChokes.map((g) => ({
                 week: g.week,
                 you: g.you,
                 opp: g.opp,
                 opponent: rosterName(g.oppRid),
+                isNuclear: g.isNuclear,
+                rank: g.rank,
               })),
             }
           : null,
