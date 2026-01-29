@@ -1009,7 +1009,7 @@ export function getDemoAutopsy() {
       title: "FANTASY INJUSTICE",
       subtitle: `${highestLossName} (${formatPts(highestLossPoints)}) lost to ${highestLossOppName} (${formatPts(highestLossOppPoints)}) in Week ${highestLossWeek}`,
       tagline: "Some weeks, the fantasy gods just hate you.",
-      stat: formatPts(highestLossPoints),
+      stat: `-${formatPts(highestLossOppPoints - highestLossPoints)}`,
       meta: {
         roster_id: highestLossRosterId,
         week: highestLossWeek,

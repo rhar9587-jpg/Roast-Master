@@ -1053,6 +1053,7 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
   if (highestScoreInLoss) {
     const teamName = rosterName(highestScoreInLoss.roster_id);
     const oppName = rosterName(highestScoreInLoss.opp_rid);
+    const lossMargin = highestScoreInLoss.opp_points - highestScoreInLoss.points;
     cards.push({
       type: "highest_loss",
       title: "FANTASY INJUSTICE",
@@ -1060,7 +1061,7 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
         highestScoreInLoss.opp_points,
       )}) in Week ${highestScoreInLoss.week}`,
       tagline: selectCardCopy("highest_loss", league_id).tagline,
-      stat: formatPts(highestScoreInLoss.points),
+      stat: `-${formatPts(lossMargin)}`,
       meta: {
         roster_id: highestScoreInLoss.roster_id,
         week: highestScoreInLoss.week,
