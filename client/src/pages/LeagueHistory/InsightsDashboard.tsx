@@ -113,12 +113,21 @@ export function InsightsDashboard({
           ? `Owns ${landlord.victimCount} managers. Rent is due.`
           : "No landlord yet"
       }
-      lines={
-        landlord?.victims.map((v) => ({
+      lines={[
+        { label: "Tenants", value: landlord ? String(landlord.victimCount) : "—" },
+        {
+          label: "Favorite Tenant",
+          value: landlord?.bestVictim
+            ? `${landlord.bestVictim.victimName} (${landlord.bestVictim.record})`
+            : "—",
+        },
+      ]}
+      back={{
+        lines: landlord?.victims.map((v) => ({
           label: v.victimName,
           value: v.record,
-        })) ?? []
-      }
+        })) ?? [],
+      }}
       season="2024–25"
       onClick={() =>
         onOpenCell(landlord?.bestVictim?.cellKey ?? null)
