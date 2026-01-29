@@ -13,6 +13,15 @@ type WrappedApiResponse = {
       title: string;
       subtitle?: string;
       stat?: string;
+      meta?: {
+        rank?: number;
+        leagueSize?: number;
+        pointsFor?: number;
+        pointsAgainst?: number;
+        tagline?: string;
+        taglineBucket?: string;
+        [key: string]: unknown;
+      };
     }>;
   };
 };
@@ -84,6 +93,15 @@ export function SeasonWrappedCard({ data, isPremium = false }: SeasonWrappedCard
           title={current.title}
           subtitle={current.subtitle}
           bigValue={current.stat || "—"}
+          statLabel={current.type === "season_summary" ? "Record" : "Points"}
+          extraLine={
+            current.type === "season_summary" && current.meta?.pointsFor
+              ? `${current.meta.pointsFor.toLocaleString()} PF  •  ${current.meta.pointsAgainst?.toLocaleString() ?? "—"} PA`
+              : undefined
+          }
+          tagline={
+            current.type === "season_summary" ? current.meta?.tagline : undefined
+          }
           footer="fantasyroast.net"
           accent={accentFor(current.type)}
           isPremium={isPremium}

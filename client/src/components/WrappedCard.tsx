@@ -10,6 +10,8 @@ type WrappedCardProps = {
   title: string;
   subtitle?: string;
   bigValue?: string;
+  statLabel?: string; // Label above big stat (defaults to "Points")
+  extraLine?: string; // Extra info line (e.g., PF/PA)
   tagline?: string;
   footer?: string;
   accent?: "green" | "pink" | "blue" | "orange" | "slate";
@@ -39,6 +41,8 @@ export function WrappedCard({
   title,
   subtitle,
   bigValue,
+  statLabel = "Points",
+  extraLine,
   tagline,
   footer = "Made with Fantasy Roast",
   accent = "green",
@@ -153,7 +157,7 @@ export function WrappedCard({
             {bigValue ? (
               <div className="mt-6">
                 <div className="text-white/40 text-[10px] font-bold tracking-widest uppercase">
-                  Points
+                  {statLabel}
                 </div>
                 <div className="mt-1 text-4xl sm:text-6xl md:text-8xl font-black text-white break-words">
                   {bigValue}
@@ -161,10 +165,17 @@ export function WrappedCard({
               </div>
             ) : null}
 
+            {/* Extra info line (e.g., PF/PA) */}
+            {extraLine ? (
+              <div className="mt-4 text-white/50 text-sm font-medium">
+                {extraLine}
+              </div>
+            ) : null}
+
             {/* Tagline */}
             {tagline ? (
-              <div className="mt-6 text-white/80 text-lg md:text-xl font-semibold">
-                {tagline}
+              <div className="mt-6 text-white/70 text-base md:text-lg italic">
+                "{tagline}"
               </div>
             ) : null}
 

@@ -21,6 +21,8 @@ import {
 
 // ✅ NEW: League History (Dominance Grid)
 import { handleLeagueHistoryDominance } from "./league-history";
+import { selectTagline } from "./lib/seasonTagline";
+import { selectCardCopy, interpolateTagline } from "./lib/cardCopy";
 
 // -------------------------
 // Analytics (PostgreSQL-backed with in-memory fallback)
@@ -723,24 +725,49 @@ async function handleWrapped(params: RoastRequest) {
     if (idx >= 0) derivedRank = idx + 1;
   }
 
+  // Generate tagline for season summary (safe by default, spicy for premium)
+  const taglineResult = selectTagline({
+    wins,
+    losses,
+    ties,
+    rank: derivedRank ?? rosters.length,
+    leagueSize: rosters.length,
+    pointsFor,
+    pointsAgainst,
+    leagueId: league_id,
+  });
+
   const cards = [
     {
       type: "season_summary",
       title: "Season Summary",
-      subtitle: derivedRank ? `${displayName} finished #${derivedRank}` : `${displayName} season recap`,
-      stat: `${record} record`,
+      subtitle: derivedRank
+        ? `#${derivedRank} of ${rosters.length} teams`
+        : `${displayName} season recap`,
+      stat: record,
+      meta: {
+        rank: derivedRank,
+        leagueSize: rosters.length,
+        pointsFor: Math.round(pointsFor),
+        pointsAgainst: Math.round(pointsAgainst),
+        tagline: taglineResult.tagline,
+        taglineBucket: taglineResult.bucket,
+      },
     },
     {
       type: "season_mvp",
       title: "Team MVP",
       subtitle: mvpName === "No data" ? "Couldn’t read player points for this league." : mvpName,
       stat: `${mvpPoints.toFixed(1)} pts`,
+      meta: {
+        tagline: selectCardCopy("season_mvp", league_id).tagline,
+      },
     },
     {
       type: "best_win",
       title: "Biggest Win",
       subtitle: bestWin
-        ? `Week ${bestWin.week}: you cooked ${rosterName(bestWin.oppRid)}.`
+        ? `Week ${bestWin.week}: ${interpolateTagline(selectCardCopy("best_win", league_id).tagline, { opponent: rosterName(bestWin.oppRid) })}`
         : "No wins found in this season range.",
       stat: bestWin ? `+${formatPts(bestWin.margin)} pts` : "—",
       meta: bestWin
@@ -758,7 +785,7 @@ async function handleWrapped(params: RoastRequest) {
       type: "worst_enemy",
       title: "Your Worst Enemy",
       subtitle: worstEnemy
-        ? `${rosterName(worstEnemy.rosterId)} owns you this season.`
+        ? interpolateTagline(selectCardCopy("worst_enemy", league_id).tagline, { name: rosterName(worstEnemy.rosterId) })
         : "No one owns you. You ran the table.",
       stat: worstEnemy ? `${worstEnemy.wins}-${worstEnemy.losses}` : "0-0",
       meta: worstEnemy
@@ -775,7 +802,7 @@ async function handleWrapped(params: RoastRequest) {
       title: "Your Choke Jobs",
       subtitle: (() => {
         if (cappedChokes.length === 0) {
-          return "Zero choke jobs. You show up when it matters.";
+          return `Zero choke jobs. ${selectCardCopy("choke_jobs", league_id).tagline}`;
         }
         const nuclearCount = cappedChokes.filter((c) => c.isNuclear).length;
         const worstChoke = cappedChokes[0];
@@ -950,7 +977,7 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
       type: "last_place",
       title: "THE BODY",
       subtitle: `${teamName} finished #${rosters.length}`,
-      tagline: "Someone had to finish here.",
+      tagline: selectCardCopy("last_place", league_id).tagline,
       stat: record,
       meta: {
         roster_id: lastPlaceRoster.roster_id,
@@ -967,7 +994,7 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
       type: "season_high",
       title: "PEAK DELUSION",
       subtitle: `${teamName} in Week ${seasonHighScore.week}`,
-      tagline: "This broke the league.",
+      tagline: selectCardCopy("season_high", league_id).tagline,
       stat: formatPts(seasonHighScore.points),
       meta: {
         roster_id: seasonHighScore.roster_id,
@@ -984,7 +1011,7 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
       type: "season_low",
       title: "CRIME SCENE",
       subtitle: `${teamName} in Week ${seasonLowScore.week}`,
-      tagline: "Authorities were notified.",
+      tagline: selectCardCopy("season_low", league_id).tagline,
       stat: formatPts(seasonLowScore.points),
       meta: {
         roster_id: seasonLowScore.roster_id,
@@ -1004,7 +1031,7 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
       subtitle: `${winnerName} ${formatPts(biggestBlowout.winner_score)} vs ${loserName} ${formatPts(
         biggestBlowout.loser_score,
       )}`,
-      tagline: "This game was over at kickoff.",
+      tagline: selectCardCopy("biggest_blowout", league_id).tagline,
       stat: `+${formatPts(biggestBlowout.margin)}`,
       meta: {
         week: biggestBlowout.week,
@@ -1026,7 +1053,7 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
       subtitle: `${teamName} (${formatPts(highestScoreInLoss.points)}) lost to ${oppName} (${formatPts(
         highestScoreInLoss.opp_points,
       )}) in Week ${highestScoreInLoss.week}`,
-      tagline: "Did everything right. Still lost.",
+      tagline: selectCardCopy("highest_loss", league_id).tagline,
       stat: formatPts(highestScoreInLoss.points),
       meta: {
         roster_id: highestScoreInLoss.roster_id,
