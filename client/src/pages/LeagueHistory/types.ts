@@ -46,6 +46,7 @@ export type DominanceApiResponse = {
     key: string;
     name: string;
     avatarUrl?: string | null;
+    emoji?: string | null; // Emoji fallback for demo league
     totalWins: number;
     totalLosses: number;
     totalTies: number;
@@ -116,6 +117,7 @@ export type HeroReceiptCard = {
   title: string;
   name: string;
   avatarUrl?: string | null;
+  emoji?: string | null; // Emoji fallback for demo league
   primaryStat: { value: string; label?: string };
   punchline?: string;
   lines?: Array<{label: string; value: string}>;

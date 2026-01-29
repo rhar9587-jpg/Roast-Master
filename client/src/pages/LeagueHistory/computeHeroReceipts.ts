@@ -34,6 +34,7 @@ export function computeHeroReceipts(
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
   leagueId: string = "",
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard[] {
   const receipts: HeroReceiptCard[] = [];
   const selectedMatchupKeys = new Set<string>();
@@ -45,47 +46,47 @@ export function computeHeroReceipts(
     console.log("[HeroReceipts] weeklyMatchups is empty");
   }
 
-  const woodenSpoon = computeWoodenSpoonMerchant(seasonStats, managers, avatarByKey, leagueId);
+  const woodenSpoon = computeWoodenSpoonMerchant(seasonStats, managers, avatarByKey, leagueId, emojiByKey);
   if (woodenSpoon) receipts.push(woodenSpoon);
   else logHeroReceiptSkip("Wooden Spoon Merchant", "no qualifying last-place manager");
 
-  const playoffDrought = computePlayoffDrought(seasonStats, managers, avatarByKey, leagueId);
+  const playoffDrought = computePlayoffDrought(seasonStats, managers, avatarByKey, leagueId, emojiByKey);
   if (playoffDrought) receipts.push(playoffDrought);
   else logHeroReceiptSkip("Playoff Drought", "no multi-season playoff drought found");
 
-  const bridesmaid = computeBridesmaid(seasonStats, managers, avatarByKey, leagueId);
+  const bridesmaid = computeBridesmaid(seasonStats, managers, avatarByKey, leagueId, emojiByKey);
   if (bridesmaid) receipts.push(bridesmaid);
   else logHeroReceiptSkip("Bridesmaid", "no 2+ runner-up finishes without a title");
 
-  const missedIt = computeMissedItByThatMuch(seasonStats, managers, avatarByKey);
+  const missedIt = computeMissedItByThatMuch(seasonStats, managers, avatarByKey, emojiByKey);
   if (missedIt) receipts.push(missedIt);
   else logHeroReceiptSkip("Missed It By That Much", "no non-playoff high scorer");
 
-  const blowout = computeBiggestBlowout(weeklyMatchups, managers, avatarByKey, selectedMatchupKeys);
+  const blowout = computeBiggestBlowout(weeklyMatchups, managers, avatarByKey, selectedMatchupKeys, emojiByKey);
   if (blowout) receipts.push(blowout);
   else logHeroReceiptSkip("Biggest Blowout", "no losing blowout found");
 
-  const stoleOne = computeStoleOne(weeklyMatchups, managers, avatarByKey);
+  const stoleOne = computeStoleOne(weeklyMatchups, managers, avatarByKey, emojiByKey);
   if (stoleOne) receipts.push(stoleOne);
   else logHeroReceiptSkip("Stole One", "no win found in weekly matchups");
 
-  const fallOff = computeBiggestFallOff(seasonStats, managers, avatarByKey);
+  const fallOff = computeBiggestFallOff(seasonStats, managers, avatarByKey, emojiByKey);
   if (fallOff) receipts.push(fallOff);
   else logHeroReceiptSkip("Biggest Fall Off", "no multi-season rank drop found");
 
-  const allGas = computeAllGasNoPlayoffs(seasonStats, managers, avatarByKey);
+  const allGas = computeAllGasNoPlayoffs(seasonStats, managers, avatarByKey, emojiByKey);
   if (allGas) receipts.push(allGas);
   else logHeroReceiptSkip("All Gas, No Playoffs", "no non-playoff high scorer found");
 
-  const playoffChoker = computePlayoffChoker(seasonStats, weeklyMatchups, managers, avatarByKey);
+  const playoffChoker = computePlayoffChoker(seasonStats, weeklyMatchups, managers, avatarByKey, emojiByKey);
   if (playoffChoker) receipts.push(playoffChoker);
   else logHeroReceiptSkip("Playoff Choker", "no qualifying playoff choker found");
 
-  const gameOfTheYear = computeGameOfTheYear(weeklyMatchups, managers, avatarByKey, selectedMatchupKeys);
+  const gameOfTheYear = computeGameOfTheYear(weeklyMatchups, managers, avatarByKey, selectedMatchupKeys, emojiByKey);
   if (gameOfTheYear) receipts.push(gameOfTheYear);
   else logHeroReceiptSkip("Game of the Year", "no qualifying high-scoring game found");
 
-  const paperChampion = computePaperChampion(seasonStats, managers, avatarByKey);
+  const paperChampion = computePaperChampion(seasonStats, managers, avatarByKey, emojiByKey);
   if (paperChampion) receipts.push(paperChampion);
   else logHeroReceiptSkip("Paper Champion", "no qualifying paper champion found");
 
@@ -129,6 +130,7 @@ function computePlayoffDrought(
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
   leagueId: string,
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
@@ -170,6 +172,7 @@ function computePlayoffDrought(
     title: copy.headline,
     name: manager.name,
     avatarUrl: avatarByKey[best.managerKey] ?? null,
+    emoji: emojiByKey[best.managerKey] ?? null,
     primaryStat: {
       value: String(best.length),
       label: best.length === 1 ? "SEASON" : "SEASONS",
@@ -196,6 +199,7 @@ function computeBridesmaid(
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
   leagueId: string,
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
@@ -250,6 +254,7 @@ function computeBridesmaid(
     title: copy.headline,
     name: manager.name,
     avatarUrl: avatarByKey[best.managerKey] ?? null,
+    emoji: emojiByKey[best.managerKey] ?? null,
     primaryStat: {
       value: String(best.runnerUpCount),
       label: best.runnerUpCount === 1 ? "RUNNER-UP" : "RUNNER-UPS",
@@ -270,6 +275,7 @@ function computeWoodenSpoonMerchant(
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
   leagueId: string,
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
@@ -321,6 +327,7 @@ function computeWoodenSpoonMerchant(
     title: copy.headline,
     name: manager.name,
     avatarUrl: avatarByKey[winner.key] ?? null,
+    emoji: emojiByKey[winner.key] ?? null,
     primaryStat: {
       value: String(maxCount),
       label: maxCount === 1 ? "WOODEN SPOON" : "WOODEN SPOONS",
@@ -337,6 +344,7 @@ function computeMissedItByThatMuch(
   seasonStats: SeasonStat[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
@@ -362,6 +370,7 @@ function computeMissedItByThatMuch(
     title: "MISSED IT BY THAT MUCH 😬",
     name: manager.name,
     avatarUrl: avatarByKey[winner.managerKey] ?? null,
+    emoji: emojiByKey[winner.managerKey] ?? null,
     primaryStat: {
       value: Math.round(winner.totalPF).toLocaleString(),
       label: "PTS AND STILL MISSED",
@@ -381,6 +390,7 @@ function computeBiggestBlowout(
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
   selectedMatchupKeys: Set<string>,
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (weeklyMatchups.length === 0) return null;
 
@@ -411,6 +421,7 @@ function computeBiggestBlowout(
     title: "BIGGEST BLOWOUT 💥",
     name: manager.name,
     avatarUrl: avatarByKey[worst.managerKey] ?? null,
+    emoji: emojiByKey[worst.managerKey] ?? null,
     primaryStat: {
       value: Math.abs(worst.margin).toFixed(1),
       label: "PTS LOSS",
@@ -429,6 +440,7 @@ function computeStoleOne(
   weeklyMatchups: WeeklyMatchupDetail[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (weeklyMatchups.length === 0) return null;
 
@@ -455,6 +467,7 @@ function computeStoleOne(
     title: "STOLE ONE 🎯",
     name: manager.name,
     avatarUrl: avatarByKey[winner.managerKey] ?? null,
+    emoji: emojiByKey[winner.managerKey] ?? null,
     primaryStat: {
       value: winner.points.toFixed(1),
       label: "PTS IN WIN",
@@ -473,6 +486,7 @@ function computeBiggestFallOff(
   seasonStats: SeasonStat[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
@@ -527,6 +541,7 @@ function computeBiggestFallOff(
     title: "BIGGEST FALL OFF 📉",
     name: manager.name,
     avatarUrl: avatarByKey[winner.managerKey] ?? null,
+    emoji: emojiByKey[winner.managerKey] ?? null,
     primaryStat: {
       value: `${getRankLabel(winner.fromRank)} → ${getRankLabel(winner.toRank)}`,
       label: "RANK DROP",
@@ -545,6 +560,7 @@ function computeAllGasNoPlayoffs(
   seasonStats: SeasonStat[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
@@ -570,6 +586,7 @@ function computeAllGasNoPlayoffs(
     title: "ALL GAS, NO PLAYOFFS ⛽",
     name: manager.name,
     avatarUrl: avatarByKey[winner.managerKey] ?? null,
+    emoji: emojiByKey[winner.managerKey] ?? null,
     primaryStat: {
       value: Math.round(winner.totalPF).toLocaleString(),
       label: "PTS, NO PLAYOFFS",
@@ -606,6 +623,7 @@ function computePlayoffChoker(
   weeklyMatchups: WeeklyMatchupDetail[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0 || weeklyMatchups.length === 0) return null;
 
@@ -705,6 +723,7 @@ function computePlayoffChoker(
     title: "PLAYOFF CHOKER 💔",
     name: manager.name,
     avatarUrl: avatarByKey[worst.managerKey] ?? null,
+    emoji: emojiByKey[worst.managerKey] ?? null,
     primaryStat: {
       value: String(maxLosses),
       label: "PLAYOFF LOSSES",
@@ -723,6 +742,7 @@ function computeGameOfTheYear(
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
   selectedMatchupKeys: Set<string>,
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (weeklyMatchups.length === 0) return null;
 
@@ -759,6 +779,7 @@ function computeGameOfTheYear(
     title: "GAME OF THE YEAR 🏆",
     name: manager.name,
     avatarUrl: avatarByKey[best.managerKey] ?? null,
+    emoji: emojiByKey[best.managerKey] ?? null,
     primaryStat: {
       value: Math.round(maxCombinedScore).toLocaleString(),
       label: "COMBINED SCORE",
@@ -777,6 +798,7 @@ function computePaperChampion(
   seasonStats: SeasonStat[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
@@ -841,6 +863,7 @@ function computePaperChampion(
     title: "PAPER CHAMPION 📄",
     name: manager.name,
     avatarUrl: avatarByKey[best.managerKey] ?? null,
+    emoji: emojiByKey[best.managerKey] ?? null,
     primaryStat: {
       value: Math.round(best.totalPF).toLocaleString(),
       label: "PTS, NO TITLE",

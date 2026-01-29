@@ -36,7 +36,7 @@ type Props = {
   mostOwned: MostOwned | null;
   biggestRivalry: BiggestRivalry | null;
   avatarByKey: Record<string, string | null>;
-  emojiByKey?: Record<string, string | null>;
+  emojiByKey: Record<string, string | null>;
   onOpenCell: (cellKey: string | null) => void;
   isPremium: boolean;
   onUnlock?: () => void;
@@ -87,7 +87,7 @@ export function InsightsDashboard({
   mostOwned,
   biggestRivalry,
   avatarByKey,
-  emojiByKey = {},
+  emojiByKey,
   onOpenCell,
   isPremium,
   onUnlock,
@@ -101,7 +101,9 @@ export function InsightsDashboard({
       avatarUrl={
         landlord ? (avatarByKey[landlord.landlordKey] ?? null) : null
       }
-      emoji={landlord ? (emojiByKey[landlord.landlordKey] ?? null) : null}
+      emoji={
+        landlord ? (emojiByKey[landlord.landlordKey] ?? null) : null
+      }
       primaryStat={{
         value: landlord ? String(landlord.totalOwnedGames) : "—",
         label: "OWNED GAMES",
@@ -141,7 +143,9 @@ export function InsightsDashboard({
       avatarUrl={
         mostOwned ? (avatarByKey[mostOwned.victimKey] ?? null) : null
       }
-      emoji={mostOwned ? (emojiByKey[mostOwned.victimKey] ?? null) : null}
+      emoji={
+        mostOwned ? (emojiByKey[mostOwned.victimKey] ?? null) : null
+      }
       primaryStat={{
         value: mostOwned ? String(mostOwned.timesOwned) : "—",
         label: "TIMES OWNED",
@@ -180,7 +184,11 @@ export function InsightsDashboard({
           ? (avatarByKey[biggestRivalry.aKey] ?? null)
           : null
       }
-      emoji={biggestRivalry ? (emojiByKey[biggestRivalry.aKey] ?? null) : null}
+      emoji={
+        biggestRivalry
+          ? (emojiByKey[biggestRivalry.aKey] ?? null)
+          : null
+      }
       primaryStat={{
         value: biggestRivalry?.record ?? "—",
         label: "RECORD",

@@ -29,6 +29,7 @@ type V2Props = {
   title: string;
   name: string;
   avatarUrl?: string | null;
+  emoji?: string | null; // Emoji fallback when no avatarUrl (for demo league)
   primaryStat: { value: string; label?: string };
   punchline?: string;
   lines?: StatLine[];
@@ -154,6 +155,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
     title,
     name,
     avatarUrl,
+    emoji,
     primaryStat,
     punchline,
     lines = [],
@@ -448,6 +450,14 @@ export function BaseballCard(props: LegacyProps | V2Props) {
               badge === "OWNED" ? "ring-2 ring-inset ring-emerald-300/40" : badge === "NEMESIS" ? "ring-2 ring-inset ring-rose-300/40" : badge === "RIVAL" ? "ring-2 ring-inset ring-amber-300/40" : "",
             ].join(" ")}
           />
+        ) : emoji ? (
+          <div className={[
+            "h-[88px] w-[88px] rounded-md border-[3px] bg-gradient-to-br from-background to-muted/30 flex items-center justify-center text-4xl shadow-md",
+            tone.border,
+            badge === "OWNED" ? "ring-2 ring-inset ring-emerald-300/40" : badge === "NEMESIS" ? "ring-2 ring-inset ring-rose-300/40" : badge === "RIVAL" ? "ring-2 ring-inset ring-amber-300/40" : "",
+          ].join(" ")}>
+            {emoji}
+          </div>
         ) : (
           <div className={[
             "h-[88px] w-[88px] rounded-md border-[3px] bg-background flex items-center justify-center text-sm text-muted-foreground shadow-md",

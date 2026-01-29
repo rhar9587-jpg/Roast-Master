@@ -686,9 +686,9 @@ export default function LeagueHistoryPage() {
   const heroReceipts = useMemo(
     () =>
       data?.seasonStats && data?.weeklyMatchups
-        ? computeHeroReceipts(data.seasonStats, data.weeklyMatchups, managers, avatarByKey, leagueId)
+        ? computeHeroReceipts(data.seasonStats, data.weeklyMatchups, managers, avatarByKey, leagueId, emojiByKey)
         : [],
-    [data?.seasonStats, data?.weeklyMatchups, managers, avatarByKey, leagueId]
+    [data?.seasonStats, data?.weeklyMatchups, managers, avatarByKey, leagueId, emojiByKey]
   );
 
   // Compute additional mini cards from seasonStats and weeklyMatchups

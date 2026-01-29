@@ -91,6 +91,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock, lockedTotalCou
       title={receipt.title}
       name={receipt.name}
       avatarUrl={receipt.avatarUrl ?? null}
+      emoji={receipt.emoji ?? null}
       primaryStat={receipt.primaryStat}
       punchline={receipt.punchline}
       lines={receipt.lines}
@@ -138,6 +139,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock, lockedTotalCou
               title={receipt.title}
               name={receipt.name}
               avatarUrl={receipt.avatarUrl ?? null}
+              emoji={receipt.emoji ?? null}
               primaryStat={receipt.primaryStat}
               punchline={receipt.punchline}
               lines={receipt.lines}
