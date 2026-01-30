@@ -116,6 +116,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock, lockedTotalCou
     );
   }
 
+  // For free users, ALL hero receipts are locked (only Landlord in InsightsDashboard is visible)
   return (
     <div>
       <div className="mb-3">
@@ -123,14 +124,9 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock, lockedTotalCou
         <p className="text-xs text-muted-foreground mt-1">
           The moments your league will never forget.
         </p>
-        {!isPremium && typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Your league has {lockedTotalCount} roasts waiting.
-          </p>
-        )}
       </div>
       <RoastDeckCarousel>
-        {heroReceipts.map((receipt, index) => {
+        {heroReceipts.map((receipt) => {
           const card = (
             <BaseballCard
               key={receipt.id}
@@ -150,19 +146,13 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock, lockedTotalCou
             />
           );
 
-          const remainingCount = heroReceipts.length - 1;
-          const subtitle =
-            index === 0
-              ? undefined
-              : `🔒 ${Math.max(remainingCount, 0)} more roasts your league will argue about.`;
-
           return (
             <CardWithHeading
               key={receipt.id}
               title={receipt.title}
-              subtitle={subtitle}
+              subtitle={`🔒 ${heroReceipts.length} more roasts your league will argue about.`}
               onUnlock={onUnlock}
-              showOverlay={index !== 0}
+              showOverlay={true}
             >
               {card}
             </CardWithHeading>

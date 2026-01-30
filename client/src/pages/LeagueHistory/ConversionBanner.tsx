@@ -80,13 +80,6 @@ export function ConversionBanner({
     }
   };
 
-  const showMissingCounts =
-    !isDemo &&
-    typeof lockedReceiptsCount === "number" &&
-    typeof lockedStorylinesCount === "number" &&
-    lockedReceiptsCount > 0 &&
-    lockedStorylinesCount > 0;
-
   // Demo-specific content
   if (isDemo) {
     return (
@@ -175,35 +168,34 @@ export function ConversionBanner({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Benefits */}
+        {/* Benefits - sell the full package */}
         <div className="max-w-2xl mx-auto">
           <ul className="space-y-3 text-sm">
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>Every matchup. Every roast.</span>
+              <span><strong>All-time Dominance</strong> — who owns who, every season</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>The moments your league will argue about.</span>
+              <span><strong>Hero Roasts</strong> — Landlord, Biggest Victim, Playoff Choker, and more</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>Drop chaos in the group chat.</span>
+              <span><strong>Weekly Roasts</strong> — chaos from every matchup week</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <span><strong>Season Wrapped</strong> — personal highlights for every manager</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <span><strong>End-of-Season Recap</strong> — the full league story</span>
             </li>
           </ul>
         </div>
 
-        <p className="text-sm text-muted-foreground mt-2 text-center">
-          Why pay? Because every group chat needs a roast.
-        </p>
-
         {/* CTA */}
         <div className="text-center">
-          {showMissingCounts && (
-            <div className="text-xs font-semibold text-muted-foreground mb-2">
-              Unlock {lockedReceiptsCount} more roasts + {lockedStorylinesCount} storylines in this league.
-            </div>
-          )}
           <Button
             onClick={handleUpgrade}
             size="lg"
@@ -217,11 +209,6 @@ export function ConversionBanner({
           <p className="text-xs font-medium text-primary text-center mt-1">
             Super Bowl price ends {PROMO_DEADLINE}
           </p>
-          {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
-            <p className="text-xs text-muted-foreground text-center mt-1">
-              Your league has {lockedTotalCount} roasts waiting.
-            </p>
-          )}
         </div>
         <p className="text-sm font-semibold text-center">
           Risk-free • 30-day money-back guarantee

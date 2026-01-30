@@ -253,16 +253,13 @@ export function InsightsDashboard({
         </BlurredCardWrapper>
       </RoastDeckCarousel>
       <div className="rounded-lg border border-dashed bg-muted/20 p-4 space-y-3 text-center">
-        <p className="text-sm font-medium text-foreground">More roasts are waiting.</p>
-        {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
-          <p className="text-xs text-muted-foreground">
-            Your league has {lockedTotalCount} roasts waiting.
-          </p>
-        )}
-        <ul className="text-xs text-muted-foreground space-y-1">
-          <li>Your Season wrapped</li>
-          <li>End-of-season recap</li>
-          <li>More hero cards your league will argue about</li>
+        <p className="text-sm font-medium text-foreground">The full roast is waiting.</p>
+        <ul className="text-xs text-muted-foreground space-y-1 text-left max-w-xs mx-auto">
+          <li>• All hero cards (Biggest Victim, Playoff Choker, and more)</li>
+          <li>• League storylines and personal roasts</li>
+          <li>• Weekly roasts for every matchup</li>
+          <li>• Season Wrapped for each manager</li>
+          <li>• End-of-season recap</li>
         </ul>
         <Button size="sm" onClick={onUnlock}>
           Unlock Full Roast — <span className="line-through text-muted-foreground">${PRICE_FULL}</span>{" "}

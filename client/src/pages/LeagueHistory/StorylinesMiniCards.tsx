@@ -219,7 +219,7 @@ export function StorylinesMiniCards({
             The roasts everyone is talking about
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {leagueCards.map((c, index) => {
+            {leagueCards.map((c) => {
               const card = (
                 <MiniCardItem
                   key={c.id}
@@ -230,28 +230,23 @@ export function StorylinesMiniCards({
                 />
               );
 
-              if (isPremium || index === 0) {
+              if (isPremium) {
                 return card;
               }
 
-              const remainingCount = leagueCards.length - 1;
+              // Free users: ALL storyline cards are locked
               return (
                 <BlurredMiniCardWrapper
                   key={c.id}
                   onUnlock={onUnlock}
                   title={c.title}
-                  remainingCount={Math.max(remainingCount, 0)}
+                  remainingCount={leagueCards.length}
                 >
                   {card}
                 </BlurredMiniCardWrapper>
               );
             })}
           </div>
-          {!isPremium && (
-            <p className="text-xs text-muted-foreground text-center mt-2 mb-3">
-              This is just the beginning… Unlock to see who really owns this league.
-            </p>
-          )}
         </section>
       )}
 
@@ -262,7 +257,7 @@ export function StorylinesMiniCards({
           </h2>
           {yourRoastCards.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {yourRoastCards.map((c, index) => {
+              {yourRoastCards.map((c) => {
                 const card = (
                   <MiniCardItem
                     key={c.id}
@@ -273,17 +268,17 @@ export function StorylinesMiniCards({
                   />
                 );
 
-                if (isPremium || index === 0) {
+                if (isPremium) {
                   return card;
                 }
 
-                const remainingCount = yourRoastCards.length - 1;
+                // Free users: ALL personal roast cards are locked
                 return (
                   <BlurredMiniCardWrapper
                     key={c.id}
                     onUnlock={onUnlock}
                     title={c.title}
-                    remainingCount={Math.max(remainingCount, 0)}
+                    remainingCount={yourRoastCards.length}
                   >
                     {card}
                   </BlurredMiniCardWrapper>
