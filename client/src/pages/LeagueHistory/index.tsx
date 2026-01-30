@@ -38,7 +38,7 @@ import { RoastCard } from "@/components/RoastCard";
 import { SeasonWrappedCard } from "@/components/SeasonWrappedCard";
 import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
 import { LockedModePreview } from "./LockedModePreview";
-import { isPremium, setPremium, addUnlockedLeague } from "./premium";
+import { isLeagueUnlocked, unlockLeague, lockLeague } from "./premium";
 import { createCheckoutSession } from "@/lib/checkout";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername } from "./utils";
 import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards, type MiniCard } from "./storylines";
@@ -83,7 +83,7 @@ export default function LeagueHistoryPage() {
   const [username, setUsername] = useState<string>("");
   const [highlightedManagerKey, setHighlightedManagerKey] = useState<string | null>(null);
   const [showPostAnalysisToast, setShowPostAnalysisToast] = useState(false);
-  const [isPremiumState, setIsPremiumState] = useState(isPremium());
+  const [isPremiumState, setIsPremiumState] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [activeMode, setActiveMode] = useState<Mode>("history");
   const [weeklyWeek, setWeeklyWeek] = useState<number>(17);
@@ -276,15 +276,18 @@ export default function LeagueHistoryPage() {
     const urlLeagueId = params.get("league_id")?.trim();
 
     if (success === "true") {
-      setPremium(true);
-      setIsPremiumState(true);
       if (urlLeagueId) {
-        addUnlockedLeague(urlLeagueId);
+        unlockLeague(urlLeagueId);
+        setIsPremiumState(isLeagueUnlocked(urlLeagueId));
+        trackFunnel.purchaseSuccess(urlLeagueId);
       }
       toast({
         title: "🔥 League unlocked. Drop the receipts.",
       });
     } else if (canceled === "true") {
+      if (urlLeagueId) {
+        trackFunnel.purchaseCancel(urlLeagueId);
+      }
       toast({
         title: "Payment canceled.",
       });
@@ -999,8 +1002,8 @@ export default function LeagueHistoryPage() {
 
   // Sync premium state on mount
   useEffect(() => {
-    setIsPremiumState(isPremium());
-  }, []);
+    setIsPremiumState(isLeagueUnlocked(leagueId.trim()));
+  }, [leagueId]);
 
   // Reset mode-specific data when league changes
   useEffect(() => {
@@ -1027,6 +1030,11 @@ export default function LeagueHistoryPage() {
       })
       .catch(() => {
         setSeasonTeams([]);
+        toast({
+          title: "Failed to load rosters",
+          description: "Please try again.",
+          variant: "destructive",
+        });
       })
       .finally(() => {
         setSeasonTeamsLoading(false);
@@ -1266,7 +1274,11 @@ export default function LeagueHistoryPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setPremium(!isPremiumState);
+                  if (isPremiumState) {
+                    lockLeague(leagueId.trim());
+                  } else {
+                    unlockLeague(leagueId.trim());
+                  }
                   setIsPremiumState(!isPremiumState);
                 }}
               >

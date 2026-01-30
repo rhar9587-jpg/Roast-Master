@@ -1419,6 +1419,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         return res.status(500).json({ error: "Failed to create checkout session" });
       }
 
+      // Track checkout session creation
+      trackEvent("checkout_session_created", "/api/checkout/create-session", "POST", {
+        league_id,
+        session_id: session.id,
+      });
+
       return res.json({ url: session.url });
     } catch (err) {
       console.error("[/api/checkout/create-session] Error:", err);

@@ -40,9 +40,11 @@
 ## Technical Notes
 
 **Premium State:**
-- localStorage key: "fantasy-roast-premium"
-- State syncs on mount via `useState(isPremium())`
-- Dev toggle for easy testing
+- localStorage key: "fantasy-roast-unlockedLeagues" (array of league IDs)
+- Premium is tracked **per league** via `isLeagueUnlocked(leagueId)`
+- State recomputes when league ID changes via `useEffect(() => { setIsPremiumState(isLeagueUnlocked(leagueId.trim())); }, [leagueId])`
+- Stripe checkout unlocks only the specific league purchased
+- Dev toggle locks/unlocks current league only (for easy testing)
 
 **Locked Overlays:**
 - Consistent pattern: semi-transparent background + blur + lock icon + CTA
