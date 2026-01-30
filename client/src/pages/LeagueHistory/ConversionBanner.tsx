@@ -6,10 +6,10 @@ import { Check } from "lucide-react";
 const PRICE_FULL = 29;
 const PRICE_PROMO = 19;
 const PROMO_DEADLINE = "Feb 10";
-const EXAMPLE_LEAGUE_ID = "demo-group-chat-dynasty";
 
 type Props = {
   onUpgrade?: () => void;
+  onScrollToTop?: () => void;
   ownedCount?: number;
   rivalryExists?: boolean;
   leagueName?: string;
@@ -17,10 +17,12 @@ type Props = {
   lockedReceiptsCount?: number;
   lockedStorylinesCount?: number;
   lockedTotalCount?: number;
+  isDemo?: boolean;
 };
 
 export function ConversionBanner({
   onUpgrade,
+  onScrollToTop,
   ownedCount,
   rivalryExists,
   leagueName,
@@ -28,22 +30,106 @@ export function ConversionBanner({
   lockedReceiptsCount,
   lockedStorylinesCount,
   lockedTotalCount,
+  isDemo = false,
 }: Props) {
   const handleUpgrade = () => {
     if (onUpgrade) {
       onUpgrade();
     } else {
-      // Default: scroll to top or show placeholder
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handleScrollToTop = () => {
+    if (onScrollToTop) {
+      onScrollToTop();
+    } else {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
   const showMissingCounts =
+    !isDemo &&
     typeof lockedReceiptsCount === "number" &&
     typeof lockedStorylinesCount === "number" &&
     lockedReceiptsCount > 0 &&
     lockedStorylinesCount > 0;
 
+  // Demo-specific content
+  if (isDemo) {
+    return (
+      <Card
+        className="border-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 shadow-lg animate-in fade-in duration-500"
+        id="conversion-banner"
+      >
+        <CardHeader className="text-center pb-4">
+          <CardTitle className="text-2xl font-bold tracking-tight">
+            Want this for YOUR league?{" "}
+            <span className="line-through text-muted-foreground font-normal">${PRICE_FULL}</span>{" "}
+            <span className="text-primary">${PRICE_PROMO}</span> — Super Bowl price.
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Benefits - framed for demo */}
+          <div className="max-w-2xl mx-auto">
+            <ul className="space-y-3 text-sm">
+              <li className="flex items-start gap-2">
+                <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <span>See who really owns YOUR league.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <span>Expose the choke jobs YOUR friends won't admit.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <span>Drop real receipts in the group chat.</span>
+              </li>
+            </ul>
+          </div>
+
+          <p className="text-sm text-muted-foreground mt-2 text-center">
+            This is demo data. The real roasts are in YOUR league.
+          </p>
+
+          {/* CTA - demo focused */}
+          <div className="text-center">
+            <p className="text-xs font-semibold text-muted-foreground mb-2">
+              Enter your Sleeper username above to get started.
+            </p>
+            <Button
+              onClick={handleScrollToTop}
+              size="lg"
+              className="font-semibold px-8 interact-cta"
+            >
+              Get My League's Roasts — ${PRICE_PROMO}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Split with your league — usually ~$2 each.
+            </p>
+            <p className="text-xs font-medium text-primary text-center mt-1">
+              Super Bowl price ends {PROMO_DEADLINE}
+            </p>
+          </div>
+          <p className="text-sm font-semibold text-center">
+            Risk-free • 30-day money-back guarantee
+          </p>
+
+          {/* Trust & Social Proof */}
+          <div className="text-center space-y-2 pt-2 border-t">
+            <p className="text-xs text-muted-foreground">
+              Built for group chats and league banter.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              30-day money-back guarantee • Secure checkout
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Non-demo content (original)
   return (
     <Card
       className="border-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 shadow-lg animate-in fade-in duration-500"
@@ -108,23 +194,6 @@ export function ConversionBanner({
         <p className="text-sm font-semibold text-center">
           Risk-free • 30-day money-back guarantee
         </p>
-
-        {leagueId === EXAMPLE_LEAGUE_ID && (
-          <div className="text-center text-xs text-muted-foreground">
-            <button onClick={handleUpgrade} className="text-primary hover:underline font-medium">
-              Unlock Full Roast — ${PRICE_PROMO}
-            </button>
-            {" "}or{" "}
-            <button
-              onClick={() => {
-                window.location.href = "/league-history/dominance";
-              }}
-              className="text-primary hover:underline font-medium"
-            >
-              load your league
-            </button>
-          </div>
-        )}
 
         {/* Trust & Social Proof */}
         <div className="text-center space-y-2 pt-2 border-t">

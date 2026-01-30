@@ -10,10 +10,12 @@ const PROMO_DEADLINE = "Feb 10";
 
 type Props = {
   onUpgrade?: () => void;
+  onScrollToTop?: () => void;
   leagueName?: string;
   lockedReceiptsCount?: number;
   lockedStorylinesCount?: number;
   lockedTotalCount?: number;
+  isDemo?: boolean;
 };
 
 function isDismissed(): boolean {
@@ -33,10 +35,12 @@ function setDismissed(): void {
 
 export function StickyUpgradeBar({
   onUpgrade,
+  onScrollToTop,
   leagueName,
   lockedReceiptsCount,
   lockedStorylinesCount,
   lockedTotalCount,
+  isDemo = false,
 }: Props) {
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissedState, setIsDismissedState] = useState(false);
@@ -91,14 +95,69 @@ export function StickyUpgradeBar({
     }
   };
 
+  const handleScrollToTop = () => {
+    if (onScrollToTop) {
+      onScrollToTop();
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
   if (!isVisible || isDismissedState) return null;
 
   const showMissingCounts =
+    !isDemo &&
     typeof lockedReceiptsCount === "number" &&
     typeof lockedStorylinesCount === "number" &&
     lockedReceiptsCount > 0 &&
     lockedStorylinesCount > 0;
 
+  // Demo-specific sticky bar
+  if (isDemo) {
+    return (
+      <div
+        className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-t shadow-lg animate-in slide-in-from-bottom-2 fade-in duration-300"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="mx-auto max-w-6xl px-4 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">
+                This is demo data. Get the real roasts for YOUR league •{" "}
+                <span className="line-through text-muted-foreground">${PRICE_FULL}</span>{" "}
+                <span className="font-bold">${PRICE_PROMO}</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-col items-center">
+                <Button
+                  onClick={handleScrollToTop}
+                  size="sm"
+                  className="font-semibold whitespace-nowrap interact-cta"
+                >
+                  Enter My League
+                </Button>
+                <p className="text-xs text-muted-foreground text-center mt-1">
+                  Ends {PROMO_DEADLINE}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 interact-icon"
+                onClick={handleDismiss}
+                aria-label="Dismiss"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Non-demo sticky bar (original)
   return (
     <div
       className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-t shadow-lg animate-in slide-in-from-bottom-2 fade-in duration-300"

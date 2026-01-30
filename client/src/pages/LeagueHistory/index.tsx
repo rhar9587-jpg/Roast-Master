@@ -101,7 +101,7 @@ export default function LeagueHistoryPage() {
   const [autopsyError, setAutopsyError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Demo league always shows full content (bypasses premium gating for showcase)
+  // Demo league always shows full content (bypasses premium gating)
   const isDemo = leagueId === EXAMPLE_LEAGUE_ID;
   const showPremiumContent = isPremiumState || isDemo;
 
@@ -1279,13 +1279,17 @@ export default function LeagueHistoryPage() {
       )}
 
       {leagueId === EXAMPLE_LEAGUE_ID && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <span>
-            📺 <strong>Fictional demo league.</strong> Load your league to see your real roasts →
+        <div className="rounded-lg border-2 border-primary/30 bg-primary/5 px-4 py-3 text-sm flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <span className="text-foreground">
+            📺 <strong>This is demo data.</strong> Who really owns YOUR league? Find out →
           </span>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={handleLoadYourLeagueFromExample}>
-              Enter your league
+            <Button 
+              size="sm" 
+              className="interact-cta font-semibold"
+              onClick={handleLoadYourLeagueFromExample}
+            >
+              Get My League's Roasts
             </Button>
           </div>
         </div>
@@ -1676,7 +1680,7 @@ export default function LeagueHistoryPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          if (isPremiumState) {
+                          if (showPremiumContent) {
                             saveStorylinesPng();
                           } else {
                             handleUpgrade();
@@ -1688,7 +1692,7 @@ export default function LeagueHistoryPage() {
                       </Button>
                     </span>
                   </TooltipTrigger>
-                  {!isPremiumState && (
+                  {!showPremiumContent && (
                     <TooltipContent>
                       <p>Unlock to export League Storylines</p>
                     </TooltipContent>
@@ -1731,6 +1735,7 @@ export default function LeagueHistoryPage() {
         <section>
           <ConversionBanner 
             onUpgrade={handleUpgrade}
+            onScrollToTop={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             ownedCount={ownedCount}
             rivalryExists={rivalryExists}
             leagueName={data?.league?.name}
@@ -1738,6 +1743,7 @@ export default function LeagueHistoryPage() {
             lockedReceiptsCount={lockedReceiptsCount}
             lockedStorylinesCount={lockedStorylinesCount}
             lockedTotalCount={lockedTotalCount}
+            isDemo={isDemo}
           />
         </section>
       )}
@@ -1758,15 +1764,17 @@ export default function LeagueHistoryPage() {
       {activeMode === "history" && hasData && hasEnoughData && (
         <StickyUpgradeBar
           onUpgrade={handleUpgrade}
+          onScrollToTop={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           leagueName={data?.league?.name}
           lockedReceiptsCount={lockedReceiptsCount}
           lockedStorylinesCount={lockedStorylinesCount}
           lockedTotalCount={lockedTotalCount}
+          isDemo={isDemo}
         />
       )}
 
-      {/* Unlock Modal */}
-      {activeMode === "history" && (
+      {/* Unlock Modal (hidden in demo mode) */}
+      {activeMode === "history" && !isDemo && (
         <UnlockReceiptsModal
           open={showUnlockModal}
           onOpenChange={setShowUnlockModal}
