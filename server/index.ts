@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -89,6 +90,9 @@ app.use((req, res, next) => {
   
   httpServer.listen(port, host, () => {
     log(`serving on http://${host}:${port}`);
+    console.log("Stripe key present:", !!process.env.STRIPE_SECRET_KEY);
+    console.log("Stripe price present:", !!process.env.STRIPE_PRICE_ID);
+    console.log("CLIENT_URL:", process.env.CLIENT_URL || "not set");
   });
   })();
   

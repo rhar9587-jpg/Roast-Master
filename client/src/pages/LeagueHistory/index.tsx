@@ -38,7 +38,8 @@ import { RoastCard } from "@/components/RoastCard";
 import { SeasonWrappedCard } from "@/components/SeasonWrappedCard";
 import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
 import { LockedModePreview } from "./LockedModePreview";
-import { isPremium, setPremium } from "./premium";
+import { isPremium, setPremium, addUnlockedLeague } from "./premium";
+import { createCheckoutSession } from "@/lib/checkout";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername } from "./utils";
 import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards, type MiniCard } from "./storylines";
 import { computeHeroReceipts } from "./computeHeroReceipts";
@@ -84,7 +85,6 @@ export default function LeagueHistoryPage() {
   const [showPostAnalysisToast, setShowPostAnalysisToast] = useState(false);
   const [isPremiumState, setIsPremiumState] = useState(isPremium());
   const [showUnlockModal, setShowUnlockModal] = useState(false);
-  const [unlockShownThisSession, setUnlockShownThisSession] = useState(false);
   const [activeMode, setActiveMode] = useState<Mode>("history");
   const [weeklyWeek, setWeeklyWeek] = useState<number>(17);
   const [weeklyRoastData, setWeeklyRoastData] = useState<RoastResponse | null>(null);
@@ -265,6 +265,41 @@ export default function LeagueHistoryPage() {
     // Priority 3: Empty state (user must enter league)
     // leagueId already defaults to "" from useState
   }, []);
+
+  // Post-checkout handling (success/canceled) + clean URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get("success");
+    const canceled = params.get("canceled");
+    if (!success && !canceled) return;
+
+    const urlLeagueId = params.get("league_id")?.trim();
+
+    if (success === "true") {
+      setPremium(true);
+      setIsPremiumState(true);
+      if (urlLeagueId) {
+        addUnlockedLeague(urlLeagueId);
+      }
+      toast({
+        title: "🔥 League unlocked. Drop the receipts.",
+      });
+    } else if (canceled === "true") {
+      toast({
+        title: "Payment canceled.",
+      });
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("success");
+    url.searchParams.delete("canceled");
+    const nextSearch = url.searchParams.toString();
+    window.history.replaceState(
+      {},
+      "",
+      `${url.pathname}${nextSearch ? `?${nextSearch}` : ""}${url.hash}`
+    );
+  }, [toast]);
 
   // Auto-trigger after URL params are loaded
   useEffect(() => {
@@ -998,27 +1033,29 @@ export default function LeagueHistoryPage() {
       });
   }, [activeMode, leagueId]);
 
-  function handleUnlock() {
-    setPremium(true);
-    setIsPremiumState(true);
-    setShowUnlockModal(false);
-    toast({
-      title: "Full roast unlocked!",
-      description: "Share the chaos with your league.",
-    });
+  async function handleCheckout() {
+    if (!leagueId.trim()) {
+      toast({
+        title: "Enter a league first",
+        description: "Add your league ID or username to continue.",
+      });
+      return;
+    }
+    trackFunnel.unlockClicked(leagueId, "page");
+    try {
+      const url = await createCheckoutSession(leagueId.trim());
+      window.location.href = url;
+    } catch (err: any) {
+      toast({
+        title: "Checkout failed",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
   }
 
   function handleUpgrade() {
-    trackFunnel.unlockClicked(leagueId, "page");
-    if (!unlockShownThisSession) {
-      setShowUnlockModal(true);
-      setUnlockShownThisSession(true);
-    } else {
-      toast({
-        title: "Unlock the full roast — $19 (Super Bowl price ends Feb 10)",
-        description: "Headlines, storylines, and all exports.",
-      });
-    }
+    setShowUnlockModal(true);
   }
 
   function handleLoadYourLeagueFromExample() {
@@ -1347,7 +1384,7 @@ export default function LeagueHistoryPage() {
             "Matchup chaos and blowouts",
             "Shareable roast cards for the group chat",
           ]}
-          onUnlock={handleUpgrade}
+          onUnlock={handleCheckout}
           lockedTotalCount={lockedTotalCount}
         />
       )}
@@ -1425,7 +1462,7 @@ export default function LeagueHistoryPage() {
             "Your season story in shareable cards",
             "A roast-worthy recap for the group chat",
           ]}
-          onUnlock={handleUpgrade}
+          onUnlock={handleCheckout}
           lockedTotalCount={lockedTotalCount}
         />
       )}
@@ -1499,7 +1536,7 @@ export default function LeagueHistoryPage() {
             "Season highs and lows",
             "Shareable recap cards for the league",
           ]}
-          onUnlock={handleUpgrade}
+          onUnlock={handleCheckout}
           lockedTotalCount={lockedTotalCount}
         />
       )}
@@ -1545,7 +1582,7 @@ export default function LeagueHistoryPage() {
             emojiByKey={emojiByKey}
             onOpenCell={openCell}
             isPremium={showPremiumContent}
-            onUnlock={handleUpgrade}
+            onUnlock={handleCheckout}
             lockedTotalCount={lockedTotalCount}
           />
           {hasData && hasEnoughData && (
@@ -1609,7 +1646,7 @@ export default function LeagueHistoryPage() {
           <HeroReceipts
             heroReceipts={heroReceipts}
             isPremium={showPremiumContent}
-            onUnlock={handleUpgrade}
+            onUnlock={handleCheckout}
             lockedTotalCount={lockedTotalCount}
           />
         </section>
@@ -1649,7 +1686,7 @@ export default function LeagueHistoryPage() {
           gridVisibleRef={gridVisibleRef}
           highlightedManagerKey={highlightedManagerKey}
           isPremium={showPremiumContent}
-          onUnlock={handleUpgrade}
+          onUnlock={handleCheckout}
         />
         
         {/* Trust Signals */}
@@ -1724,7 +1761,7 @@ export default function LeagueHistoryPage() {
                 new Date().toLocaleString()
               }
               isPremium={showPremiumContent}
-              onUnlock={handleUpgrade}
+              onUnlock={handleCheckout}
               lockedTotalCount={lockedTotalCount}
             />
           </section>
@@ -1734,7 +1771,7 @@ export default function LeagueHistoryPage() {
       {activeMode === "history" && hasData && hasEnoughData && (
         <section>
           <ConversionBanner 
-            onUpgrade={handleUpgrade}
+            onUpgrade={handleCheckout}
             onScrollToTop={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             ownedCount={ownedCount}
             rivalryExists={rivalryExists}
@@ -1763,7 +1800,7 @@ export default function LeagueHistoryPage() {
       {/* Sticky Upgrade Bar */}
       {activeMode === "history" && hasData && hasEnoughData && (
         <StickyUpgradeBar
-          onUpgrade={handleUpgrade}
+          onUpgrade={handleCheckout}
           onScrollToTop={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           leagueName={data?.league?.name}
           lockedReceiptsCount={lockedReceiptsCount}
@@ -1778,7 +1815,7 @@ export default function LeagueHistoryPage() {
         <UnlockReceiptsModal
           open={showUnlockModal}
           onOpenChange={setShowUnlockModal}
-          onUnlock={handleUnlock}
+          onUnlock={handleCheckout}
           ownedCount={ownedCount}
           rivalryExists={rivalryExists}
           leagueName={data?.league?.name}

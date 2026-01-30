@@ -41,7 +41,6 @@ export function UnlockReceiptsModal({
     if (onUnlock) {
       onUnlock();
     }
-    onOpenChange(false);
   };
 
   // Contextual copy logic

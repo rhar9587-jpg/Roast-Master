@@ -1,5 +1,6 @@
 // server/routes.ts
 import type { Express, Request, Response } from "express";
+import Stripe from "stripe";
 import type { Server } from "http";
 import {
   roastRequestSchema,
@@ -35,6 +36,12 @@ import {
 // Analytics (PostgreSQL-backed with in-memory fallback)
 // -------------------------
 const ADMIN_KEY = process.env.ADMIN_KEY || "";
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
+const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || "";
+const stripe = STRIPE_SECRET_KEY
+  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
+  : null;
 const serverStartedAt = Date.now();
 
 // Initialize DB on startup (async, runs in background)
@@ -1378,6 +1385,44 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (err) {
       console.error("[/api/track] Error:", err);
       return res.status(200).json({ ok: true }); // Never break client
+    }
+  });
+
+  // -------------------------
+  // Stripe Checkout (MVP)
+  // -------------------------
+  app.post("/api/checkout/create-session", async (req: Request, res: Response) => {
+    try {
+      const league_id = String(req.body?.league_id || "").trim();
+      if (!league_id) {
+        return res.status(400).json({ error: "league_id is required" });
+      }
+      if (!stripe || !STRIPE_PRICE_ID) {
+        return res.status(500).json({ error: "Stripe is not configured" });
+      }
+
+      const success_url = `${CLIENT_URL}/league-history/dominance?league_id=${encodeURIComponent(
+        league_id
+      )}&success=true`;
+      const cancel_url = `${CLIENT_URL}/league-history/dominance?league_id=${encodeURIComponent(
+        league_id
+      )}&canceled=true`;
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
+        success_url,
+        cancel_url,
+      });
+
+      if (!session.url) {
+        return res.status(500).json({ error: "Failed to create checkout session" });
+      }
+
+      return res.json({ url: session.url });
+    } catch (err) {
+      console.error("[/api/checkout/create-session] Error:", err);
+      return res.status(500).json({ error: "Failed to create checkout session" });
     }
   });
 
