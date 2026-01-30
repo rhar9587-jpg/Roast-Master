@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -8,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Check } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 // Super Bowl Promo Pricing
 const PRICE_FULL = 29;
@@ -24,6 +26,8 @@ type Props = {
   lockedReceiptsCount?: number;
   lockedStorylinesCount?: number;
   lockedTotalCount?: number;
+  leagueId?: string;
+  onCompUnlock?: () => void;
 };
 
 export function UnlockReceiptsModal({
@@ -36,10 +40,41 @@ export function UnlockReceiptsModal({
   lockedReceiptsCount,
   lockedStorylinesCount,
   lockedTotalCount,
+  leagueId,
+  onCompUnlock,
 }: Props) {
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [codeValue, setCodeValue] = useState("");
+  const [codeLoading, setCodeLoading] = useState(false);
+  const { toast } = useToast();
+
   const handleUnlock = () => {
     if (onUnlock) {
       onUnlock();
+    }
+  };
+
+  const handleCodeSubmit = async () => {
+    if (!codeValue.trim() || !leagueId) return;
+    setCodeLoading(true);
+    try {
+      const res = await fetch("/api/comp/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ league_id: leagueId, code: codeValue.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        if (onCompUnlock) onCompUnlock();
+        toast({ title: "League unlocked." });
+        onOpenChange(false);
+      } else {
+        toast({ title: data.error || "Invalid code", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Something went wrong", variant: "destructive" });
+    } finally {
+      setCodeLoading(false);
     }
   };
 
@@ -142,6 +177,38 @@ export function UnlockReceiptsModal({
         <p className="text-sm font-semibold text-center mt-2">
           Risk-free • 30-day money-back guarantee
         </p>
+
+        {/* Comp Code Section */}
+        <div className="text-center pt-2">
+          {!showCodeInput ? (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline hover:text-foreground"
+              onClick={() => setShowCodeInput(true)}
+            >
+              Have a code?
+            </button>
+          ) : (
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <input
+                type="text"
+                placeholder="Enter code"
+                value={codeValue}
+                onChange={(e) => setCodeValue(e.target.value)}
+                className="w-32 px-2 py-1 text-sm border rounded"
+                disabled={codeLoading}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCodeSubmit}
+                disabled={codeLoading || !codeValue.trim()}
+              >
+                {codeLoading ? "..." : "Unlock"}
+              </Button>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

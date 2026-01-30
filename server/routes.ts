@@ -1389,6 +1389,72 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // -------------------------
+  // Comp Code Unlock (Friend Trial)
+  // -------------------------
+  const ENABLE_COMP_CODES = process.env.ENABLE_COMP_CODES === "true";
+  const COMP_CODES = process.env.COMP_CODES || "";
+
+  // Simple in-memory rate limiter: IP -> { attempts, resetAt }
+  const compCodeAttempts = new Map<string, { count: number; resetAt: number }>();
+  const RATE_LIMIT_MAX = 5;
+  const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+
+  function parseCompCodes(): Map<string, string> {
+    // Format: "leagueId1:CODE1,leagueId2:CODE2"
+    const map = new Map<string, string>();
+    if (!COMP_CODES.trim()) return map;
+    for (const entry of COMP_CODES.split(",")) {
+      const [leagueId, code] = entry.split(":");
+      if (leagueId && code) {
+        map.set(leagueId.trim(), code.trim());
+      }
+    }
+    return map;
+  }
+
+  app.post("/api/comp/unlock", (req: Request, res: Response) => {
+    // Production safety: disabled unless explicitly enabled
+    if (!ENABLE_COMP_CODES) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const now = Date.now();
+
+    // Rate limiting
+    const record = compCodeAttempts.get(ip);
+    if (record) {
+      if (now < record.resetAt) {
+        if (record.count >= RATE_LIMIT_MAX) {
+          return res.status(429).json({ error: "Too many attempts. Try again later." });
+        }
+        record.count++;
+      } else {
+        compCodeAttempts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+      }
+    } else {
+      compCodeAttempts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    }
+
+    const { league_id, code } = req.body || {};
+    if (!league_id || !code) {
+      return res.status(400).json({ error: "Invalid code" });
+    }
+
+    const codeMap = parseCompCodes();
+    const expectedCode = codeMap.get(String(league_id).trim());
+
+    if (!expectedCode || expectedCode !== String(code).trim()) {
+      trackEvent("comp_code_failed", "/api/comp/unlock", "POST", { league_id });
+      return res.status(400).json({ error: "Invalid code" });
+    }
+
+    // Success
+    trackEvent("comp_code_success", "/api/comp/unlock", "POST", { league_id });
+    return res.json({ ok: true });
+  });
+
+  // -------------------------
   // Stripe Checkout (MVP)
   // -------------------------
   app.post("/api/checkout/create-session", async (req: Request, res: Response) => {

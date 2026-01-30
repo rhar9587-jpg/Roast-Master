@@ -141,6 +141,32 @@ Server logs on startup will confirm:
 
 ---
 
+## Comp Code Testing (Friend Trial)
+
+### Setup
+1. Set `ENABLE_COMP_CODES=true` in .env
+2. Set `COMP_CODES=YOUR_LEAGUE_ID:TESTCODE` in .env (e.g., `1204010527051763712:ROBTEST`)
+3. Restart server
+4. Server logs should show: "Comp codes enabled: true"
+
+### Test Checklist
+- [ ] "Have a code?" link appears in unlock modal
+- [ ] Clicking "Have a code?" reveals input field and Unlock button
+- [ ] Entering wrong code shows "Invalid code" toast
+- [ ] Entering correct code for correct league unlocks it and shows "League unlocked." toast
+- [ ] Entering correct code for WRONG league fails (codes are league-specific)
+- [ ] After 5 failed attempts from same IP, shows "Too many attempts. Try again later."
+- [ ] With `ENABLE_COMP_CODES` unset or false, endpoint returns 404
+- [ ] Comp code unlock persists after page refresh (uses same localStorage mechanism)
+
+### Security Notes
+- Codes are league-specific only (no global codes)
+- Rate limited: 5 attempts per 10 minutes per IP
+- Disabled by default in production (requires `ENABLE_COMP_CODES=true`)
+- Codes are case-sensitive
+
+---
+
 ## Summary
 
 All planned improvements have been implemented:

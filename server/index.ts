@@ -93,6 +93,7 @@ app.use((req, res, next) => {
     console.log("Stripe key present:", !!process.env.STRIPE_SECRET_KEY);
     console.log("Stripe price present:", !!process.env.STRIPE_PRICE_ID);
     console.log("CLIENT_URL:", process.env.CLIENT_URL || "not set");
+    console.log("Comp codes enabled:", process.env.ENABLE_COMP_CODES === "true");
   });
   })();
   

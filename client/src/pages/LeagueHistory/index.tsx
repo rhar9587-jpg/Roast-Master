@@ -1834,6 +1834,11 @@ export default function LeagueHistoryPage() {
           lockedReceiptsCount={lockedReceiptsCount}
           lockedStorylinesCount={lockedStorylinesCount}
           lockedTotalCount={lockedTotalCount}
+          leagueId={leagueId}
+          onCompUnlock={() => {
+            unlockLeague(leagueId);
+            setIsPremiumState(true);
+          }}
         />
       )}
 
