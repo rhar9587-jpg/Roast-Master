@@ -101,6 +101,10 @@ export default function LeagueHistoryPage() {
   const [autopsyError, setAutopsyError] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Demo league always shows full content (bypasses premium gating for showcase)
+  const isDemo = leagueId === EXAMPLE_LEAGUE_ID;
+  const showPremiumContent = isPremiumState || isDemo;
+
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
   const gridExportRef = useRef<HTMLDivElement | null>(null);
   const storylinesExportRef = useRef<HTMLDivElement | null>(null);
@@ -1268,7 +1272,7 @@ export default function LeagueHistoryPage() {
         </p>
       )}
 
-      {activeMode === "history" && !isPremiumState && hasData && (
+      {activeMode === "history" && !showPremiumContent && hasData && (
         <p className="text-xs text-muted-foreground">
           Unlock once for this league to share everything.
         </p>
@@ -1307,7 +1311,7 @@ export default function LeagueHistoryPage() {
         />
       </div>
 
-      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && !isPremiumState && (
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && !showPremiumContent && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="flex-1">
@@ -1330,7 +1334,7 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && !isPremiumState && (
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && !showPremiumContent && (
         <LockedModePreview
           title="Weekly Roast"
           description="Pick any week and generate the chaos from that slate."
@@ -1344,7 +1348,7 @@ export default function LeagueHistoryPage() {
         />
       )}
 
-      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && isPremiumState && (
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="flex-1">
@@ -1368,18 +1372,18 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && isPremiumState && weeklyRoastData && (
-        <RoastCard data={weeklyRoastData} isPremium={isPremiumState} />
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && weeklyRoastData && (
+        <RoastCard data={weeklyRoastData} isPremium={showPremiumContent} />
       )}
 
-      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && isPremiumState && !weeklyRoastData && !weeklyRoastLoading && (
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && !weeklyRoastData && !weeklyRoastLoading && (
         <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
           <p className="text-sm text-muted-foreground">Choose a week to generate the roast.</p>
           <p className="text-xs text-muted-foreground mt-1">History is always available.</p>
         </div>
       )}
 
-      {hasData && activeMode === "season" && !isPremiumState && (
+      {hasData && activeMode === "season" && !showPremiumContent && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="flex-1">
@@ -1408,7 +1412,7 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {hasData && activeMode === "season" && !isPremiumState && (
+      {hasData && activeMode === "season" && !showPremiumContent && (
         <LockedModePreview
           title="Your Season"
           description="Pick a manager and reveal their season wrapped."
@@ -1422,7 +1426,7 @@ export default function LeagueHistoryPage() {
         />
       )}
 
-      {hasData && activeMode === "season" && isPremiumState && (
+      {hasData && activeMode === "season" && showPremiumContent && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="flex-1">
@@ -1456,18 +1460,18 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {hasData && activeMode === "season" && isPremiumState && seasonWrappedData && (
-        <SeasonWrappedCard data={seasonWrappedData} isPremium={isPremiumState} />
+      {hasData && activeMode === "season" && showPremiumContent && seasonWrappedData && (
+        <SeasonWrappedCard data={seasonWrappedData} isPremium={showPremiumContent} />
       )}
 
-      {hasData && activeMode === "season" && isPremiumState && !seasonWrappedData && !seasonWrappedLoading && (
+      {hasData && activeMode === "season" && showPremiumContent && !seasonWrappedData && !seasonWrappedLoading && (
         <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
           <p className="text-sm text-muted-foreground">Choose a manager to generate Your Season.</p>
           <p className="text-xs text-muted-foreground mt-1">History is always available.</p>
         </div>
       )}
 
-      {hasData && activeMode === "end" && !isPremiumState && (
+      {hasData && activeMode === "end" && !showPremiumContent && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
@@ -1482,7 +1486,7 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {hasData && activeMode === "end" && !isPremiumState && (
+      {hasData && activeMode === "end" && !showPremiumContent && (
         <LockedModePreview
           title="Recap"
           description="End-of-season moments that your league won't forget."
@@ -1496,7 +1500,7 @@ export default function LeagueHistoryPage() {
         />
       )}
 
-      {hasData && activeMode === "end" && isPremiumState && (
+      {hasData && activeMode === "end" && showPremiumContent && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
@@ -1513,11 +1517,11 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {hasData && activeMode === "end" && isPremiumState && autopsyData && (
-        <LeagueAutopsyCard data={autopsyData} isPremium={isPremiumState} />
+      {hasData && activeMode === "end" && showPremiumContent && autopsyData && (
+        <LeagueAutopsyCard data={autopsyData} isPremium={showPremiumContent} />
       )}
 
-      {hasData && activeMode === "end" && isPremiumState && !autopsyData && !autopsyLoading && (
+      {hasData && activeMode === "end" && showPremiumContent && !autopsyData && !autopsyLoading && (
         <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
           <p className="text-sm text-muted-foreground">Click Generate to see the league recap.</p>
           <p className="text-xs text-muted-foreground mt-1">History is always available.</p>
@@ -1536,7 +1540,7 @@ export default function LeagueHistoryPage() {
             avatarByKey={avatarByKey}
             emojiByKey={emojiByKey}
             onOpenCell={openCell}
-            isPremium={isPremiumState}
+            isPremium={showPremiumContent}
             onUnlock={handleUpgrade}
             lockedTotalCount={lockedTotalCount}
           />
@@ -1600,7 +1604,7 @@ export default function LeagueHistoryPage() {
         <section className="mt-8">
           <HeroReceipts
             heroReceipts={heroReceipts}
-            isPremium={isPremiumState}
+            isPremium={showPremiumContent}
             onUnlock={handleUpgrade}
             lockedTotalCount={lockedTotalCount}
           />
@@ -1640,7 +1644,7 @@ export default function LeagueHistoryPage() {
           isFetching={isFetching}
           gridVisibleRef={gridVisibleRef}
           highlightedManagerKey={highlightedManagerKey}
-          isPremium={isPremiumState}
+          isPremium={showPremiumContent}
           onUnlock={handleUpgrade}
         />
         
@@ -1715,7 +1719,7 @@ export default function LeagueHistoryPage() {
                 lastAnalyzedAt?.toLocaleString() ??
                 new Date().toLocaleString()
               }
-              isPremium={isPremiumState}
+              isPremium={showPremiumContent}
               onUnlock={handleUpgrade}
               lockedTotalCount={lockedTotalCount}
             />
@@ -1746,7 +1750,7 @@ export default function LeagueHistoryPage() {
           minWeek={startWeek}
           maxWeek={endWeek}
           onDismiss={() => setShowPostAnalysisToast(false)}
-          isPremium={isPremiumState}
+          isPremium={showPremiumContent}
         />
       )}
 

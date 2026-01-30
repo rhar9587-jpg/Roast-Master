@@ -535,6 +535,19 @@ export function getDemoLeagueData() {
   };
 }
 
+/**
+ * Returns demo league teams list matching /api/league-teams response schema
+ */
+export function getDemoLeagueTeams() {
+  return {
+    league_id: DEMO_LEAGUE_ID,
+    teams: MANAGERS.map((m, idx) => ({
+      roster_id: idx + 1,
+      name: m.name,
+    })),
+  };
+}
+
 // -------------------------
 // Roster ID <-> Manager Key Mapping
 // -------------------------

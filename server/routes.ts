@@ -25,6 +25,7 @@ import { selectTagline } from "./lib/seasonTagline";
 import { selectCardCopy, interpolateTagline } from "./lib/cardCopy";
 import {
   DEMO_LEAGUE_ID as STATIC_DEMO_LEAGUE_ID,
+  getDemoLeagueTeams,
   getDemoWeeklyRoast,
   getDemoWrapped,
   getDemoAutopsy,
@@ -1145,6 +1146,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.get("/api/league-teams", async (req: Request, res: Response) => {
     const league_id = String(req.query.league_id || "").trim();
     if (!league_id) return res.status(400).json({ message: "league_id is required" });
+
+    // Demo league intercept - return static fictional teams (no Sleeper API call)
+    if (league_id === STATIC_DEMO_LEAGUE_ID) {
+      return res.json(getDemoLeagueTeams());
+    }
 
     try {
       const payload = await handleLeagueTeams(league_id);
