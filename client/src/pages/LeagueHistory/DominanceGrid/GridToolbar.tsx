@@ -84,93 +84,63 @@ export function GridToolbar({
 
   return (
     <div className="sticky top-0 z-20 border-b bg-background px-4 py-3">
-      <div className="flex flex-wrap items-start justify-end gap-2">
-        <div className="flex flex-col items-center">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleCopyLink}
-            disabled={isCopying || isDownloading || isSharing}
-            className="interact-secondary"
-          >
-            <LinkIcon className="h-4 w-4 mr-2" />
-            {isCopying ? "Copying…" : "Copy Roast Link"}
-          </Button>
-          <p className="text-xs text-muted-foreground mt-1 text-center whitespace-nowrap">Share this page with your league</p>
-        </div>
-        <div className="flex flex-col items-center">
+      {/* Mobile: stacked vertically, Desktop: horizontal */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
+        {/* Copy Link - always visible */}
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleCopyLink}
+          disabled={isCopying || isDownloading || isSharing}
+          className="interact-secondary w-full sm:w-auto"
+        >
+          <LinkIcon className="h-4 w-4 mr-2" />
+          {isCopying ? "Copying…" : "Copy Link"}
+        </Button>
+
+        {/* Save + Share buttons */}
+        <div className="flex gap-2">
           <Tooltip>
             <TooltipTrigger asChild>
-              <span>
+              <span className="flex-1 sm:flex-none">
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={handleDownloadClick}
                   disabled={!hasData || isDownloading || isSharing}
-                  className="interact-secondary"
+                  className="interact-secondary w-full"
                 >
-                  {isDownloading ? "Saving…" : "Save Roast"}
+                  {isDownloading ? "Saving…" : "Save"}
                 </Button>
               </span>
             </TooltipTrigger>
             {!isPremium && (
               <TooltipContent>
-                <p>Unlock the full roast — $19 (ends Feb 10)</p>
+                <p>Unlock the full roast — $19</p>
               </TooltipContent>
             )}
           </Tooltip>
-          <p className="text-xs text-muted-foreground mt-1 text-center whitespace-nowrap">Perfect for the league chat</p>
-          {!isPremium && (
-            <a
-              href="/previews/grid.png"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-foreground underline mt-0.5"
-              onClick={(e) => {
-                e.preventDefault();
-                window.open("/previews/grid.png", "_blank");
-              }}
-            >
-              See example export
-            </a>
-          )}
-        </div>
-        <div className="flex flex-col items-center">
+
           <Tooltip>
             <TooltipTrigger asChild>
-              <span>
+              <span className="flex-1 sm:flex-none">
                 <Button
-                  variant="secondary"
+                  variant="default"
                   size="sm"
                   onClick={handleShareClick}
                   disabled={!hasData || isDownloading || isSharing}
-                  className="interact-secondary"
+                  className="interact-cta w-full"
                 >
-                  {isSharing ? "Sending…" : "Send to Group Chat"}
+                  {isSharing ? "Sending…" : "Share"}
                 </Button>
               </span>
             </TooltipTrigger>
             {!isPremium && (
               <TooltipContent>
-                <p>Unlock the full roast — $19 (ends Feb 10)</p>
+                <p>Unlock the full roast — $19</p>
               </TooltipContent>
             )}
           </Tooltip>
-          <p className="text-xs text-muted-foreground mt-1 text-center whitespace-nowrap">Tag your nemesis 💀</p>
-          {!isPremium && (
-            <a
-              href="/previews/grid.png"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-foreground underline mt-0.5"
-              onClick={(e) => {
-                e.preventDefault();
-                window.open("/previews/grid.png", "_blank");
-              }}
-            >
-              See example export
-            </a>
-          )}
         </div>
       </div>
     </div>
