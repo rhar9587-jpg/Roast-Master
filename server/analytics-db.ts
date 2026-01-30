@@ -282,12 +282,14 @@ export interface AnalyticsSummary {
   funnel: {
     unlock_clicked: number;
     checkout_session_created: number;
-    purchase_success: number;
+    purchase_completed_webhook: number; // Server-side confirmed via Stripe webhook
+    purchase_success: number; // Client-side (user returned to success URL)
     purchase_cancel: number;
   };
   funnel_7d: {
     unlock_clicked: number;
     checkout_session_created: number;
+    purchase_completed_webhook: number;
     purchase_success: number;
     purchase_cancel: number;
   };
@@ -320,7 +322,7 @@ export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
       ]);
       
       // Funnel counts (all time from counters)
-      const funnelTypes = ["unlock_clicked", "checkout_session_created", "purchase_success", "purchase_cancel"];
+      const funnelTypes = ["unlock_clicked", "checkout_session_created", "purchase_completed_webhook", "purchase_success", "purchase_cancel"];
       const funnelRes = await pool.query(
         "SELECT type, count FROM analytics_counters WHERE type = ANY($1)",
         [funnelTypes]
@@ -355,12 +357,14 @@ export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
         funnel: {
           unlock_clicked: funnelMap["unlock_clicked"] || 0,
           checkout_session_created: funnelMap["checkout_session_created"] || 0,
+          purchase_completed_webhook: funnelMap["purchase_completed_webhook"] || 0,
           purchase_success: funnelMap["purchase_success"] || 0,
           purchase_cancel: funnelMap["purchase_cancel"] || 0,
         },
         funnel_7d: {
           unlock_clicked: funnel7dMap["unlock_clicked"] || 0,
           checkout_session_created: funnel7dMap["checkout_session_created"] || 0,
+          purchase_completed_webhook: funnel7dMap["purchase_completed_webhook"] || 0,
           purchase_success: funnel7dMap["purchase_success"] || 0,
           purchase_cancel: funnel7dMap["purchase_cancel"] || 0,
         },
@@ -385,7 +389,7 @@ function getInMemorySummary(ts24h: number, ts7d: number): AnalyticsSummary {
   const uniqueLeagues7d = new Set(events7d.filter(e => e.league_id).map(e => e.league_id));
   const uniqueLeaguesAll = new Set(fallback.events.filter(e => e.league_id).map(e => e.league_id));
   
-  const funnelTypes = ["unlock_clicked", "checkout_session_created", "purchase_success", "purchase_cancel"];
+  const funnelTypes = ["unlock_clicked", "checkout_session_created", "purchase_completed_webhook", "purchase_success", "purchase_cancel"];
   const funnel7d: Record<string, number> = {};
   for (const t of funnelTypes) {
     funnel7d[t] = events7d.filter(e => e.type === t).length;
@@ -410,12 +414,14 @@ function getInMemorySummary(ts24h: number, ts7d: number): AnalyticsSummary {
     funnel: {
       unlock_clicked: fallback.counts["unlock_clicked"] || 0,
       checkout_session_created: fallback.counts["checkout_session_created"] || 0,
+      purchase_completed_webhook: fallback.counts["purchase_completed_webhook"] || 0,
       purchase_success: fallback.counts["purchase_success"] || 0,
       purchase_cancel: fallback.counts["purchase_cancel"] || 0,
     },
     funnel_7d: {
       unlock_clicked: funnel7d["unlock_clicked"] || 0,
       checkout_session_created: funnel7d["checkout_session_created"] || 0,
+      purchase_completed_webhook: funnel7d["purchase_completed_webhook"] || 0,
       purchase_success: funnel7d["purchase_success"] || 0,
       purchase_cancel: funnel7d["purchase_cancel"] || 0,
     },

@@ -42,6 +42,7 @@ const ADMIN_KEY = process.env.ADMIN_KEY || "";
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || "";
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
   : null;
@@ -1502,6 +1503,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
         success_url,
         cancel_url,
+        metadata: {
+          league_id,
+        },
       });
 
       if (!session.url) {
@@ -1519,6 +1523,63 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       console.error("[/api/checkout/create-session] Error:", err);
       return res.status(500).json({ error: "Failed to create checkout session" });
     }
+  });
+
+  // -------------------------
+  // Stripe Webhook (checkout.session.completed)
+  // This is the ONLY reliable way to track completed purchases
+  // -------------------------
+  app.post("/api/stripe/webhook", async (req: Request, res: Response) => {
+    if (!stripe) {
+      return res.status(500).json({ error: "Stripe not configured" });
+    }
+
+    const sig = req.headers["stripe-signature"] as string | undefined;
+    
+    // If no webhook secret configured, log warning but still process (for testing)
+    if (!STRIPE_WEBHOOK_SECRET) {
+      console.warn("[Stripe Webhook] No STRIPE_WEBHOOK_SECRET configured - skipping signature verification");
+    }
+
+    let event: Stripe.Event;
+    try {
+      if (STRIPE_WEBHOOK_SECRET && sig) {
+        // Verify webhook signature using raw body
+        const rawBody = req.rawBody as Buffer;
+        event = stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET);
+      } else {
+        // Fallback for testing without signature (NOT recommended for production)
+        event = req.body as Stripe.Event;
+      }
+    } catch (err: any) {
+      console.error("[Stripe Webhook] Signature verification failed:", err.message);
+      return res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
+    }
+
+    // Handle checkout.session.completed
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const sessionId = session.id;
+      const leagueId = session.metadata?.league_id || null;
+      const amountTotal = session.amount_total; // in cents
+      const currency = session.currency;
+      const customerEmail = session.customer_details?.email || null;
+
+      console.log(`[Stripe Webhook] checkout.session.completed: session=${sessionId}, league=${leagueId}, amount=${amountTotal} ${currency}`);
+
+      // Track the webhook-confirmed purchase (this is the source of truth)
+      trackEvent("purchase_completed_webhook", "/api/stripe/webhook", "POST", {
+        session_id: sessionId,
+        league_id: leagueId,
+        amount_cents: amountTotal,
+        currency,
+        // Don't log email for privacy, but note if present
+        has_email: !!customerEmail,
+      });
+    }
+
+    // Acknowledge receipt
+    return res.json({ received: true });
   });
 
   // -------------------------
@@ -1570,16 +1631,26 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     try {
       const summary = await getAnalyticsSummary();
       
-      // Calculate conversion rates
+      // Calculate conversion rates using webhook-confirmed purchases (source of truth)
+      const webhookPurchases = summary.funnel.purchase_completed_webhook;
+      const checkoutSessions = summary.funnel.checkout_session_created;
+      const unlockClicks = summary.funnel.unlock_clicked;
+      
       const conversionRates = {
-        unlock_to_checkout: summary.funnel.unlock_clicked > 0 
-          ? ((summary.funnel.checkout_session_created / summary.funnel.unlock_clicked) * 100).toFixed(1) + "%"
+        unlock_to_checkout: unlockClicks > 0 
+          ? ((checkoutSessions / unlockClicks) * 100).toFixed(1) + "%"
           : "N/A",
-        checkout_to_purchase: summary.funnel.checkout_session_created > 0
-          ? ((summary.funnel.purchase_success / summary.funnel.checkout_session_created) * 100).toFixed(1) + "%"
+        // Webhook-confirmed completion rate (most reliable)
+        checkout_completion_rate: checkoutSessions > 0
+          ? ((webhookPurchases / checkoutSessions) * 100).toFixed(1) + "%"
           : "N/A",
-        overall: summary.funnel.unlock_clicked > 0
-          ? ((summary.funnel.purchase_success / summary.funnel.unlock_clicked) * 100).toFixed(1) + "%"
+        // Overall funnel conversion
+        overall: unlockClicks > 0
+          ? ((webhookPurchases / unlockClicks) * 100).toFixed(1) + "%"
+          : "N/A",
+        // Client-side success (for comparison - may miss some)
+        checkout_to_client_success: checkoutSessions > 0
+          ? ((summary.funnel.purchase_success / checkoutSessions) * 100).toFixed(1) + "%"
           : "N/A",
       };
       
