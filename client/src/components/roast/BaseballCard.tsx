@@ -177,6 +177,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
   const [isSharing, setIsSharing] = React.useState(false);
   const [showTagModal, setShowTagModal] = React.useState(false);
   const cardRef = React.useRef<HTMLDivElement>(null);
+  const pointerStart = React.useRef<{ x: number; y: number } | null>(null);
   const { toast } = useToast();
 
   const tone =
@@ -255,11 +256,33 @@ export function BaseballCard(props: LegacyProps | V2Props) {
     }
   }, [badge, title, name, punchline, primaryStat, roastContext]);
 
+  // Track pointer start position to distinguish taps from swipes
+  const handlePointerDown = (e: React.PointerEvent) => {
+    pointerStart.current = { x: e.clientX, y: e.clientY };
+  };
+
   // IMPORTANT: iOS + Embla can swallow "click" during swipe; pointer-up is more reliable.
+  // Only flip if pointer didn't move much (tap vs swipe/scroll)
   const handlePointerUp = (e: React.PointerEvent) => {
     const target = e.target as HTMLElement | null;
     // Don't flip when pressing actionable elements
     if (target?.closest("button,a,input,textarea,select,[data-no-flip='true']")) return;
+
+    // Check if this was a tap (minimal movement) vs a swipe/scroll
+    const start = pointerStart.current;
+    pointerStart.current = null;
+
+    if (start) {
+      const dx = Math.abs(e.clientX - start.x);
+      const dy = Math.abs(e.clientY - start.y);
+      const TAP_THRESHOLD = 10; // pixels
+
+      if (dx > TAP_THRESHOLD || dy > TAP_THRESHOLD) {
+        // User was swiping/scrolling, not tapping
+        return;
+      }
+    }
+
     flip();
   };
 
@@ -594,6 +617,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
         // Interaction feedback: lift on hover, press on active
         "interact-hero",
       ].join(" ")}
+      onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") flip();

@@ -356,7 +356,14 @@ export default function Home() {
               <p className="text-sm text-muted-foreground mt-1">
                 Super Bowl price ends Feb 10
               </p>
-              <p className="text-xs text-muted-foreground mt-2">
+              <Button 
+                size="lg" 
+                onClick={handleViewLeagueHistory} 
+                className="mt-4 font-semibold interact-cta"
+              >
+                Get Your League's Receipts
+              </Button>
+              <p className="text-xs text-muted-foreground mt-3">
                 Designed for fantasy leagues that talk trash.
               </p>
             </div>

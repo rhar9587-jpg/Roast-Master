@@ -1438,15 +1438,15 @@ export default function LeagueHistoryPage() {
 
       {hasData && activeMode === "season" && !showPremiumContent && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <label className="block text-sm font-semibold text-foreground">Pick your team</label>
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1">
-              <label className="block text-sm font-semibold text-foreground">Pick your team</label>
               <select
                 value={seasonRosterId}
                 onChange={(e) =>
                   setSeasonRosterId(e.target.value ? Number(e.target.value) : "")
                 }
-                className="mt-1 w-full rounded-lg border px-3 py-2"
+                className="w-full rounded-lg border px-3 py-2"
                 disabled
               >
                 <option value="">Choose your roster...</option>
@@ -1456,12 +1456,12 @@ export default function LeagueHistoryPage() {
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-muted-foreground">
-                <span className="font-medium">Locked.</span> Unlock to generate Your Season.
-              </p>
             </div>
-            <Button disabled>Generate Your Season</Button>
+            <Button disabled className="sm:w-auto">Generate Your Season</Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium">Locked.</span> Unlock to generate Your Season.
+          </p>
         </section>
       )}
 
@@ -1481,15 +1481,15 @@ export default function LeagueHistoryPage() {
 
       {hasData && activeMode === "season" && showPremiumContent && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <label className="block text-sm font-semibold text-foreground">Pick your team</label>
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1">
-              <label className="block text-sm font-semibold text-foreground">Pick your team</label>
               <select
                 value={seasonRosterId}
                 onChange={(e) =>
                   setSeasonRosterId(e.target.value ? Number(e.target.value) : "")
                 }
-                className="mt-1 w-full rounded-lg border px-3 py-2"
+                className="w-full rounded-lg border px-3 py-2"
                 disabled={seasonTeamsLoading}
               >
                 <option value="">Choose your roster...</option>
@@ -1499,14 +1499,14 @@ export default function LeagueHistoryPage() {
                   </option>
                 ))}
               </select>
-              {seasonTeamsLoading && (
-                <p className="mt-1 text-xs text-muted-foreground">Loading rosters…</p>
-              )}
             </div>
-            <Button onClick={fetchSeasonWrapped} disabled={seasonWrappedLoading}>
+            <Button onClick={fetchSeasonWrapped} disabled={seasonWrappedLoading} className="sm:w-auto">
               {seasonWrappedLoading ? "Generating…" : "Generate Your Season"}
             </Button>
           </div>
+          {seasonTeamsLoading && (
+            <p className="text-xs text-muted-foreground">Loading rosters…</p>
+          )}
           {seasonWrappedError && (
             <p className="text-xs text-red-600">{seasonWrappedError}</p>
           )}
