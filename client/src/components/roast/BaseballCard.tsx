@@ -177,6 +177,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
   const [isSharing, setIsSharing] = React.useState(false);
   const [showTagModal, setShowTagModal] = React.useState(false);
   const cardRef = React.useRef<HTMLDivElement>(null);
+  const frontFaceRef = React.useRef<HTMLDivElement>(null); // Separate ref for front face export
   const pointerStart = React.useRef<{ x: number; y: number } | null>(null);
   const { toast } = useToast();
 
@@ -288,7 +289,8 @@ export function BaseballCard(props: LegacyProps | V2Props) {
 
   const handleShare = React.useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!cardRef.current || isSharing) return;
+    // Use frontFaceRef for export to avoid 3D transform issues with html-to-image
+    if (!frontFaceRef.current || isSharing) return;
     
     // Track share attempt
     track("share_clicked", { card_type: title, card_name: name, has_watermark: !isPremium });
@@ -306,7 +308,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
       const caption = `${title} ${badgeIconEmoji} — ${name}${punchline ? ` ${punchline}` : ""} • ${primaryStat.value} ${primaryStat.label || ""}`.trim();
 
       const { dataUrl } = await exportCardPng({
-        element: cardRef.current,
+        element: frontFaceRef.current,
         filename,
         caption,
         isPremium,
@@ -372,7 +374,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
     } finally {
       setIsSharing(false);
     }
-  }, [cardRef, isSharing, title, badge, name, punchline, primaryStat, onShare, toast, isPremium]);
+  }, [frontFaceRef, isSharing, title, badge, name, punchline, primaryStat, onShare, toast, isPremium]);
 
   const bgLayers = () => (
     <div className="pointer-events-none absolute inset-0">
@@ -637,6 +639,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
         >
           {/* FRONT */}
           <div
+            ref={frontFaceRef}
             className={[
               "absolute inset-0",
               // Safari needs the -webkit variant; Tailwind arbitrary lets us set it
