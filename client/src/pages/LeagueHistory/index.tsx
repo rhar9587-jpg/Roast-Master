@@ -1793,6 +1793,10 @@ export default function LeagueHistoryPage() {
             lockedStorylinesCount={lockedStorylinesCount}
             lockedTotalCount={lockedTotalCount}
             isDemo={isDemo}
+            onCompUnlock={() => {
+              unlockLeague(leagueId);
+              setIsPremiumState(true);
+            }}
           />
         </section>
       )}
