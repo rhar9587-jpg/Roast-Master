@@ -18,6 +18,9 @@ import {
   getFirstStartedAt,
   isUsingDatabase,
   ensureDb,
+  getAnalyticsSummary,
+  hashIp,
+  type RecordEventOptions,
 } from "./analytics-db";
 
 // ✅ NEW: League History (Dominance Grid)
@@ -47,11 +50,30 @@ const serverStartedAt = Date.now();
 // Initialize DB on startup (async, runs in background)
 ensureDb().catch((err) => console.error("[Analytics] DB init error:", err));
 
-function trackEvent(type: string, route: string, method: string, meta?: Record<string, any>) {
-  recordEvent(type, route, method, Date.now(), meta || {}).catch((err) =>
+function trackEvent(
+  type: string,
+  route: string,
+  method: string,
+  meta?: Record<string, any>,
+  options?: RecordEventOptions
+) {
+  recordEvent(type, route, method, Date.now(), meta || {}, options || {}).catch((err) =>
     console.error("[Analytics] recordEvent error:", err),
   );
-  console.log(`[Analytics] ${type} ${method} ${route}`, meta || "");
+  // Log without sensitive data (no IP, truncate user_agent)
+  const logMeta = meta ? { ...meta } : {};
+  console.log(`[Analytics] ${type} ${method} ${route}`, logMeta);
+}
+
+// Helper to extract request context for analytics
+function getRequestContext(req: Request): RecordEventOptions {
+  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() 
+    || req.socket?.remoteAddress 
+    || "";
+  return {
+    user_agent: (req.headers["user-agent"] || "").slice(0, 256), // Truncate for storage
+    ip_hash: hashIp(ip),
+  };
 }
 
 // -------------------------
@@ -1380,7 +1402,8 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (!event || typeof event !== "string") {
         return res.status(400).json({ error: "Missing event name" });
       }
-      trackEvent(event, "/api/track", "POST", properties || {});
+      // Pass request context (user_agent, ip_hash) for analytics
+      trackEvent(event, "/api/track", "POST", properties || {}, getRequestContext(req));
       return res.status(200).json({ ok: true });
     } catch (err) {
       console.error("[/api/track] Error:", err);
@@ -1531,6 +1554,43 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (err: any) {
       console.error("[/api/stats] Error:", err);
       return res.status(500).json({ error: "Failed to retrieve stats" });
+    }
+  });
+
+  // -------------------------
+  // Analytics Summary Endpoint (protected by ADMIN_KEY)
+  // Returns: 24h/7d event counts, unique leagues, conversion funnel
+  // -------------------------
+  app.get("/api/admin/analytics/summary", async (req: Request, res: Response) => {
+    const key = req.query.key as string | undefined;
+    if (!ADMIN_KEY || key !== ADMIN_KEY) {
+      return res.status(401).json({ error: "Unauthorized. Provide ?key=ADMIN_KEY" });
+    }
+
+    try {
+      const summary = await getAnalyticsSummary();
+      
+      // Calculate conversion rates
+      const conversionRates = {
+        unlock_to_checkout: summary.funnel.unlock_clicked > 0 
+          ? ((summary.funnel.checkout_session_created / summary.funnel.unlock_clicked) * 100).toFixed(1) + "%"
+          : "N/A",
+        checkout_to_purchase: summary.funnel.checkout_session_created > 0
+          ? ((summary.funnel.purchase_success / summary.funnel.checkout_session_created) * 100).toFixed(1) + "%"
+          : "N/A",
+        overall: summary.funnel.unlock_clicked > 0
+          ? ((summary.funnel.purchase_success / summary.funnel.unlock_clicked) * 100).toFixed(1) + "%"
+          : "N/A",
+      };
+      
+      return res.json({
+        generated_at: new Date().toISOString(),
+        ...summary,
+        conversion_rates: conversionRates,
+      });
+    } catch (err: any) {
+      console.error("[/api/admin/analytics/summary] Error:", err);
+      return res.status(500).json({ error: "Failed to retrieve analytics summary" });
     }
   });
 
