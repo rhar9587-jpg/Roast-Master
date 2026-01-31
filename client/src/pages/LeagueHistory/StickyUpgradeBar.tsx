@@ -3,10 +3,8 @@ import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 
 const STORAGE_KEY = "fantasy-roast-upgradeDismissedUntil";
-// Super Bowl Promo Pricing
-const PRICE_FULL = 29;
-const PRICE_PROMO = 19;
-const PROMO_DEADLINE = "Feb 10";
+// Personal Unlock Pricing
+const PRICE = 7;
 
 type Props = {
   onUpgrade?: () => void;
@@ -123,9 +121,7 @@ export function StickyUpgradeBar({
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">
-                This is demo data. Get the real roasts for YOUR league •{" "}
-                <span className="line-through text-muted-foreground">${PRICE_FULL}</span>{" "}
-                <span className="font-bold">${PRICE_PROMO}</span>
+                This is demo data. Get the real roasts for YOUR league • ${PRICE}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -137,9 +133,6 @@ export function StickyUpgradeBar({
                 >
                   Enter My League
                 </Button>
-                <p className="text-xs text-muted-foreground text-center mt-1">
-                  Ends {PROMO_DEADLINE}
-                </p>
               </div>
               <Button
                 variant="ghost"
@@ -172,9 +165,7 @@ export function StickyUpgradeBar({
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">
-              Unlock the full roast for {leagueName?.trim() ? leagueName : "this league"} •{" "}
-              <span className="line-through text-muted-foreground">${PRICE_FULL}</span>{" "}
-              <span className="font-bold">${PRICE_PROMO}</span>
+              Unlock the full league for you — ${PRICE}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -184,11 +175,8 @@ export function StickyUpgradeBar({
                 size="sm"
                 className="font-semibold whitespace-nowrap interact-cta"
               >
-                Unlock — ${PRICE_PROMO}
+                Unlock for you — ${PRICE}
               </Button>
-              <p className="text-xs text-muted-foreground text-center mt-1">
-                Ends {PROMO_DEADLINE}
-              </p>
               {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
                 <p className="text-xs text-muted-foreground text-center mt-1">
                   Your league has {lockedTotalCount} roasts waiting.

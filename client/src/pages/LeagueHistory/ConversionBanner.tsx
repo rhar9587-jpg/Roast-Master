@@ -4,10 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-// Super Bowl Promo Pricing
-const PRICE_FULL = 29;
-const PRICE_PROMO = 19;
-const PROMO_DEADLINE = "Feb 10";
+// Personal Unlock Pricing
+const PRICE = 7;
 
 type Props = {
   onUpgrade?: () => void;
@@ -89,9 +87,7 @@ export function ConversionBanner({
       >
         <CardHeader className="text-center pb-4">
           <CardTitle className="text-2xl font-bold tracking-tight">
-            Want this for YOUR league?{" "}
-            <span className="line-through text-muted-foreground font-normal">${PRICE_FULL}</span>{" "}
-            <span className="text-primary">${PRICE_PROMO}</span> — Super Bowl price.
+            Want this for YOUR league? Unlock for you — ${PRICE}.
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -127,14 +123,8 @@ export function ConversionBanner({
               size="lg"
               className="font-semibold px-8 interact-cta"
             >
-              Get My League's Roasts — ${PRICE_PROMO}
+              Unlock for you — ${PRICE}
             </Button>
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              Split with your league — usually ~$2 each.
-            </p>
-            <p className="text-xs font-medium text-primary text-center mt-1">
-              Super Bowl price ends {PROMO_DEADLINE}
-            </p>
           </div>
           <p className="text-sm font-semibold text-center">
             Risk-free • 30-day money-back guarantee
@@ -162,9 +152,7 @@ export function ConversionBanner({
     >
       <CardHeader className="text-center pb-4">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          {leagueName?.trim() ? leagueName : "This league"} has receipts waiting.{" "}
-          <span className="line-through text-muted-foreground font-normal">${PRICE_FULL}</span>{" "}
-          <span className="text-primary">${PRICE_PROMO}</span> — Super Bowl price.
+          {leagueName?.trim() ? leagueName : "This league"} has receipts waiting. Unlock for you — ${PRICE}.
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -201,14 +189,8 @@ export function ConversionBanner({
             size="lg"
             className="font-semibold px-8 interact-cta"
           >
-            Unlock Full Roast — ${PRICE_PROMO}
+            Unlock for you — ${PRICE}
           </Button>
-          <p className="text-xs text-muted-foreground text-center mt-2">
-            Split with your league — usually ~$2 each.
-          </p>
-          <p className="text-xs font-medium text-primary text-center mt-1">
-            Super Bowl price ends {PROMO_DEADLINE}
-          </p>
         </div>
         <p className="text-sm font-semibold text-center">
           Risk-free • 30-day money-back guarantee

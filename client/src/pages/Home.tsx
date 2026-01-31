@@ -186,13 +186,11 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" onClick={handleViewLeagueHistory} className="font-semibold interact-cta">
-                Get Your League's Receipts
+                Unlock for you — $7
               </Button>
             </div>
             <p className="text-sm text-muted-foreground">
-              <span className="line-through">$29</span>{" "}
-              <span className="font-bold text-foreground">$19</span>{" "}
-              — Super Bowl price ends Feb 10
+              Unlock for you — <span className="font-bold text-foreground">$7</span>
             </p>
           </section>
 
@@ -350,18 +348,14 @@ export default function Home() {
             </ul>
             <div className="text-center pt-4 border-t border-primary/10">
               <p className="text-lg font-bold">
-                <span className="line-through text-muted-foreground font-normal">$29</span>{" "}
-                <span className="text-primary">$19</span> for your league
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Super Bowl price ends Feb 10
+                Unlock the full league for you — <span className="text-primary">$7</span>
               </p>
               <Button 
                 size="lg" 
                 onClick={handleViewLeagueHistory} 
                 className="mt-4 font-semibold interact-cta"
               >
-                Get Your League's Receipts
+                Unlock for you — $7
               </Button>
               <p className="text-xs text-muted-foreground mt-3">
                 Designed for fantasy leagues that talk trash.

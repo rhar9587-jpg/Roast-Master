@@ -11,10 +11,8 @@ import {
 import { Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-// Super Bowl Promo Pricing
-const PRICE_FULL = 29;
-const PRICE_PROMO = 19;
-const PROMO_DEADLINE = "Feb 10";
+// Personal Unlock Pricing
+const PRICE = 7;
 
 type Props = {
   open: boolean;
@@ -83,7 +81,7 @@ export function UnlockReceiptsModal({
     ? `You own ${ownedCount} manager${ownedCount === 1 ? '' : 's'}. Want the roast to prove it?`
     : rivalryExists
       ? "Your league has a real rivalry. See the full story."
-      : "Your league has stories worth sharing. Unlock the full roast.";
+      : "Your league has stories worth sharing. Unlock the full league for you.";
 
   const showMissingCounts =
     typeof lockedReceiptsCount === "number" &&
@@ -96,12 +94,10 @@ export function UnlockReceiptsModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">
-            Your league has receipts. Time to collect.
+            Unlock the full league for you
           </DialogTitle>
           <DialogDescription className="pt-2">
-            Unlock all roasts for {leagueName?.trim() ? leagueName : "this league"}.{" "}
-            <span className="line-through text-muted-foreground">${PRICE_FULL}</span>{" "}
-            <span className="font-bold text-foreground">${PRICE_PROMO}</span> — Super Bowl price ends {PROMO_DEADLINE}.
+            Unlock the full league experience for you — including the all-time dominance grid, hidden roast cards and storylines, plus shareable receipts made for your group chat. One-time unlock. No subscription.
           </DialogDescription>
         </DialogHeader>
 
@@ -157,19 +153,16 @@ export function UnlockReceiptsModal({
               onClick={handleUnlock}
               className="w-full sm:w-auto font-semibold interact-cta"
             >
-              Unlock Full Roast — ${PRICE_PROMO}
+              Unlock for you — ${PRICE}
             </Button>
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              Split with your league — usually ~$2 each.
-            </p>
-            <p className="text-xs font-medium text-primary text-center mt-1">
-              Super Bowl price ends {PROMO_DEADLINE}
-            </p>
             {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
               <p className="text-xs text-muted-foreground text-center mt-1">
                 Your league has {lockedTotalCount} roasts waiting.
               </p>
             )}
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Each manager unlocks their own view. Sharing is encouraged.
+            </p>
           </div>
         </DialogFooter>
 

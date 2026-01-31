@@ -7,9 +7,8 @@ import { Lock } from "lucide-react";
 import { useState } from "react";
 import * as React from "react";
 
-// Super Bowl Promo Pricing
-const PRICE_FULL = 29;
-const PRICE_PROMO = 19;
+// Personal Unlock Pricing
+const PRICE = 7;
 
 type MostOwned = {
   victimName: string;
@@ -262,8 +261,7 @@ export function InsightsDashboard({
           <li>• End-of-season recap</li>
         </ul>
         <Button size="sm" onClick={onUnlock}>
-          Unlock Full Roast — <span className="line-through text-muted-foreground">${PRICE_FULL}</span>{" "}
-          <span className="font-bold">${PRICE_PROMO}</span>
+          Unlock for you — ${PRICE}
         </Button>
       </div>
     </div>
