@@ -198,19 +198,9 @@ function computeNflDoppelganger(
 
   const archetypes = [
     {
-      team: "Kansas City Chiefs",
-      label: "Villain / Always wins",
-      match: viewerRecordRank <= topCount && viewerPointsRank <= topCount,
-      reasons: [
-        `Top-${viewerRecordRank} record at ${viewerPerf.wins}-${viewerPerf.losses}.`,
-        `Top-${viewerPointsRank} in points (${formatPoints(viewerPerf.totalPF)}).`,
-        "The league is tired of you winning.",
-      ],
-      roastLine: "Every season ends with you on top.",
-    },
-    {
       team: "San Francisco 49ers",
       label: "Juggernaut",
+      // varianceRank is sorted high-to-low, so "least volatile" is the bottom 20%
       match: viewerPointsRank <= topCount && viewerVarianceRank > leagueSize - topCount,
       reasons: [
         `No. ${viewerPointsRank} in points (${formatPoints(viewerPerf.totalPF)}).`,
@@ -218,6 +208,17 @@ function computeNflDoppelganger(
         "Consistent dominance week after week.",
       ],
       roastLine: "Steady, scary, and built to win.",
+    },
+    {
+      team: "Kansas City Chiefs",
+      label: "Villain / Always wins",
+      match: viewerRecordRank === 1 && viewerPointsRank <= topCount,
+      reasons: [
+        `Top-${viewerRecordRank} record at ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        `Top-${viewerPointsRank} in points (${formatPoints(viewerPerf.totalPF)}).`,
+        "The league is tired of you winning.",
+      ],
+      roastLine: "Every season ends with you on top.",
     },
     {
       team: "Los Angeles Chargers",
