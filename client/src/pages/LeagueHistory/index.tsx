@@ -5,6 +5,12 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -90,6 +96,208 @@ type PersonalHookCard =
       teaser?: string;
       subtitle?: string;
     };
+
+type DoppelgangerEntry = {
+  rosterId: string;
+  managerName: string;
+  team: string;
+  label: string;
+  reasons: string[];
+  roastLine: string;
+  record: string;
+  season?: string;
+};
+
+type SeasonPerf = {
+  managerKey: string;
+  wins: number;
+  losses: number;
+  totalPF: number;
+  variance: number;
+};
+
+function computeStdDev(values: number[]) {
+  if (values.length <= 1) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function computeNflDoppelganger(
+  viewerKey: string,
+  seasonStats: DominanceApiResponse["seasonStats"],
+  weeklyMatchups: WeeklyMatchupDetail[],
+  managers: ManagerRow[],
+  leagueSeason?: string,
+) {
+  const availableSeasons = (seasonStats ?? [])
+    .map((s) => s.season)
+    .filter(Boolean);
+  const targetSeason =
+    leagueSeason ||
+    (availableSeasons.length
+      ? availableSeasons.sort().at(-1)
+      : weeklyMatchups[0]?.season);
+
+  if (!targetSeason) return null;
+
+  const statsByManager = new Map<string, SeasonPerf>();
+
+  for (const manager of managers) {
+    const weekly = weeklyMatchups.filter(
+      (m) => m.managerKey === manager.key && m.season === targetSeason,
+    );
+    const points = weekly.map((m) => m.points).filter(Number.isFinite);
+    const wins = weekly.filter((m) => m.won).length;
+    const losses = weekly.filter((m) => !m.won).length;
+    const totalPF =
+      seasonStats?.find((s) => s.managerKey === manager.key && s.season === targetSeason)
+        ?.totalPF ??
+      points.reduce((a, b) => a + b, 0);
+    statsByManager.set(manager.key, {
+      managerKey: manager.key,
+      wins,
+      losses,
+      totalPF,
+      variance: computeStdDev(points),
+    });
+  }
+
+  const perfList = Array.from(statsByManager.values()).filter((p) => Number.isFinite(p.totalPF));
+  if (!perfList.length) return null;
+
+  const leagueSize = perfList.length;
+  const topCount = Math.max(2, Math.ceil(leagueSize * 0.2));
+
+  const pointsRanked = [...perfList].sort((a, b) => b.totalPF - a.totalPF);
+  const recordRanked = [...perfList].sort((a, b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins;
+    if (a.losses !== b.losses) return a.losses - b.losses;
+    return b.totalPF - a.totalPF;
+  });
+  const varianceRanked = [...perfList].sort((a, b) => b.variance - a.variance);
+
+  const pointsRank = (key: string) => pointsRanked.findIndex((p) => p.managerKey === key) + 1;
+  const recordRank = (key: string) => recordRanked.findIndex((p) => p.managerKey === key) + 1;
+  const varianceRank = (key: string) => varianceRanked.findIndex((p) => p.managerKey === key) + 1;
+
+  const viewerPerf = statsByManager.get(viewerKey);
+  if (!viewerPerf) return null;
+
+  const viewerPointsRank = pointsRank(viewerKey);
+  const viewerRecordRank = recordRank(viewerKey);
+  const viewerVarianceRank = varianceRank(viewerKey);
+
+  const closeLosses = weeklyMatchups.filter(
+    (m) =>
+      m.managerKey === viewerKey &&
+      m.season === targetSeason &&
+      !m.won &&
+      Math.abs(m.margin ?? m.opponentPoints - m.points) <= 5,
+  ).length;
+
+  const archetypes = [
+    {
+      team: "Kansas City Chiefs",
+      label: "Villain / Always wins",
+      match: viewerRecordRank <= topCount && viewerPointsRank <= topCount,
+      reasons: [
+        `Top-${viewerRecordRank} record at ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        `Top-${viewerPointsRank} in points (${formatPoints(viewerPerf.totalPF)}).`,
+        "The league is tired of you winning.",
+      ],
+      roastLine: "Every season ends with you on top.",
+    },
+    {
+      team: "San Francisco 49ers",
+      label: "Juggernaut",
+      match: viewerPointsRank <= topCount && viewerVarianceRank > leagueSize - topCount,
+      reasons: [
+        `No. ${viewerPointsRank} in points (${formatPoints(viewerPerf.totalPF)}).`,
+        `Low variance (${formatPoints(viewerPerf.variance)} pts std dev).`,
+        "Consistent dominance week after week.",
+      ],
+      roastLine: "Steady, scary, and built to win.",
+    },
+    {
+      team: "Los Angeles Chargers",
+      label: "Talented Disappointment",
+      match: viewerPointsRank <= topCount && viewerRecordRank > topCount,
+      reasons: [
+        `Top-${viewerPointsRank} scorer, only ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        "High firepower, low results.",
+        "Highlight reel, no trophy.",
+      ],
+      roastLine: "All flash, no hardware.",
+    },
+    {
+      team: "New York Jets",
+      label: "Pain Merchant",
+      match: closeLosses >= 2 && viewerRecordRank > topCount,
+      reasons: [
+        `Lost ${closeLosses} games by 5 pts or less.`,
+        `Points for: ${formatPoints(viewerPerf.totalPF)}. Record: ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        "Every week was a new way to suffer.",
+      ],
+      roastLine: "Invented new ways to lose.",
+    },
+    {
+      team: "Minnesota Vikings",
+      label: "Sneaky Fraud",
+      match: viewerRecordRank <= topCount && viewerPointsRank > topCount,
+      reasons: [
+        `Record rank ${viewerRecordRank}, points rank ${viewerPointsRank}.`,
+        `Wins masked a middling point total (${formatPoints(viewerPerf.totalPF)}).`,
+        "This season felt luckier than good.",
+      ],
+      roastLine: "You won, but nobody's convinced.",
+    },
+    {
+      team: "Las Vegas Raiders",
+      label: "Chaos",
+      match: viewerVarianceRank <= topCount,
+      reasons: [
+        `Wild swings: ${formatPoints(viewerPerf.variance)} pts std dev.`,
+        `Record: ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        "No one knows which version shows up.",
+      ],
+      roastLine: "Every week was a new personality.",
+    },
+    {
+      team: "Detroit Lions",
+      label: "Overachiever",
+      match: viewerRecordRank < viewerPointsRank - 2,
+      reasons: [
+        `Record rank ${viewerRecordRank} beat points rank ${viewerPointsRank}.`,
+        "Won more than the numbers said you should.",
+        "Gritty, annoying, effective.",
+      ],
+      roastLine: "Outworked the math.",
+    },
+    {
+      team: "Tennessee Titans",
+      label: "Mid-table Purgatory",
+      match: true,
+      reasons: [
+        `Record ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        `Points rank ${viewerPointsRank} of ${leagueSize}.`,
+        "Stuck in the middle, never feared.",
+      ],
+      roastLine: "Forever average, forever ignored.",
+    },
+  ];
+
+  const picked = archetypes.find((a) => a.match) || archetypes[archetypes.length - 1];
+
+  return {
+    team: picked.team,
+    label: picked.label,
+    reasons: picked.reasons,
+    roastLine: picked.roastLine,
+    record: `${viewerPerf.wins}-${viewerPerf.losses}`,
+    season: targetSeason,
+  };
+}
 
 function computePersonalHookCard(
   viewerKey: string,
@@ -844,6 +1052,51 @@ export default function LeagueHistoryPage() {
     );
   }, [viewerKey, data?.weeklyMatchups, managers, data?.league?.season]);
 
+  const nflDoppelganger = useMemo(() => {
+    if (!viewerKey || !data?.weeklyMatchups?.length || !managers.length) return null;
+    return computeNflDoppelganger(
+      viewerKey,
+      data?.seasonStats,
+      data.weeklyMatchups,
+      managers,
+      data?.league?.season,
+    );
+  }, [viewerKey, data?.seasonStats, data?.weeklyMatchups, managers, data?.league?.season]);
+
+  const doppelgangerList = useMemo(() => {
+    if (!data?.weeklyMatchups?.length || !managers.length) return [];
+    return managers
+      .map((m) => {
+        const dg = computeNflDoppelganger(
+          m.key,
+          data?.seasonStats,
+          data.weeklyMatchups,
+          managers,
+          data?.league?.season,
+        );
+        if (!dg) return null;
+        return {
+          rosterId: m.key,
+          managerName: m.name,
+          team: dg.team,
+          label: dg.label,
+          reasons: dg.reasons,
+          roastLine: dg.roastLine,
+          record: dg.record,
+          season: dg.season,
+        } satisfies DoppelgangerEntry;
+      })
+      .filter(Boolean) as DoppelgangerEntry[];
+  }, [data?.seasonStats, data?.weeklyMatchups, managers, data?.league?.season]);
+
+  const doppelgangerByRoster = useMemo(() => {
+    const map = new Map<string, DoppelgangerEntry>();
+    for (const entry of doppelgangerList) {
+      map.set(entry.rosterId, entry);
+    }
+    return map;
+  }, [doppelgangerList]);
+
   // Compute hero receipts from seasonStats and weeklyMatchups
   const heroReceipts = useMemo(
     () =>
@@ -852,6 +1105,31 @@ export default function LeagueHistoryPage() {
         : [],
     [data?.seasonStats, data?.weeklyMatchups, managers, avatarByKey, leagueId, emojiByKey]
   );
+
+  const heroReceiptsWithDoppelganger = useMemo(() => {
+    if (!nflDoppelganger) return heroReceipts;
+    const card = {
+      id: "nfl-doppelganger",
+      badge: "EDGE" as const,
+      title: "NFL DOPPELGÄNGER",
+      name: `You are the ${nflDoppelganger.team}.`,
+      avatarUrl: null,
+      emoji: null,
+      primaryStat: {
+        value: nflDoppelganger.record,
+        label: "RECORD",
+      },
+      punchline: nflDoppelganger.roastLine,
+      lines: [
+        { label: "Archetype", value: nflDoppelganger.label },
+        { label: "Signal", value: nflDoppelganger.reasons[0] },
+        { label: "Signal", value: nflDoppelganger.reasons[1] },
+        { label: "Signal", value: nflDoppelganger.reasons[2] },
+      ],
+      season: nflDoppelganger.season,
+    };
+    return [...heroReceipts, card];
+  }, [heroReceipts, nflDoppelganger]);
 
   // Compute additional mini cards from seasonStats and weeklyMatchups
   const additionalMiniCards = useMemo(
@@ -863,8 +1141,8 @@ export default function LeagueHistoryPage() {
   );
 
   const lockedReceiptsCount = useMemo(() => {
-    return Math.max(heroReceipts.length - 1, 0);
-  }, [heroReceipts.length]);
+    return Math.max(heroReceiptsWithDoppelganger.length - 1, 0);
+  }, [heroReceiptsWithDoppelganger.length]);
 
   const lockedStorylinesCount = useMemo(() => {
     const totalStorylines = leagueStorylines.length + additionalMiniCards.length;
@@ -909,6 +1187,98 @@ export default function LeagueHistoryPage() {
       week,
     });
   }, [personalHookCard, leagueId, viewerKey, data?.league?.season]);
+
+  const doppelgangerListTrackedRef = useRef<string>("");
+  useEffect(() => {
+    if (!leagueId || !doppelgangerList.length) return;
+    const season = data?.league?.season || doppelgangerList[0]?.season || "";
+    const key = `${leagueId}:${season}:dg-list`;
+    if (doppelgangerListTrackedRef.current === key) return;
+    doppelgangerListTrackedRef.current = key;
+    track("nfl_doppelganger_list_viewed", {
+      league_id: leagueId,
+      season,
+    });
+  }, [leagueId, doppelgangerList, data?.league?.season]);
+
+  const doppelgangerTrackedRef = useRef<string>("");
+  useEffect(() => {
+    if (!nflDoppelganger || !leagueId || !viewerKey || !showPremiumContent) return;
+    const key = `${leagueId}:${viewerKey}:${nflDoppelganger.team}:${nflDoppelganger.season}`;
+    if (doppelgangerTrackedRef.current === key) return;
+    doppelgangerTrackedRef.current = key;
+    track("nfl_doppelganger_viewed", {
+      league_id: leagueId,
+      roster_id: viewerKey,
+      season: nflDoppelganger.season,
+      nfl_team: nflDoppelganger.team,
+    });
+  }, [nflDoppelganger, leagueId, viewerKey, showPremiumContent]);
+
+  const [selectedDoppelgangerId, setSelectedDoppelgangerId] = useState<string | null>(null);
+  const [doppelgangerOpen, setDoppelgangerOpen] = useState(false);
+
+  useEffect(() => {
+    if (!hasData || !leagueId) return;
+    const params = new URLSearchParams(window.location.search);
+    const dgId = params.get("dg_roster_id");
+    if (!dgId || !doppelgangerByRoster.has(dgId)) return;
+    setSelectedDoppelgangerId(dgId);
+    setDoppelgangerOpen(true);
+  }, [hasData, leagueId, doppelgangerByRoster]);
+
+  const selectedDoppelganger = selectedDoppelgangerId
+    ? doppelgangerByRoster.get(selectedDoppelgangerId)
+    : null;
+
+  const canSeeDoppelgangerDetails =
+    !!selectedDoppelganger &&
+    !!viewerKey &&
+    showPremiumContent &&
+    viewerKey === selectedDoppelganger.rosterId;
+
+  const handleDoppelgangerClick = (rosterId: string) => {
+    const entry = doppelgangerByRoster.get(rosterId);
+    if (!entry) return;
+    setSelectedDoppelgangerId(rosterId);
+    setDoppelgangerOpen(true);
+    track("nfl_doppelganger_clicked", {
+      league_id: leagueId,
+      season: entry.season,
+      target_roster_id: rosterId,
+    });
+  };
+
+  const handleShareDoppelganger = async (entry: DoppelgangerEntry) => {
+    const baseUrl = `${window.location.origin}${window.location.pathname}`;
+    const params = new URLSearchParams();
+    if (leagueId) params.set("league_id", leagueId);
+    if (entry.season) params.set("season", entry.season);
+    params.set("dg_roster_id", entry.rosterId);
+    const url = `${baseUrl}?${params.toString()}`;
+
+    track("nfl_doppelganger_shared", {
+      league_id: leagueId,
+      season: entry.season,
+      target_roster_id: entry.rosterId,
+    });
+
+    try {
+      if (navigator.share && navigator.canShare) {
+        await navigator.share({
+          title: "Fantasy Roast",
+          text: `${entry.managerName}'s NFL Doppelgänger: ${entry.team} — ${entry.label}`,
+          url,
+        });
+        toast({ title: "Link shared" });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast({ title: "Link copied", description: "Send it to the group chat." });
+    } catch {
+      toast({ title: "Failed to share", variant: "destructive" });
+    }
+  };
 
   useEffect(() => {
     setViewerKey("");
@@ -1848,7 +2218,35 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {activeMode === "history" && hasData && hasEnoughData && heroReceipts.length > 0 && (
+      {activeMode === "history" && hasData && hasEnoughData && doppelgangerList.length > 0 && (
+        <section className="mt-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium text-muted-foreground">NFL Doppelgängers</h2>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Click a manager to see their team.
+          </p>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {doppelgangerList.map((entry) => (
+              <button
+                key={entry.rosterId}
+                type="button"
+                onClick={() => handleDoppelgangerClick(entry.rosterId)}
+                className="w-full text-left rounded-lg border border-border bg-card px-3 py-2 shadow-sm hover:border-primary/30 transition"
+              >
+                <div className="text-sm font-semibold text-foreground">
+                  {entry.managerName} — {entry.team}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {entry.label}
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {activeMode === "history" && hasData && hasEnoughData && heroReceiptsWithDoppelganger.length > 0 && (
         <p className="text-xs text-muted-foreground text-center">
           You’ve seen who owns the league. Now here’s how it broke.
         </p>
@@ -1856,14 +2254,14 @@ export default function LeagueHistoryPage() {
 
       {import.meta.env.DEV && hasData && (
         <p className="text-xs text-muted-foreground mb-2">
-          seasonStats: {data?.seasonStats?.length ?? 0}, weeklyMatchups: {data?.weeklyMatchups?.length ?? 0}, heroReceipts: {heroReceipts.length}
+          seasonStats: {data?.seasonStats?.length ?? 0}, weeklyMatchups: {data?.weeklyMatchups?.length ?? 0}, heroReceipts: {heroReceiptsWithDoppelganger.length}
         </p>
       )}
 
-      {activeMode === "history" && hasData && hasEnoughData && heroReceipts.length > 0 && (
+      {activeMode === "history" && hasData && hasEnoughData && heroReceiptsWithDoppelganger.length > 0 && (
         <section className="mt-8">
           <HeroReceipts
-            heroReceipts={heroReceipts}
+            heroReceipts={heroReceiptsWithDoppelganger}
             isPremium={showPremiumContent}
             onUnlock={handleCheckout}
             lockedTotalCount={lockedTotalCount}
@@ -1945,6 +2343,88 @@ export default function LeagueHistoryPage() {
             />
           </section>
         )}
+
+      {selectedDoppelganger && (
+        <Dialog open={doppelgangerOpen} onOpenChange={setDoppelgangerOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {selectedDoppelganger.managerName} — {selectedDoppelganger.team}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {selectedDoppelganger.label}
+              </p>
+              {!canSeeDoppelgangerDetails && (
+                <div className="rounded-lg border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
+                  Unlock to see why you’re the {selectedDoppelganger.team}.
+                </div>
+              )}
+              {canSeeDoppelgangerDetails && (
+                <div className="space-y-2 text-sm text-foreground">
+                  {selectedDoppelganger.reasons.map((r, i) => (
+                    <div key={`${selectedDoppelganger.rosterId}-reason-${i}`}>• {r}</div>
+                  ))}
+                  <p className="text-sm font-semibold">{selectedDoppelganger.roastLine}</p>
+                </div>
+              )}
+              {!canSeeDoppelgangerDetails && (
+                <p className="text-xs text-muted-foreground">
+                  🔒 See who beat you — and why this one hurt so much
+                </p>
+              )}
+            </div>
+            {!canSeeDoppelgangerDetails && (
+              <div className="pt-2 space-y-2">
+                {viewerKey && selectedDoppelganger.rosterId === viewerKey ? (
+                  <Button
+                    onClick={() => {
+                      track("nfl_doppelganger_unlock_clicked", {
+                        league_id: leagueId,
+                        season: selectedDoppelganger.season,
+                        target_roster_id: selectedDoppelganger.rosterId,
+                      });
+                      handleCheckout();
+                    }}
+                    className="w-full font-semibold interact-cta"
+                  >
+                    Unlock your doppelgänger — $7
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      onClick={() => handleShareDoppelganger(selectedDoppelganger)}
+                      className="w-full font-semibold interact-cta"
+                    >
+                      Share with {selectedDoppelganger.managerName}
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center">
+                      They’ll see their team… and can unlock why.
+                    </p>
+                    {!viewerKey && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          track("nfl_doppelganger_unlock_clicked", {
+                            league_id: leagueId,
+                            season: selectedDoppelganger.season,
+                            target_roster_id: selectedDoppelganger.rosterId,
+                          });
+                          handleCheckout();
+                        }}
+                        className="w-full"
+                      >
+                        Unlock to see the full doppelgänger breakdown
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
 
       {activeMode === "history" && hasData && hasEnoughData && !showPremiumContent && (
         <section className="pt-2">
