@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toPng } from "html-to-image";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Collapsible,
   CollapsibleContent,
@@ -43,7 +44,7 @@ import { createCheckoutSession } from "@/lib/checkout";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername } from "./utils";
 import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards, type MiniCard } from "./storylines";
 import { computeHeroReceipts } from "./computeHeroReceipts";
-import { trackFunnel } from "@/lib/track";
+import { track, trackFunnel } from "@/lib/track";
 import type {
   Badge,
   DominanceApiResponse,
@@ -51,6 +52,7 @@ import type {
   VictimRow,
   LandlordSummary,
   ManagerRow,
+  WeeklyMatchupDetail,
 } from "./types";
 import type { RoastResponse, WrappedResponse, LeagueAutopsyResponse } from "@shared/schema";
 
@@ -61,6 +63,112 @@ type TeamOption = { roster_id: number; name: string };
 
 function isCountable(c: DominanceCellDTO) {
   return (c?.games ?? 0) >= 3;
+}
+
+function formatPoints(value: number) {
+  return Number.isFinite(value) ? value.toFixed(1) : "—";
+}
+
+type PersonalHookCard =
+  | {
+      type: "second_most_points_loss" | "worst_loss";
+      title: string;
+      subtitle: string;
+      body: string;
+      teaser: string;
+      pointsFor: string;
+      week: number;
+      season?: string;
+    }
+  | {
+      type: "undefeated";
+      title: string;
+      body: string;
+      pointsFor?: string;
+      week?: number;
+      season?: string;
+      teaser?: string;
+      subtitle?: string;
+    };
+
+function computePersonalHookCard(
+  viewerKey: string,
+  weeklyMatchups: WeeklyMatchupDetail[],
+  managers: ManagerRow[],
+  leagueSeason?: string,
+): PersonalHookCard | null {
+  const losses = weeklyMatchups.filter(
+    (m) =>
+      m.managerKey === viewerKey &&
+      !m.won &&
+      Number.isFinite(m.points) &&
+      Number.isFinite(m.opponentPoints),
+  );
+
+  if (!losses.length) {
+    return {
+      type: "undefeated",
+      title: "Nobody Gave You This Satisfaction.",
+      body: "No losses found. Your league had to find other ways to cope.",
+      season: leagueSeason,
+    };
+  }
+
+  const weekPointsMap = new Map<string, Array<{ managerKey: string; points: number }>>();
+  for (const m of weeklyMatchups) {
+    if (!Number.isFinite(m.points)) continue;
+    const key = `${m.season}-${m.week}`;
+    const list = weekPointsMap.get(key) || [];
+    list.push({ managerKey: m.managerKey, points: m.points });
+    weekPointsMap.set(key, list);
+  }
+
+  const qualifiedSecondMost = losses.filter((loss) => {
+    const key = `${loss.season}-${loss.week}`;
+    const list = weekPointsMap.get(key) || [];
+    const higherCount = list.filter((p) => p.points > loss.points).length;
+    return higherCount === 1;
+  });
+
+  if (qualifiedSecondMost.length > 0) {
+    const best = [...qualifiedSecondMost].sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      const aMargin = Math.abs(a.margin ?? (a.opponentPoints - a.points));
+      const bMargin = Math.abs(b.margin ?? (b.opponentPoints - b.points));
+      return aMargin - bMargin;
+    })[0];
+
+    const pointsFor = formatPoints(best.points);
+    return {
+      type: "second_most_points_loss",
+      title: "This Should Have Been a Win.",
+      subtitle: "You scored the 2nd-most points in the league.",
+      body: `You put up ${pointsFor} points in Week ${best.week}. Only one team scored more — and you still lost.`,
+      teaser: "🔒 See who beat you — and why this one hurt so much",
+      pointsFor,
+      week: best.week,
+      season: best.season || leagueSeason,
+    };
+  }
+
+  const worst = [...losses].sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    const aMargin = Math.abs(a.margin ?? (a.opponentPoints - a.points));
+    const bMargin = Math.abs(b.margin ?? (b.opponentPoints - b.points));
+    return aMargin - bMargin;
+  })[0];
+
+  const pointsFor = formatPoints(worst.points);
+  return {
+    type: "worst_loss",
+    title: "You Did Enough.",
+    subtitle: "And still took the L.",
+    body: `You scored ${pointsFor} in Week ${worst.week} and still lost. That’s fantasy football for you.`,
+    teaser: "🔒 See who beat you — and why this one hurt so much",
+    pointsFor,
+    week: worst.week,
+    season: worst.season || leagueSeason,
+  };
 }
 
 export default function LeagueHistoryPage() {
@@ -726,6 +834,16 @@ export default function LeagueHistoryPage() {
     [viewerKey, allCells, managers, data?.weeklyMatchups]
   );
 
+  const personalHookCard = useMemo(() => {
+    if (!viewerKey || !data?.weeklyMatchups?.length) return null;
+    return computePersonalHookCard(
+      viewerKey,
+      data.weeklyMatchups,
+      managers,
+      data?.league?.season,
+    );
+  }, [viewerKey, data?.weeklyMatchups, managers, data?.league?.season]);
+
   // Compute hero receipts from seasonStats and weeklyMatchups
   const heroReceipts = useMemo(
     () =>
@@ -774,6 +892,23 @@ export default function LeagueHistoryPage() {
   const rivalryExists = useMemo(() => {
     return biggestRivalry?.badge === "RIVAL";
   }, [biggestRivalry]);
+
+  const personalCardTrackedRef = useRef<string>("");
+  useEffect(() => {
+    if (!personalHookCard || !leagueId || !viewerKey) return;
+    const season = personalHookCard.season || data?.league?.season || "";
+    const week = typeof personalHookCard.week === "number" ? personalHookCard.week : null;
+    const key = `${leagueId}:${viewerKey}:${season}:${personalHookCard.type}:${week ?? "na"}`;
+    if (personalCardTrackedRef.current === key) return;
+    personalCardTrackedRef.current = key;
+    track("personal_card_viewed", {
+      card_type: personalHookCard.type,
+      league_id: leagueId,
+      roster_id: viewerKey,
+      season,
+      week,
+    });
+  }, [personalHookCard, leagueId, viewerKey, data?.league?.season]);
 
   useEffect(() => {
     setViewerKey("");
@@ -1581,6 +1716,82 @@ export default function LeagueHistoryPage() {
         </div>
       )}
 
+      {activeMode === "history" && (
+        <section>
+          <h2 className="text-sm font-medium text-muted-foreground mb-2">
+            Every matchup, every roast
+          </h2>
+          <DominanceGrid
+            managers={managers}
+            rowTotals={rowTotals}
+            colTotals={colTotals}
+            grandTotals={grandTotals}
+            cellMap={cellMap}
+            allCells={allCells}
+            activeBadge={activeBadge}
+            onActiveBadgeChange={setActiveBadge}
+            onSelectCell={setSelected}
+            onDownloadPng={downloadPng}
+            onSharePng={sharePng}
+            isDownloading={isDownloading}
+            isSharing={isSharing}
+            isFetching={isFetching}
+            gridVisibleRef={gridVisibleRef}
+            highlightedManagerKey={highlightedManagerKey}
+            isPremium={showPremiumContent}
+            onUnlock={handleCheckout}
+          />
+
+          {/* View as picker - personal roast selector */}
+          {hasData && hasEnoughData && managers.length > 0 && (
+            <div ref={viewAsPickerRef} className="mt-3 flex items-center justify-center gap-3">
+              <span className="text-sm font-medium text-foreground">View as:</span>
+              <Select
+                value={viewerKey || "__none__"}
+                onValueChange={(v) => {
+                  if (v === "__none__") {
+                    setViewerKey("");
+                    if (leagueId.trim()) setViewerByLeague(leagueId.trim(), "");
+                  } else {
+                    setViewerKey(v);
+                    if (leagueId.trim()) setViewerByLeague(leagueId.trim(), v);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Pick your manager" />
+                </SelectTrigger>
+                <SelectContent className="!bg-background">
+                  <SelectItem value="__none__">
+                    Pick your manager
+                  </SelectItem>
+                  {managers.map((m) => (
+                    <SelectItem key={m.key} value={m.key}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                See your personal roasts
+              </p>
+            </div>
+          )}
+          
+          {/* Trust Signals */}
+          {hasData && (
+            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+              <span>Powered by Sleeper API</span>
+              {lastAnalyzedAt && (
+                <span>
+                  Last updated: {lastAnalyzedAt.toLocaleString()}
+                </span>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       {activeMode === "history" && hasData && hasEnoughData && (
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-2">
@@ -1605,38 +1816,34 @@ export default function LeagueHistoryPage() {
         </section>
       )}
 
-      {/* View as picker - moved here for better visibility */}
-      {activeMode === "history" && hasData && hasEnoughData && managers.length > 0 && (
-        <section ref={viewAsPickerRef} className="flex items-center justify-center gap-3 py-2">
-          <span className="text-sm font-medium text-foreground">View as:</span>
-          <Select
-            value={viewerKey || "__none__"}
-            onValueChange={(v) => {
-              if (v === "__none__") {
-                setViewerKey("");
-                if (leagueId.trim()) setViewerByLeague(leagueId.trim(), "");
-              } else {
-                setViewerKey(v);
-                if (leagueId.trim()) setViewerByLeague(leagueId.trim(), v);
-              }
-            }}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Pick your manager" />
-            </SelectTrigger>
-            <SelectContent className="!bg-background">
-              <SelectItem value="__none__">
-                Pick your manager
-              </SelectItem>
-              {managers.map((m) => (
-                <SelectItem key={m.key} value={m.key}>
-                  {m.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            See your personal roasts
+      {activeMode === "history" && hasData && hasEnoughData && personalHookCard && (
+        <section className="mt-4">
+          <div className="max-w-md mx-auto">
+            <Card className="border border-primary/20 shadow-sm">
+              <CardContent className="p-4 space-y-2">
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">
+                    {personalHookCard.title}
+                  </h3>
+                  {personalHookCard.subtitle && (
+                    <p className="text-xs text-muted-foreground">
+                      {personalHookCard.subtitle}
+                    </p>
+                  )}
+                </div>
+                <p className="text-sm text-foreground">
+                  {personalHookCard.body}
+                </p>
+                {personalHookCard.teaser && (
+                  <p className="text-xs text-muted-foreground">
+                    {personalHookCard.teaser}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+          <p className="text-xs text-muted-foreground text-center mt-3">
+            This is just one moment. See what else your league has to say about you — $7.
           </p>
         </section>
       )}
@@ -1673,46 +1880,6 @@ export default function LeagueHistoryPage() {
             Add more weeks to see who owns who.
           </p>
         </div>
-      )}
-
-      {activeMode === "history" && (
-        <section>
-        <h2 className="text-sm font-medium text-muted-foreground mb-2">
-          Every matchup, every roast
-        </h2>
-        <DominanceGrid
-          managers={managers}
-          rowTotals={rowTotals}
-          colTotals={colTotals}
-          grandTotals={grandTotals}
-          cellMap={cellMap}
-          allCells={allCells}
-          activeBadge={activeBadge}
-          onActiveBadgeChange={setActiveBadge}
-          onSelectCell={setSelected}
-          onDownloadPng={downloadPng}
-          onSharePng={sharePng}
-          isDownloading={isDownloading}
-          isSharing={isSharing}
-          isFetching={isFetching}
-          gridVisibleRef={gridVisibleRef}
-          highlightedManagerKey={highlightedManagerKey}
-          isPremium={showPremiumContent}
-          onUnlock={handleCheckout}
-        />
-        
-        {/* Trust Signals */}
-        {hasData && (
-          <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-            <span>Powered by Sleeper API</span>
-            {lastAnalyzedAt && (
-              <span>
-                Last updated: {lastAnalyzedAt.toLocaleString()}
-              </span>
-            )}
-          </div>
-        )}
-      </section>
       )}
 
       {activeMode === "history" &&
@@ -1778,6 +1945,14 @@ export default function LeagueHistoryPage() {
             />
           </section>
         )}
+
+      {activeMode === "history" && hasData && hasEnoughData && !showPremiumContent && (
+        <section className="pt-2">
+          <Button onClick={handleCheckout} className="w-full sm:w-auto font-semibold interact-cta">
+            See the rest of your roast — $7
+          </Button>
+        </section>
+      )}
 
       {/* Conversion Banner - appears after Storylines */}
       {activeMode === "history" && hasData && hasEnoughData && (
