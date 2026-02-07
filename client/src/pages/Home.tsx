@@ -190,7 +190,7 @@ export default function Home() {
               </Button>
             </div>
             <p className="text-sm text-muted-foreground">
-              Unlock for you — <span className="font-bold text-foreground">$2.99</span>
+              One-time payment • No subscription
             </p>
           </section>
 
