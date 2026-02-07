@@ -12,7 +12,7 @@ import { Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // Personal Unlock Pricing
-const PRICE = 7;
+const PRICE = 2.99;
 
 type Props = {
   open: boolean;

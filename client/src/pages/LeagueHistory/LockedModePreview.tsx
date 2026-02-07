@@ -2,7 +2,7 @@ import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // Personal Unlock Pricing
-const PRICE = 7;
+const PRICE = 2.99;
 
 type LockedModePreviewProps = {
   title: string;

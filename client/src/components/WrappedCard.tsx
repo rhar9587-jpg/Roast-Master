@@ -232,7 +232,7 @@ export function WrappedCard({
           </div>
           {!isPremium && (
             <p className="text-xs text-gray-500 text-right">
-              Watermark removed when you unlock ($7)
+              Watermark removed when you unlock ($2.99)
             </p>
           )}
         </div>

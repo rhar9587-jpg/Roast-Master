@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 
 const STORAGE_KEY = "fantasy-roast-upgradeDismissedUntil";
 // Personal Unlock Pricing
-const PRICE = 7;
+const PRICE = 2.99;
 
 type Props = {
   onUpgrade?: () => void;

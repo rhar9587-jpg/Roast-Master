@@ -8,7 +8,7 @@ import { useState } from "react";
 import * as React from "react";
 
 // Personal Unlock Pricing
-const PRICE = 7;
+const PRICE = 2.99;
 
 type MostOwned = {
   victimName: string;
@@ -34,6 +34,35 @@ type BiggestRivalry = {
   cellKey: string;
 };
 
+type PersonalHookCard =
+  | {
+      type: "second_most_points_loss" | "worst_loss";
+      title: string;
+      subtitle: string;
+      body: string;
+      teaser: string;
+      pointsFor: string;
+      week: number;
+      season?: string;
+    }
+  | {
+      type: "undefeated";
+      title: string;
+      body: string;
+      pointsFor?: string;
+      week?: number;
+      season?: string;
+    };
+
+type NflDoppelganger = {
+  team: string;
+  label: string;
+  reasons: string[];
+  roastLine: string;
+  record: string;
+  season: string;
+};
+
 type Props = {
   landlord: LandlordSummary | null;
   mostOwned: MostOwned | null;
@@ -44,6 +73,11 @@ type Props = {
   isPremium: boolean;
   onUnlock?: () => void;
   lockedTotalCount?: number;
+  personalHookCard?: PersonalHookCard | null;
+  nflDoppelganger?: NflDoppelganger | null;
+  viewerName?: string;
+  viewerAvatarUrl?: string | null;
+  viewerEmoji?: string | null;
 };
 
 // Helper component to wrap blurred cards
@@ -95,7 +129,84 @@ export function InsightsDashboard({
   isPremium,
   onUnlock,
   lockedTotalCount,
+  personalHookCard,
+  nflDoppelganger,
+  viewerName,
+  viewerAvatarUrl,
+  viewerEmoji,
 }: Props) {
+  // Build NFL Doppelgänger card (second card after Landlord)
+  const nflDoppelgangerCard = nflDoppelganger ? (
+    <BaseballCard
+      badge={nflDoppelganger.label.toUpperCase()}
+      title="NFL DOPPELGÄNGER 🏈"
+      name={nflDoppelganger.team}
+      avatarUrl={viewerAvatarUrl ?? null}
+      emoji={viewerEmoji ?? null}
+      primaryStat={{
+        value: nflDoppelganger.record,
+        label: "YOUR RECORD",
+      }}
+      punchline={nflDoppelganger.roastLine}
+      lines={[
+        { label: "Archetype", value: nflDoppelganger.label },
+        { label: "Season", value: nflDoppelganger.season },
+      ]}
+      back={{
+        lines: nflDoppelganger.reasons.map((reason, i) => ({
+          label: `${i + 1}.`,
+          value: reason,
+        })),
+      }}
+      season={nflDoppelganger.season}
+      enableShare={isPremium}
+      isPremium={isPremium}
+    />
+  ) : null;
+
+  // Build personal hook card as BaseballCard (always visible, creates emotional hook)
+  const personalHookBaseballCard = personalHookCard ? (
+    <BaseballCard
+      badge={
+        personalHookCard.type === "undefeated"
+          ? "UNTOUCHABLE"
+          : personalHookCard.type === "second_most_points_loss"
+            ? "ROBBED"
+            : "PAIN"
+      }
+      title={
+        personalHookCard.type === "undefeated"
+          ? "UNDEFEATED 🏆"
+          : personalHookCard.type === "second_most_points_loss"
+            ? "ROBBED 😤"
+            : "YOUR WORST LOSS 💀"
+      }
+      name={viewerName ?? "You"}
+      avatarUrl={viewerAvatarUrl ?? null}
+      emoji={viewerEmoji ?? null}
+      primaryStat={
+        personalHookCard.type !== "undefeated" && personalHookCard.pointsFor
+          ? {
+              value: personalHookCard.pointsFor,
+              label: `WEEK ${personalHookCard.week}`,
+            }
+          : { value: "∞", label: "WINS" }
+      }
+      punchline={personalHookCard.body}
+      lines={
+        personalHookCard.type !== "undefeated"
+          ? [
+              { label: "Week", value: String(personalHookCard.week) },
+              { label: "Points", value: personalHookCard.pointsFor },
+            ]
+          : [{ label: "Losses", value: "0" }]
+      }
+      season={personalHookCard.season ?? "2024–25"}
+      enableShare={isPremium}
+      isPremium={isPremium}
+    />
+  ) : null;
+
   const landlordCard = (
     <BaseballCard
       badge="OWNED"
@@ -234,6 +345,8 @@ export function InsightsDashboard({
     return (
       <RoastDeckCarousel>
         {landlordCard}
+        {nflDoppelgangerCard}
+        {personalHookBaseballCard}
         {mostOwnedCard}
         {biggestRivalryCard}
       </RoastDeckCarousel>
@@ -244,6 +357,8 @@ export function InsightsDashboard({
     <div className="space-y-4">
       <RoastDeckCarousel>
         {landlordCard}
+        {nflDoppelgangerCard}
+        {personalHookBaseballCard}
         <BlurredCardWrapper onUnlock={onUnlock}>
           {mostOwnedCard}
         </BlurredCardWrapper>

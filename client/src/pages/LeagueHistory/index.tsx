@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { toPng } from "html-to-image";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -167,7 +166,10 @@ function computeNflDoppelganger(
   if (!perfList.length) return null;
 
   const leagueSize = perfList.length;
-  const topCount = Math.max(2, Math.ceil(leagueSize * 0.2));
+  const topCount = Math.max(2, Math.ceil(leagueSize * 0.25)); // Widened to 25%
+  const bottomCount = Math.max(2, Math.ceil(leagueSize * 0.25)); // Bottom 25%
+  const midFloor = topCount + 1; // Start of "middle"
+  const midCeil = leagueSize - bottomCount; // End of "middle"
 
   const pointsRanked = [...perfList].sort((a, b) => b.totalPF - a.totalPF);
   const recordRanked = [...perfList].sort((a, b) => {
@@ -196,11 +198,23 @@ function computeNflDoppelganger(
       Math.abs(m.margin ?? m.opponentPoints - m.points) <= 5,
   ).length;
 
+  // Compute first-half vs second-half performance for momentum archetypes
+  const viewerWeekly = weeklyMatchups
+    .filter((m) => m.managerKey === viewerKey && m.season === targetSeason)
+    .sort((a, b) => a.week - b.week);
+  const midWeek = Math.ceil(viewerWeekly.length / 2);
+  const firstHalfWins = viewerWeekly.slice(0, midWeek).filter((m) => m.won).length;
+  const secondHalfWins = viewerWeekly.slice(midWeek).filter((m) => m.won).length;
+
+  // Check if record is close to .500
+  const isNear500 = Math.abs(viewerPerf.wins - viewerPerf.losses) <= 2;
+
   const archetypes = [
+    // ============ TOP TIER (specific achievements) ============
     {
       team: "San Francisco 49ers",
       label: "Juggernaut",
-      // varianceRank is sorted high-to-low, so "least volatile" is the bottom 20%
+      // varianceRank is sorted high-to-low, so "least volatile" is the bottom 25%
       match: viewerPointsRank <= topCount && viewerVarianceRank > leagueSize - topCount,
       reasons: [
         `No. ${viewerPointsRank} in points (${formatPoints(viewerPerf.totalPF)}).`,
@@ -211,80 +225,182 @@ function computeNflDoppelganger(
     },
     {
       team: "Kansas City Chiefs",
-      label: "Villain / Always wins",
+      label: "The Villain",
       match: viewerRecordRank === 1 && viewerPointsRank <= topCount,
       reasons: [
-        `Top-${viewerRecordRank} record at ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        `Best record at ${viewerPerf.wins}-${viewerPerf.losses}.`,
         `Top-${viewerPointsRank} in points (${formatPoints(viewerPerf.totalPF)}).`,
         "The league is tired of you winning.",
       ],
-      roastLine: "Every season ends with you on top.",
+      roastLine: "Everyone hates you. You don't care.",
     },
     {
       team: "Los Angeles Chargers",
-      label: "Talented Disappointment",
+      label: "Wasted Talent",
       match: viewerPointsRank <= topCount && viewerRecordRank > topCount,
       reasons: [
-        `Top-${viewerPointsRank} scorer, only ${viewerPerf.wins}-${viewerPerf.losses}.`,
-        "High firepower, low results.",
-        "Highlight reel, no trophy.",
+        `Top-${viewerPointsRank} scorer with only ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        "All the firepower, none of the wins.",
+        "Your roster deserved better luck.",
       ],
-      roastLine: "All flash, no hardware.",
-    },
-    {
-      team: "New York Jets",
-      label: "Pain Merchant",
-      match: closeLosses >= 2 && viewerRecordRank > topCount,
-      reasons: [
-        `Lost ${closeLosses} games by 5 pts or less.`,
-        `Points for: ${formatPoints(viewerPerf.totalPF)}. Record: ${viewerPerf.wins}-${viewerPerf.losses}.`,
-        "Every week was a new way to suffer.",
-      ],
-      roastLine: "Invented new ways to lose.",
+      roastLine: "A Ferrari driven into a ditch.",
     },
     {
       team: "Minnesota Vikings",
-      label: "Sneaky Fraud",
-      match: viewerRecordRank <= topCount && viewerPointsRank > topCount,
+      label: "Schedule Merchant",
+      match: viewerRecordRank <= topCount && viewerPointsRank > midFloor,
       reasons: [
-        `Record rank ${viewerRecordRank}, points rank ${viewerPointsRank}.`,
-        `Wins masked a middling point total (${formatPoints(viewerPerf.totalPF)}).`,
-        "This season felt luckier than good.",
+        `Record: ${viewerPerf.wins}-${viewerPerf.losses} (rank ${viewerRecordRank}).`,
+        `Points rank ${viewerPointsRank} tells a different story.`,
+        "You won, but the numbers don't believe you.",
       ],
-      roastLine: "You won, but nobody's convinced.",
+      roastLine: "Lucky bounces all season.",
     },
+
+    // ============ CHAOS / HIGH VARIANCE ============
     {
       team: "Las Vegas Raiders",
-      label: "Chaos",
-      match: viewerVarianceRank <= topCount,
+      label: "Chaos Agent",
+      match: viewerVarianceRank <= topCount && viewerRecordRank > topCount,
       reasons: [
         `Wild swings: ${formatPoints(viewerPerf.variance)} pts std dev.`,
-        `Record: ${viewerPerf.wins}-${viewerPerf.losses}.`,
-        "No one knows which version shows up.",
+        `Finished ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        "No one knew which version would show up.",
       ],
-      roastLine: "Every week was a new personality.",
+      roastLine: "Every week was a coin flip.",
     },
+
+    // ============ PAIN / CLOSE LOSSES ============
+    {
+      team: "New York Jets",
+      label: "Pain Merchant",
+      match: closeLosses >= 3,
+      reasons: [
+        `Lost ${closeLosses} games by 5 pts or less.`,
+        "Fantasy football personally victimized you.",
+        "The unluckiest manager in the league.",
+      ],
+      roastLine: "You invented new ways to suffer.",
+    },
+    {
+      team: "Atlanta Falcons",
+      label: "Blown Lead Specialist",
+      match: closeLosses >= 2 && viewerPointsRank <= midCeil,
+      reasons: [
+        `${closeLosses} heartbreakers by slim margins.`,
+        "Had the lead. Lost the game.",
+        "28-3 energy all season.",
+      ],
+      roastLine: "Snatching defeat from the jaws of victory.",
+    },
+
+    // ============ MID-TIER WITH STORY ============
     {
       team: "Detroit Lions",
       label: "Overachiever",
       match: viewerRecordRank < viewerPointsRank - 2,
       reasons: [
         `Record rank ${viewerRecordRank} beat points rank ${viewerPointsRank}.`,
-        "Won more than the numbers said you should.",
+        "Won more than the math said you should.",
         "Gritty, annoying, effective.",
       ],
-      roastLine: "Outworked the math.",
+      roastLine: "Ugly wins are still wins.",
     },
     {
+      team: "Cincinnati Bengals",
+      label: "Second-Half Surge",
+      match: secondHalfWins > firstHalfWins + 1 && viewerRecordRank > topCount,
+      reasons: [
+        `Started ${firstHalfWins} wins, finished with ${secondHalfWins} more.`,
+        "The league slept on your late-season run.",
+        "Too little, too late — or was it?",
+      ],
+      roastLine: "Fashionably late to contention.",
+    },
+    {
+      team: "New Orleans Saints",
+      label: "Fading Star",
+      match: firstHalfWins > secondHalfWins + 1 && viewerRecordRank > topCount,
+      reasons: [
+        `Started hot with ${firstHalfWins} wins, then ${secondHalfWins}.`,
+        "Your team quit before the season did.",
+        "Week 1 was your Super Bowl.",
+      ],
+      roastLine: "All downhill from Week 1.",
+    },
+    {
+      team: "Pittsburgh Steelers",
+      label: "The .500 Life",
+      match: isNear500 && viewerRecordRank > topCount && viewerRecordRank <= midCeil,
+      reasons: [
+        `Finished ${viewerPerf.wins}-${viewerPerf.losses}. Peak mediocrity.`,
+        "Not bad enough to rebuild, not good enough to win.",
+        "The definition of 'fine.'",
+      ],
+      roastLine: "Aggressively average.",
+    },
+    {
+      team: "Dallas Cowboys",
+      label: "All Hype",
+      match:
+        viewerRecordRank > topCount &&
+        viewerRecordRank <= midCeil &&
+        viewerPointsRank > topCount &&
+        viewerPointsRank <= midCeil,
+      reasons: [
+        `Finished ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        `Points rank ${viewerPointsRank} of ${leagueSize}.`,
+        "Talked a big game. Delivered average.",
+      ],
+      roastLine: "America's Team of Disappointment.",
+    },
+
+    // ============ BOTTOM TIER ============
+    {
+      team: "Cleveland Browns",
+      label: "Next Year's Contender",
+      match: viewerRecordRank > midCeil && viewerPointsRank <= midCeil,
+      reasons: [
+        `Record: ${viewerPerf.wins}-${viewerPerf.losses}. Not great.`,
+        "The pieces were there. The wins weren't.",
+        "Perpetually rebuilding.",
+      ],
+      roastLine: "Your window is always 'next year.'",
+    },
+    {
+      team: "Carolina Panthers",
+      label: "Rebuilding Forever",
+      match: viewerRecordRank > midCeil && viewerPointsRank > midCeil && viewerRecordRank < leagueSize,
+      reasons: [
+        `${viewerPerf.wins}-${viewerPerf.losses}. Near the bottom.`,
+        `Points rank ${viewerPointsRank} of ${leagueSize}.`,
+        "At least you have draft picks?",
+      ],
+      roastLine: "The rebuild has no end date.",
+    },
+    {
+      team: "Houston Texans",
+      label: "Basement Dweller",
+      match: viewerRecordRank === leagueSize || viewerPointsRank === leagueSize,
+      reasons: [
+        `Record: ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        `Points: ${formatPoints(viewerPerf.totalPF)} (rank ${viewerPointsRank}).`,
+        "At least someone has to finish last.",
+      ],
+      roastLine: "Rock bottom, meet your new tenant.",
+    },
+
+    // ============ TRUE FALLBACK (should be rare now) ============
+    {
       team: "Tennessee Titans",
-      label: "Mid-table Purgatory",
+      label: "Forgettable",
       match: true,
       reasons: [
-        `Record ${viewerPerf.wins}-${viewerPerf.losses}.`,
+        `Record: ${viewerPerf.wins}-${viewerPerf.losses}.`,
         `Points rank ${viewerPointsRank} of ${leagueSize}.`,
-        "Stuck in the middle, never feared.",
+        "No storyline. No drama. Just... there.",
       ],
-      roastLine: "Forever average, forever ignored.",
+      roastLine: "The human equivalent of a bye week.",
     },
   ];
 
@@ -426,11 +542,9 @@ export default function LeagueHistoryPage() {
   const gridExportRef = useRef<HTMLDivElement | null>(null);
   const storylinesExportRef = useRef<HTMLDivElement | null>(null);
   const yourRoastExportRef = useRef<HTMLDivElement | null>(null);
-  const viewAsPickerRef = useRef<HTMLDivElement | null>(null);
   const selectorRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedFromUrl = useRef(false);
   const shouldAutoTrigger = useRef(false);
-  const hasScrolledToPicker = useRef(false);
 
   const { data, isFetching, error, refetch } = useQuery({
     queryKey: ["league-history-dominance", leagueId, startWeek, endWeek, includePlayoffs],
@@ -662,24 +776,8 @@ export default function LeagueHistoryPage() {
         hasTrackedLoad.current = true;
         trackFunnel.leagueHistoryLoaded(leagueId);
       }
-      
-      // Auto-scroll to "View as" picker after a short delay to let UI render
-      // Check data?.grid?.length inside effect (managers is defined later via useMemo)
-      if (!hasScrolledToPicker.current && viewAsPickerRef.current) {
-        // Use data?.grid?.length as proxy for managers.length since managers depends on it
-        const hasManagers = data?.grid?.length > 0;
-        if (hasManagers) {
-          setTimeout(() => {
-            viewAsPickerRef.current?.scrollIntoView({ 
-              behavior: "smooth", 
-              block: "center" 
-            });
-            hasScrolledToPicker.current = true;
-          }, 500);
-        }
-      }
     }
-  }, [isFetching, hasData, data?.grid?.length, leagueId]);
+  }, [isFetching, hasData, leagueId]);
 
   // Save to recent leagues after successful fetch
   useEffect(() => {
@@ -2087,6 +2185,78 @@ export default function LeagueHistoryPage() {
         </div>
       )}
 
+      {/* View as picker - moved to top so personal content renders correctly */}
+      {activeMode === "history" && hasData && hasEnoughData && managers.length > 0 && (
+        <section className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <span className="text-sm font-medium text-foreground">
+              {viewerKey ? "Viewing as:" : "Who are you?"}
+            </span>
+            <Select
+              value={viewerKey || "__none__"}
+              onValueChange={(v) => {
+                if (v === "__none__") {
+                  setViewerKey("");
+                  if (leagueId.trim()) setViewerByLeague(leagueId.trim(), "");
+                } else {
+                  setViewerKey(v);
+                  if (leagueId.trim()) setViewerByLeague(leagueId.trim(), v);
+                }
+              }}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select your team" />
+              </SelectTrigger>
+              <SelectContent className="!bg-background">
+                <SelectItem value="__none__">
+                  Select your team
+                </SelectItem>
+                {managers.map((m) => (
+                  <SelectItem key={m.key} value={m.key}>
+                    {m.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!viewerKey && (
+              <p className="text-xs text-muted-foreground">
+                Select yourself to see your personal roast
+              </p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* InsightsDashboard - Personal hook cards ABOVE the grid for conversion */}
+      {activeMode === "history" && hasData && hasEnoughData && (
+        <section>
+          <h2 className="text-sm font-medium text-muted-foreground mb-2">
+            Your league's biggest moments
+          </h2>
+          <InsightsDashboard
+            landlord={landlord}
+            mostOwned={mostOwned}
+            biggestRivalry={biggestRivalry}
+            avatarByKey={avatarByKey}
+            emojiByKey={emojiByKey}
+            onOpenCell={openCell}
+            isPremium={showPremiumContent}
+            onUnlock={handleCheckout}
+            lockedTotalCount={lockedTotalCount}
+            personalHookCard={personalHookCard}
+            nflDoppelganger={nflDoppelganger}
+            viewerName={managers.find((m) => m.key === viewerKey)?.name}
+            viewerAvatarUrl={viewerKey ? avatarByKey[viewerKey] : null}
+            viewerEmoji={viewerKey ? emojiByKey[viewerKey] : null}
+          />
+          {hasData && hasEnoughData && (
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Found your nemesis? Send this roast.
+            </p>
+          )}
+        </section>
+      )}
+
       {activeMode === "history" && (
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-2">
@@ -2112,42 +2282,6 @@ export default function LeagueHistoryPage() {
             isPremium={showPremiumContent}
             onUnlock={handleCheckout}
           />
-
-          {/* View as picker - personal roast selector */}
-          {hasData && hasEnoughData && managers.length > 0 && (
-            <div ref={viewAsPickerRef} className="mt-3 flex items-center justify-center gap-3">
-              <span className="text-sm font-medium text-foreground">View as:</span>
-              <Select
-                value={viewerKey || "__none__"}
-                onValueChange={(v) => {
-                  if (v === "__none__") {
-                    setViewerKey("");
-                    if (leagueId.trim()) setViewerByLeague(leagueId.trim(), "");
-                  } else {
-                    setViewerKey(v);
-                    if (leagueId.trim()) setViewerByLeague(leagueId.trim(), v);
-                  }
-                }}
-              >
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Pick your manager" />
-                </SelectTrigger>
-                <SelectContent className="!bg-background">
-                  <SelectItem value="__none__">
-                    Pick your manager
-                  </SelectItem>
-                  {managers.map((m) => (
-                    <SelectItem key={m.key} value={m.key}>
-                      {m.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                See your personal roasts
-              </p>
-            </div>
-          )}
           
           {/* Trust Signals */}
           {hasData && (
@@ -2160,62 +2294,6 @@ export default function LeagueHistoryPage() {
               )}
             </div>
           )}
-        </section>
-      )}
-
-      {activeMode === "history" && hasData && hasEnoughData && (
-        <section>
-          <h2 className="text-sm font-medium text-muted-foreground mb-2">
-            Your league's biggest moments
-          </h2>
-          <InsightsDashboard
-            landlord={landlord}
-            mostOwned={mostOwned}
-            biggestRivalry={biggestRivalry}
-            avatarByKey={avatarByKey}
-            emojiByKey={emojiByKey}
-            onOpenCell={openCell}
-            isPremium={showPremiumContent}
-            onUnlock={handleCheckout}
-            lockedTotalCount={lockedTotalCount}
-          />
-          {hasData && hasEnoughData && (
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              Found your nemesis? Send this roast.
-            </p>
-          )}
-        </section>
-      )}
-
-      {activeMode === "history" && hasData && hasEnoughData && personalHookCard && (
-        <section className="mt-4">
-          <div className="max-w-md mx-auto">
-            <Card className="border border-primary/20 shadow-sm">
-              <CardContent className="p-4 space-y-2">
-                <div>
-                  <h3 className="text-lg font-bold text-foreground">
-                    {personalHookCard.title}
-                  </h3>
-                  {personalHookCard.subtitle && (
-                    <p className="text-xs text-muted-foreground">
-                      {personalHookCard.subtitle}
-                    </p>
-                  )}
-                </div>
-                <p className="text-sm text-foreground">
-                  {personalHookCard.body}
-                </p>
-                {personalHookCard.teaser && (
-                  <p className="text-xs text-muted-foreground">
-                    {personalHookCard.teaser}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-          <p className="text-xs text-muted-foreground text-center mt-3">
-            This is just one moment. See what else your league has to say about you — $7.
-          </p>
         </section>
       )}
 
@@ -2390,7 +2468,7 @@ export default function LeagueHistoryPage() {
                     }}
                     className="w-full font-semibold interact-cta"
                   >
-                    Unlock your doppelgänger — $7
+                    Unlock your doppelgänger — $2.99
                   </Button>
                 ) : (
                   <>
@@ -2430,7 +2508,7 @@ export default function LeagueHistoryPage() {
       {activeMode === "history" && hasData && hasEnoughData && !showPremiumContent && (
         <section className="pt-2">
           <Button onClick={handleCheckout} className="w-full sm:w-auto font-semibold interact-cta">
-            See the rest of your roast — $7
+            See the rest of your roast — $2.99
           </Button>
         </section>
       )}
