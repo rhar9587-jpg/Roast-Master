@@ -18,6 +18,8 @@ type Props = {
   activeBadge: Badge | null;
   onSelectCell: (cell: DominanceCellDTO) => void;
   highlightedManagerKey?: string | null;
+  isPremium?: boolean;
+  freeRowCount?: number;
 };
 
 const SCORE_TOOLTIP = "Ownership score: +1 = you own them, -1 = they own you.";
@@ -35,9 +37,17 @@ export function GridTable({
   activeBadge,
   onSelectCell,
   highlightedManagerKey,
+  isPremium = true,
+  freeRowCount = 3,
 }: Props) {
   const applyFilter = !forExport && activeBadge != null;
   const suffix = forExport ? "x" : "v";
+  
+  // For non-premium users, only show the first N rows of data
+  const visibleManagers = (!isPremium && !forExport) 
+    ? managers.slice(0, freeRowCount) 
+    : managers;
+  const hiddenRowCount = managers.length - visibleManagers.length;
 
   useEffect(() => {
     if (!forExport && highlightedManagerKey) {
@@ -79,7 +89,7 @@ export function GridTable({
         Overall
       </div>
 
-      {managers.map((row) => {
+      {visibleManagers.map((row) => {
         const rt = rowTotals.get(row.key);
         const isHighlighted = !forExport && highlightedManagerKey === row.key;
         const rowHeaderClass = isHighlighted
@@ -175,66 +185,71 @@ export function GridTable({
         );
       })}
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="sticky left-0 z-20 bg-background border-t border-r border-muted/30 p-2 cursor-help shadow-sm" style={{ transform: 'translateZ(0)' }}>
-            <div className="text-xs font-medium">League vs Team</div>
-            <div className="text-[11px] text-muted-foreground">
-              (how everyone does vs them)
-            </div>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent className="!bg-background">{LEAGUE_VS_TEAM_TOOLTIP}</TooltipContent>
-      </Tooltip>
-
-      {managers.map((m) => {
-        const ct = colTotals.get(m.key);
-        return (
-          <div
-            key={`coltotal-${m.key}-${suffix}`}
-            className="p-2 text-center bg-muted/10"
-          >
-            {ct ? (
-              <>
-                <div className="text-xs text-muted-foreground">
-                  {fmtRecord(ct.w, ct.l, ct.t)}
+      {/* Footer row - only show for premium users or during export */}
+      {(isPremium || forExport) && (
+        <>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="sticky left-0 z-20 bg-background border-t border-r border-muted/30 p-2 cursor-help shadow-sm" style={{ transform: 'translateZ(0)' }}>
+                <div className="text-xs font-medium">League vs Team</div>
+                <div className="text-[11px] text-muted-foreground">
+                  (how everyone does vs them)
                 </div>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="text-sm font-semibold cursor-help">
-                      {fmtScore(ct.score)}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="!bg-background">{LEAGUE_VS_TEAM_TOOLTIP}</TooltipContent>
+          </Tooltip>
+
+          {managers.map((m) => {
+            const ct = colTotals.get(m.key);
+            return (
+              <div
+                key={`coltotal-${m.key}-${suffix}`}
+                className="p-2 text-center bg-muted/10"
+              >
+                {ct ? (
+                  <>
+                    <div className="text-xs text-muted-foreground">
+                      {fmtRecord(ct.w, ct.l, ct.t)}
                     </div>
-                  </TooltipTrigger>
-                  <TooltipContent className="!bg-background">{SCORE_TOOLTIP}</TooltipContent>
-                </Tooltip>
-                <div className="text-[10px] text-muted-foreground">
-                  {ct.games} games
-                </div>
-              </>
-            ) : (
-              <div className="text-xs text-muted-foreground">—</div>
-            )}
-          </div>
-        );
-      })}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="text-sm font-semibold cursor-help">
+                          {fmtScore(ct.score)}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="!bg-background">{SCORE_TOOLTIP}</TooltipContent>
+                    </Tooltip>
+                    <div className="text-[10px] text-muted-foreground">
+                      {ct.games} games
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-muted-foreground">—</div>
+                )}
+              </div>
+            );
+          })}
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="border-l border-muted/30 p-2 text-center bg-muted/20 cursor-help">
-            <div className="text-xs font-medium">Grand</div>
-            <div className="text-xs text-muted-foreground">
-              {fmtRecord(grandTotals.w, grandTotals.l, grandTotals.t)}
-            </div>
-            <div className="text-sm font-semibold">
-              {fmtScore(grandTotals.score)}
-            </div>
-            <div className="text-[10px] text-muted-foreground">
-              (double-counted)
-            </div>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent className="!bg-background">{GRAND_TOOLTIP}</TooltipContent>
-      </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="border-l border-muted/30 p-2 text-center bg-muted/20 cursor-help">
+                <div className="text-xs font-medium">Grand</div>
+                <div className="text-xs text-muted-foreground">
+                  {fmtRecord(grandTotals.w, grandTotals.l, grandTotals.t)}
+                </div>
+                <div className="text-sm font-semibold">
+                  {fmtScore(grandTotals.score)}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  (double-counted)
+                </div>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="!bg-background">{GRAND_TOOLTIP}</TooltipContent>
+          </Tooltip>
+        </>
+      )}
     </div>
   );
 }

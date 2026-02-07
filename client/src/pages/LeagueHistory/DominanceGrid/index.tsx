@@ -3,6 +3,8 @@ import { GridTable } from "./GridTable";
 import { GridSkeleton } from "./GridSkeleton";
 import { LegendFooter } from "./LegendFooter";
 import { BADGES } from "../utils";
+import { Button } from "@/components/ui/button";
+import { Lock } from "lucide-react";
 import type {
   Badge,
   ManagerRow,
@@ -10,6 +12,8 @@ import type {
   GrandTotal,
   DominanceCellDTO,
 } from "../types";
+
+const FREE_ROW_COUNT = 3;
 
 type Props = {
   managers: ManagerRow[];
@@ -63,6 +67,7 @@ export function DominanceGrid({
 }: Props) {
   const hasData = managers.length > 0;
   const badgeCounts = computeBadgeCounts(allCells);
+  const hiddenRowCount = !isPremium ? Math.max(0, managers.length - FREE_ROW_COUNT) : 0;
 
   return (
     <div className="space-y-0">
@@ -96,8 +101,8 @@ export function DominanceGrid({
               className="overflow-auto" 
               style={{ 
                 WebkitOverflowScrolling: 'touch',
-                maxHeight: 'calc(100vh - 300px)',
-                minHeight: '400px'
+                maxHeight: isPremium ? 'calc(100vh - 300px)' : 'none',
+                minHeight: isPremium ? '400px' : 'auto'
               }}
             >
               <GridTable
@@ -110,9 +115,51 @@ export function DominanceGrid({
                 activeBadge={activeBadge}
                 onSelectCell={onSelectCell}
                 highlightedManagerKey={highlightedManagerKey}
+                isPremium={isPremium}
+                freeRowCount={FREE_ROW_COUNT}
               />
             </div>
           </div>
+          
+          {/* Locked rows overlay for non-premium */}
+          {!isPremium && hiddenRowCount > 0 && (
+            <div className="relative mt-0 rounded-b-lg border border-t-0 bg-gradient-to-b from-muted/30 to-muted/60 overflow-hidden">
+              {/* Blurred preview rows */}
+              <div className="blur-sm opacity-50 pointer-events-none py-4 px-2">
+                {managers.slice(FREE_ROW_COUNT, FREE_ROW_COUNT + 2).map((m, i) => (
+                  <div key={m.key} className="flex items-center gap-4 py-2 border-b border-muted/20 last:border-0">
+                    <div className="w-32 text-xs font-medium text-muted-foreground truncate">
+                      #{FREE_ROW_COUNT + i + 1} {m.name}
+                    </div>
+                    <div className="flex-1 flex gap-2">
+                      {Array.from({ length: Math.min(managers.length, 6) }).map((_, j) => (
+                        <div key={j} className="w-16 h-8 bg-muted/40 rounded" />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Lock overlay */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+                <Lock className="h-8 w-8 text-muted-foreground mb-3" />
+                <p className="text-sm font-medium text-foreground mb-1">
+                  {hiddenRowCount} more manager{hiddenRowCount === 1 ? '' : 's'} hidden
+                </p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  See your matchups and every head-to-head record
+                </p>
+                <Button 
+                  size="sm" 
+                  onClick={onUnlock}
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  Unlock full grid — $2.99
+                </Button>
+              </div>
+            </div>
+          )}
+          
           <LegendFooter
             activeBadge={activeBadge}
             onActiveBadgeChange={onActiveBadgeChange}
