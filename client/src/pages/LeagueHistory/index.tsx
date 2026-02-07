@@ -127,16 +127,37 @@ function computeNflDoppelganger(
   seasonStats: DominanceApiResponse["seasonStats"],
   weeklyMatchups: WeeklyMatchupDetail[],
   managers: ManagerRow[],
-  leagueSeason?: string,
+  leagueSeason?: string | number,
 ) {
+  // Get available seasons from the actual data (ensures format consistency)
   const availableSeasons = (seasonStats ?? [])
     .map((s) => s.season)
     .filter(Boolean);
-  const targetSeason =
-    leagueSeason ||
-    (availableSeasons.length
-      ? availableSeasons.sort().at(-1)
-      : weeklyMatchups[0]?.season);
+  
+  // Also check what seasons exist in weeklyMatchups
+  const matchupSeasons = [...new Set(weeklyMatchups.map((m) => m.season).filter(Boolean))];
+  const allSeasons = [...new Set([...availableSeasons, ...matchupSeasons])].sort();
+  
+  // Convert leagueSeason to string for comparison
+  const leagueSeasonStr = leagueSeason != null ? String(leagueSeason) : undefined;
+  
+  // Try to find a matching season - prefer exact match, then year-only match
+  let targetSeason: string | undefined;
+  if (leagueSeasonStr && allSeasons.includes(leagueSeasonStr)) {
+    targetSeason = leagueSeasonStr;
+  } else if (leagueSeasonStr) {
+    // Try extracting just the year (e.g., "2024" from "2024-2025" or from number 2024)
+    const yearMatch = leagueSeasonStr.match(/^\d{4}/);
+    if (yearMatch) {
+      const yearOnly = yearMatch[0];
+      targetSeason = allSeasons.find((s) => s === yearOnly || s.startsWith(yearOnly));
+    }
+  }
+  
+  // Fallback to most recent available season
+  if (!targetSeason) {
+    targetSeason = allSeasons.length ? allSeasons[allSeasons.length - 1] : undefined;
+  }
 
   if (!targetSeason) return null;
 
