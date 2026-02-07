@@ -341,12 +341,15 @@ export function InsightsDashboard({
     />
   );
 
+  // Only show personal cards when a viewer has been selected
+  const hasViewer = Boolean(viewerName);
+
   if (isPremium) {
     return (
       <RoastDeckCarousel>
         {landlordCard}
-        {nflDoppelgangerCard}
-        {personalHookBaseballCard}
+        {hasViewer && nflDoppelgangerCard}
+        {hasViewer && personalHookBaseballCard}
         {mostOwnedCard}
         {biggestRivalryCard}
       </RoastDeckCarousel>
@@ -357,8 +360,8 @@ export function InsightsDashboard({
     <div className="space-y-4">
       <RoastDeckCarousel>
         {landlordCard}
-        {nflDoppelgangerCard}
-        {personalHookBaseballCard}
+        {hasViewer && nflDoppelgangerCard}
+        {hasViewer && personalHookBaseballCard}
         <BlurredCardWrapper onUnlock={onUnlock}>
           {mostOwnedCard}
         </BlurredCardWrapper>
