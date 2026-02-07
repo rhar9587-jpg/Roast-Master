@@ -46,6 +46,10 @@ const CARD_EMOJI: Record<string, string> = {
   "heartbreaker": "💔",
   "blowout-artist": "💥",
   "giant-slayer": "🗡️",
+  // New guaranteed personal cards
+  "your-peak": "🚀",
+  "your-valley": "📉",
+  "your-lucky-wins": "🍀",
 };
 
 type TotalsByManagerEntry = {
@@ -427,6 +431,78 @@ export function computeYourRoast(
     });
   }
 
+  // YOUR PEAK - Highest single-week score (guaranteed to show if any games exist)
+  const myGames = weeklyMatchups.filter((m) => m.managerKey === viewerKey);
+  if (myGames.length > 0) {
+    const sortedByPoints = [...myGames].sort((a, b) => b.points - a.points);
+    const peakGame = sortedByPoints[0];
+    const peakOpponent = managers.find((m) => m.key === peakGame.opponentKey);
+    
+    // Show top 5 highest-scoring weeks
+    const peakDetailGames: GameDetail[] = sortedByPoints.slice(0, 5).map((g) => {
+      const opp = managers.find((m) => m.key === g.opponentKey);
+      return {
+        season: g.season,
+        week: g.week,
+        opponent: opp?.name || g.opponentKey,
+        yourPoints: g.points,
+        theirPoints: g.opponentPoints,
+        margin: g.margin,
+        won: g.won,
+      };
+    });
+
+    cards.push({
+      id: "your-peak",
+      title: "YOUR PEAK",
+      emoji: CARD_EMOJI["your-peak"],
+      statPrimary: peakGame.points.toFixed(1),
+      metricLabel: "points",
+      statSecondary: `Week ${peakGame.week}`,
+      meta: peakGame.season,
+      line: peakGame.won
+        ? `Career high. Obliterated ${peakOpponent?.name ?? "opponent"}.`
+        : `Career high. Still lost. Fantasy is cruel.`,
+      detail: peakOpponent?.name,
+      managerKey: viewerKey,
+      detailGames: peakDetailGames,
+    });
+
+    // YOUR VALLEY - Lowest single-week score (guaranteed to show)
+    const valleyGame = sortedByPoints[sortedByPoints.length - 1];
+    const valleyOpponent = managers.find((m) => m.key === valleyGame.opponentKey);
+    
+    // Show bottom 5 lowest-scoring weeks
+    const valleyDetailGames: GameDetail[] = sortedByPoints.slice(-5).reverse().map((g) => {
+      const opp = managers.find((m) => m.key === g.opponentKey);
+      return {
+        season: g.season,
+        week: g.week,
+        opponent: opp?.name || g.opponentKey,
+        yourPoints: g.points,
+        theirPoints: g.opponentPoints,
+        margin: g.margin,
+        won: g.won,
+      };
+    });
+
+    cards.push({
+      id: "your-valley",
+      title: "YOUR VALLEY",
+      emoji: CARD_EMOJI["your-valley"],
+      statPrimary: valleyGame.points.toFixed(1),
+      metricLabel: "points",
+      statSecondary: `Week ${valleyGame.week}`,
+      meta: valleyGame.season,
+      line: valleyGame.won
+        ? `Rock bottom. Still won somehow.`
+        : `Rock bottom. ${valleyOpponent?.name ?? "Opponent"} didn't even try.`,
+      detail: valleyOpponent?.name,
+      managerKey: viewerKey,
+      detailGames: valleyDetailGames,
+    });
+  }
+
   // YOUR CHOKE JOBS - losses where you beat the weekly median
   // Calculate weekly medians
   const weeklyScores = new Map<string, number[]>();
@@ -503,6 +579,59 @@ export function computeYourRoast(
       detail: opponent?.name,
       managerKey: viewerKey,
       detailGames,
+    });
+  }
+
+  // YOUR LUCKY WINS - wins where you scored below the weekly median
+  const luckyWins: Array<WeeklyMatchupDetail & { rank: number }> = [];
+  for (const m of weeklyMatchups) {
+    if (m.managerKey !== viewerKey || !m.won) continue;
+
+    const key = `${m.season}-${m.week}`;
+    const scores = weeklyScores.get(key) || [];
+    const sorted = [...scores].sort((a, b) => b - a);
+    const medianIndex = Math.floor(sorted.length / 2);
+    const median = sorted[medianIndex];
+    const rank = sorted.indexOf(m.points) + 1; // 1-indexed rank
+
+    if (m.points < median) {
+      luckyWins.push({ ...m, rank });
+    }
+  }
+
+  if (luckyWins.length > 0) {
+    // Sort by how low they scored (most lucky first)
+    const sortedLucky = [...luckyWins].sort((a, b) => a.points - b.points);
+    const luckiest = sortedLucky[0];
+    const luckyOpponent = managers.find((m) => m.key === luckiest.opponentKey);
+
+    const luckyDetailGames: GameDetail[] = sortedLucky.slice(0, 8).map((g) => {
+      const opp = managers.find((m) => m.key === g.opponentKey);
+      return {
+        season: g.season,
+        week: g.week,
+        opponent: opp?.name || g.opponentKey,
+        yourPoints: g.points,
+        theirPoints: g.opponentPoints,
+        margin: g.margin,
+        won: g.won,
+      };
+    });
+
+    cards.push({
+      id: "your-lucky-wins",
+      title: "YOUR LUCKY WINS",
+      emoji: CARD_EMOJI["your-lucky-wins"],
+      statPrimary: String(luckyWins.length),
+      metricLabel: luckyWins.length === 1 ? "lucky win" : "lucky wins",
+      statSecondary: `Luckiest: ${luckiest.points.toFixed(1)} pts`,
+      meta: `Week ${luckiest.week}, ${luckiest.season}`,
+      line: luckyWins.length === 1
+        ? `Scored below half the league and still won.`
+        : `${luckyWins.length} times you had no business winning.`,
+      detail: luckyOpponent?.name,
+      managerKey: viewerKey,
+      detailGames: luckyDetailGames,
     });
   }
 
