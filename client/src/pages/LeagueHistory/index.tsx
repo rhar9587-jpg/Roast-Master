@@ -127,53 +127,34 @@ function computeNflDoppelganger(
   seasonStats: DominanceApiResponse["seasonStats"],
   weeklyMatchups: WeeklyMatchupDetail[],
   managers: ManagerRow[],
-  leagueSeason?: string | number,
+  _leagueSeason?: string | number, // kept for API compatibility but not used
 ) {
-  // Get available seasons from the actual data (ensures format consistency)
-  const availableSeasons = (seasonStats ?? [])
-    .map((s) => s.season)
-    .filter(Boolean);
+  // Get all unique seasons from the data for display
+  const matchupSeasons = [...new Set(weeklyMatchups.map((m) => m.season).filter(Boolean))].sort();
   
-  // Also check what seasons exist in weeklyMatchups
-  const matchupSeasons = [...new Set(weeklyMatchups.map((m) => m.season).filter(Boolean))];
-  const allSeasons = [...new Set([...availableSeasons, ...matchupSeasons])].sort();
+  if (!matchupSeasons.length) return null;
   
-  // Convert leagueSeason to string for comparison
-  const leagueSeasonStr = leagueSeason != null ? String(leagueSeason) : undefined;
-  
-  // Try to find a matching season - prefer exact match, then year-only match
-  let targetSeason: string | undefined;
-  if (leagueSeasonStr && allSeasons.includes(leagueSeasonStr)) {
-    targetSeason = leagueSeasonStr;
-  } else if (leagueSeasonStr) {
-    // Try extracting just the year (e.g., "2024" from "2024-2025" or from number 2024)
-    const yearMatch = leagueSeasonStr.match(/^\d{4}/);
-    if (yearMatch) {
-      const yearOnly = yearMatch[0];
-      targetSeason = allSeasons.find((s) => s === yearOnly || s.startsWith(yearOnly));
-    }
-  }
-  
-  // Fallback to most recent available season
-  if (!targetSeason) {
-    targetSeason = allSeasons.length ? allSeasons[allSeasons.length - 1] : undefined;
-  }
-
-  if (!targetSeason) return null;
+  // Create a display label for the season range
+  const seasonLabel = matchupSeasons.length === 1 
+    ? matchupSeasons[0] 
+    : `${matchupSeasons[0]}–${matchupSeasons[matchupSeasons.length - 1]}`;
 
   const statsByManager = new Map<string, SeasonPerf>();
 
+  // Aggregate stats across ALL seasons (not just one)
   for (const manager of managers) {
     const weekly = weeklyMatchups.filter(
-      (m) => m.managerKey === manager.key && m.season === targetSeason,
+      (m) => m.managerKey === manager.key,
     );
     const points = weekly.map((m) => m.points).filter(Number.isFinite);
     const wins = weekly.filter((m) => m.won).length;
     const losses = weekly.filter((m) => !m.won).length;
-    const totalPF =
-      seasonStats?.find((s) => s.managerKey === manager.key && s.season === targetSeason)
-        ?.totalPF ??
-      points.reduce((a, b) => a + b, 0);
+    
+    // Sum totalPF across all seasons from seasonStats, or fall back to weekly points
+    const totalPF = (seasonStats ?? [])
+      .filter((s) => s.managerKey === manager.key)
+      .reduce((sum, s) => sum + (s.totalPF ?? 0), 0) || points.reduce((a, b) => a + b, 0);
+    
     statsByManager.set(manager.key, {
       managerKey: manager.key,
       wins,
@@ -211,24 +192,30 @@ function computeNflDoppelganger(
   const viewerRecordRank = recordRank(viewerKey);
   const viewerVarianceRank = varianceRank(viewerKey);
 
+  // Count close losses across ALL seasons
   const closeLosses = weeklyMatchups.filter(
     (m) =>
       m.managerKey === viewerKey &&
-      m.season === targetSeason &&
       !m.won &&
       Math.abs(m.margin ?? m.opponentPoints - m.points) <= 5,
   ).length;
 
-  // Compute first-half vs second-half performance for momentum archetypes
+  // Compute first-half vs second-half performance across all games
+  // Sort by season then week to get chronological order
   const viewerWeekly = weeklyMatchups
-    .filter((m) => m.managerKey === viewerKey && m.season === targetSeason)
-    .sort((a, b) => a.week - b.week);
-  const midWeek = Math.ceil(viewerWeekly.length / 2);
-  const firstHalfWins = viewerWeekly.slice(0, midWeek).filter((m) => m.won).length;
-  const secondHalfWins = viewerWeekly.slice(midWeek).filter((m) => m.won).length;
+    .filter((m) => m.managerKey === viewerKey)
+    .sort((a, b) => {
+      if (a.season !== b.season) return a.season.localeCompare(b.season);
+      return a.week - b.week;
+    });
+  const midPoint = Math.ceil(viewerWeekly.length / 2);
+  const firstHalfWins = viewerWeekly.slice(0, midPoint).filter((m) => m.won).length;
+  const secondHalfWins = viewerWeekly.slice(midPoint).filter((m) => m.won).length;
 
-  // Check if record is close to .500
-  const isNear500 = Math.abs(viewerPerf.wins - viewerPerf.losses) <= 2;
+  // Check if record is close to .500 (scale threshold with total games)
+  const totalGames = viewerPerf.wins + viewerPerf.losses;
+  const near500Threshold = Math.max(2, Math.ceil(totalGames * 0.1)); // 10% of games or at least 2
+  const isNear500 = Math.abs(viewerPerf.wins - viewerPerf.losses) <= near500Threshold;
 
   const archetypes = [
     // ============ TOP TIER (specific achievements) ============
@@ -433,7 +420,7 @@ function computeNflDoppelganger(
     reasons: picked.reasons,
     roastLine: picked.roastLine,
     record: `${viewerPerf.wins}-${viewerPerf.losses}`,
-    season: targetSeason,
+    season: seasonLabel,
   };
 }
 
