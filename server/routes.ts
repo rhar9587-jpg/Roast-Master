@@ -26,6 +26,13 @@ import {
 // ✅ NEW: League History (Dominance Grid)
 import { handleLeagueHistoryDominance } from "./league-history";
 import { selectTagline } from "./lib/seasonTagline";
+import { getWeeklyCommissionerEmail, generateWeeklyCommissionerEmail } from "./lib/weeklyCommissioner";
+import { buildTeamsFromSleeper } from "./lib/weeklyCommissioner";
+import { generatePowerRankings } from "./lib/powerRankings";
+import { sendEmail } from "./lib/emailSender";
+import { getStoredPreviousRankings, storeRankingsForWeek } from "./lib/weeklyRankingsStore";
+import { recordSent, getSentRecord } from "./lib/weeklyReportStore";
+import { generateWeeklyEmailPlainText } from "./lib/weeklyEmail";
 import { selectCardCopy, interpolateTagline } from "./lib/cardCopy";
 import {
   DEMO_LEAGUE_ID as STATIC_DEMO_LEAGUE_ID,
@@ -33,7 +40,9 @@ import {
   getDemoWeeklyRoast,
   getDemoWrapped,
   getDemoAutopsy,
+  getDemoWeeklyEmailPayload,
 } from "./league-history/demoLeague";
+import { generateWeeklyEmail } from "./lib/weeklyEmail";
 
 // -------------------------
 // Analytics (PostgreSQL-backed with in-memory fallback)
@@ -1187,6 +1196,137 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.json(payload);
     } catch (err: any) {
       return res.status(500).json({ message: err?.message || "Failed to fetch league teams" });
+    }
+  });
+
+  // Power Rankings (weekly commissioner) — GET
+  app.get("/api/power-rankings", async (req: Request, res: Response) => {
+    const league_id = String(req.query.league_id || "").trim();
+    const week = Number(req.query.week || 0);
+    if (!league_id || week < 1) {
+      return res.status(400).json({ error: "league_id and week (>= 1) are required" });
+    }
+    if (league_id === STATIC_DEMO_LEAGUE_ID) {
+      return res.status(400).json({ error: "Power rankings are not available for the demo league. Use a real Sleeper league ID." });
+    }
+    try {
+      const { leagueName, teams } = await buildTeamsFromSleeper(league_id, week);
+      const rankings = generatePowerRankings(teams);
+      return res.json({ leagueName, week, rankings });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || "Failed to generate power rankings" });
+    }
+  });
+
+  // Weekly Commissioner Email — preview (returns HTML for browser)
+  app.get("/api/leagues/:leagueId/weekly-email/preview", async (req: Request, res: Response) => {
+    const leagueId = String(req.params.leagueId || "").trim();
+    const week = Number(req.query.week) || 6;
+    const note = typeof req.query.note === "string" ? req.query.note.trim() : undefined;
+    if (!leagueId) {
+      return res.status(400).send("Missing leagueId.");
+    }
+    try {
+      let html: string;
+      if (leagueId === STATIC_DEMO_LEAGUE_ID) {
+        const demoPayload = getDemoWeeklyEmailPayload(week);
+        html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), appUrl: CLIENT_URL });
+      } else {
+        if (week < 1) return res.status(400).send("Week must be 1–18.");
+        const previousRankings = getStoredPreviousRankings(leagueId, week);
+        const result = await generateWeeklyCommissionerEmail(leagueId, week, previousRankings, note, CLIENT_URL);
+        html = result.html;
+      }
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html);
+    } catch (err: any) {
+      return res.status(500).send(err?.message || "Failed to generate preview.");
+    }
+  });
+
+  // Weekly Commissioner Email — send to commissioner only (V1)
+  app.post("/api/leagues/:leagueId/weekly-email/send", async (req: Request, res: Response) => {
+    const leagueId = String(req.params.leagueId || "").trim();
+    const body = req.body || {};
+    const week = Number(body.week || 0);
+    const commissionerEmail = typeof body.commissioner_email === "string" ? body.commissioner_email.trim() : "";
+    const note = typeof body.note === "string" ? body.note.trim() : undefined;
+    if (!leagueId || week < 1) {
+      return res.status(400).json({ error: "leagueId and week are required." });
+    }
+    if (!commissionerEmail) {
+      return res.status(400).json({ error: "commissioner_email is required to send the weekly email." });
+    }
+    if (leagueId === STATIC_DEMO_LEAGUE_ID) {
+      return res.status(400).json({ error: "Send is not available for the demo league." });
+    }
+    try {
+      const previousRankings = getStoredPreviousRankings(leagueId, week);
+      const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, note, CLIENT_URL);
+      const subject = `${result.leagueName} — Week ${result.week} Power Rankings`;
+      const text = generateWeeklyEmailPlainText(result.emailPayload);
+      const sendResult = await sendEmail({ to: commissionerEmail, subject, html: result.emailHtml, text });
+      if (!sendResult.ok) {
+        return res.status(500).json({ error: sendResult.error || "Failed to send email." });
+      }
+      storeRankingsForWeek(leagueId, week, result.rankings.map((r) => ({ teamId: r.teamId, rank: r.rank })));
+      recordSent(leagueId, week, commissionerEmail);
+      return res.json({ ok: true, message: "Weekly email sent to commissioner." });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || "Failed to generate or send email." });
+    }
+  });
+
+  // Weekly Commissioner Email — sent status (for "Sent on ..." in UI)
+  app.get("/api/leagues/:leagueId/weekly-email/sent", async (req: Request, res: Response) => {
+    const leagueId = String(req.params.leagueId || "").trim();
+    const week = Number(req.query.week) || 0;
+    if (!leagueId || week < 1) {
+      return res.status(400).json({ error: "leagueId and week are required." });
+    }
+    const record = getSentRecord(leagueId, week);
+    if (!record) return res.json({ sent: false });
+    return res.json({ sent: true, sentAt: record.sentAt });
+  });
+
+  // Weekly Commissioner Email (power rankings + HTML email) — GET (legacy)
+  app.get("/api/weekly-email", async (req: Request, res: Response) => {
+    const league_id = String(req.query.league_id || "").trim();
+    const week = Number(req.query.week) || 6;
+    const format = String(req.query.format || "json").toLowerCase(); // "json" | "html"
+    if (!league_id) {
+      return res.status(400).json({ error: "league_id is required" });
+    }
+    try {
+      let leagueName: string;
+      let emailHtml: string;
+      let rankings: unknown[];
+      if (league_id === STATIC_DEMO_LEAGUE_ID) {
+        const demoPayload = getDemoWeeklyEmailPayload(week);
+        leagueName = demoPayload.leagueName;
+        emailHtml = generateWeeklyEmail(demoPayload);
+        rankings = demoPayload.rankings;
+      } else {
+        if (week < 1) return res.status(400).json({ error: "week (>= 1) is required" });
+        const previousRankings = getStoredPreviousRankings(league_id, week);
+        const result = await getWeeklyCommissionerEmail(league_id, week, previousRankings, undefined, CLIENT_URL);
+        leagueName = result.leagueName;
+        emailHtml = result.emailHtml;
+        rankings = result.rankings;
+      }
+      if (format === "html") {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        return res.send(emailHtml);
+      }
+      return res.json({
+        leagueName,
+        week,
+        rankings,
+        html: emailHtml,
+        subject: `${leagueName} — Week ${week} Power Rankings`,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || "Failed to generate weekly email" });
     }
   });
 

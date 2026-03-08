@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toPng } from "html-to-image";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,7 @@ import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
 import { LockedModePreview } from "./LockedModePreview";
 import { isLeagueUnlocked, unlockLeague, lockLeague } from "./premium";
 import { createCheckoutSession } from "@/lib/checkout";
-import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername } from "./utils";
+import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername, getCommissionerEmail, setCommissionerEmail } from "./utils";
 import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards, type MiniCard } from "./storylines";
 import { computeHeroReceipts } from "./computeHeroReceipts";
 import { track, trackFunnel } from "@/lib/track";
@@ -65,6 +65,27 @@ const EXAMPLE_LEAGUE_ID = "demo-group-chat-dynasty";
 const WEEKLY_ENABLED = false; // Disabled for Super Bowl V1 - re-enable post-Super Bowl
 type Mode = "history" | "weekly" | "season" | "end";
 type TeamOption = { roster_id: number; name: string };
+
+function WeeklyEmailSentStatus({ leagueId, week }: { leagueId: string; week: number }) {
+  const { data } = useQuery({
+    queryKey: ["weekly-email-sent", leagueId, week],
+    queryFn: async () => {
+      const res = await fetch(`/api/leagues/${encodeURIComponent(leagueId)}/weekly-email/sent?week=${week}`);
+      if (!res.ok) return { sent: false };
+      const json = await res.json();
+      return json as { sent: boolean; sentAt?: string };
+    },
+    enabled: !!leagueId && week >= 1,
+  });
+  if (!data?.sent || !data.sentAt) return null;
+  const date = new Date(data.sentAt);
+  const label = date.toLocaleDateString(undefined, { dateStyle: "medium" });
+  return (
+    <p className="mt-1 text-xs text-muted-foreground">
+      Sent on {label}.
+    </p>
+  );
+}
 
 function isCountable(c: DominanceCellDTO) {
   return (c?.games ?? 0) >= 3;
@@ -540,6 +561,11 @@ export default function LeagueHistoryPage() {
   const [autopsyData, setAutopsyData] = useState<LeagueAutopsyResponse | null>(null);
   const [autopsyLoading, setAutopsyLoading] = useState(false);
   const [autopsyError, setAutopsyError] = useState<string | null>(null);
+  const [weeklyCommissionerWeek, setWeeklyCommissionerWeek] = useState(17);
+  const [commissionerEmail, setCommissionerEmailState] = useState("");
+  const [weeklyCommissionerNote, setWeeklyCommissionerNote] = useState("");
+  const [weeklyEmailGenerateLoading, setWeeklyEmailGenerateLoading] = useState(false);
+  const [weeklyEmailSendLoading, setWeeklyEmailSendLoading] = useState(false);
   const { toast } = useToast();
 
   // Demo league always shows full content (bypasses premium gating)
@@ -554,6 +580,7 @@ export default function LeagueHistoryPage() {
   const hasInitializedFromUrl = useRef(false);
   const shouldAutoTrigger = useRef(false);
 
+  const queryClient = useQueryClient();
   const { data, isFetching, error, refetch } = useQuery({
     queryKey: ["league-history-dominance", leagueId, startWeek, endWeek, includePlayoffs],
     enabled: false,
@@ -1391,6 +1418,22 @@ export default function LeagueHistoryPage() {
     setViewerKey("");
   }, [leagueId]);
 
+  // Sync commissioner email from storage when league changes
+  useEffect(() => {
+    if (leagueId.trim()) {
+      setCommissionerEmailState(getCommissionerEmail(leagueId.trim()));
+    } else {
+      setCommissionerEmailState("");
+    }
+  }, [leagueId]);
+
+  // Default weekly commissioner week to current endWeek when data loads
+  useEffect(() => {
+    if (endWeek >= 1 && endWeek <= 18) {
+      setWeeklyCommissionerWeek((w) => (w < 1 || w > 18 ? endWeek : w));
+    }
+  }, [endWeek]);
+
   useEffect(() => {
     if (
       !hasData ||
@@ -1975,6 +2018,158 @@ export default function LeagueHistoryPage() {
           season={data?.league?.season}
         />
       </div>
+
+      {/* Weekly Commissioner Email — gated for real leagues; demo gets full access */}
+      {hasData && leagueId.trim() && (
+        <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-foreground">Weekly Commissioner Email</h3>
+          <p className="text-xs text-muted-foreground">
+            Generate a power rankings recap email, preview it, or send it to the commissioner.
+          </p>
+          {!showPremiumContent && !isDemo && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+              Unlock to send weekly power rankings to your league.
+              <Button size="sm" className="ml-2 mt-1 sm:mt-0" onClick={handleCheckout}>
+                Unlock for this league
+              </Button>
+            </div>
+          )}
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3 flex-wrap">
+            <div className="flex-1 min-w-[80px]">
+              <label className="block text-xs font-medium text-muted-foreground">Week</label>
+              <input
+                type="number"
+                min={1}
+                max={18}
+                value={weeklyCommissionerWeek}
+                onChange={(e) => setWeeklyCommissionerWeek(Number(e.target.value) || 1)}
+                className="mt-1 w-20 rounded-lg border px-2 py-1.5 text-sm"
+                disabled={!showPremiumContent && !isDemo}
+              />
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={(!showPremiumContent && !isDemo) || weeklyEmailGenerateLoading}
+                onClick={async () => {
+                  setWeeklyEmailGenerateLoading(true);
+                  try {
+                    const res = await fetch(
+                      `/api/weekly-email?league_id=${encodeURIComponent(leagueId.trim())}&week=${weeklyCommissionerWeek}`
+                    );
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => ({}));
+                      throw new Error(data?.error || "Failed to generate email.");
+                    }
+                    toast({ title: "Email ready", description: "Use Preview or Send to Commissioner." });
+                    track("weekly_email_generated", { league_id: leagueId.trim(), week: weeklyCommissionerWeek });
+                  } catch (err: unknown) {
+                    toast({
+                      title: "Could not generate email",
+                      description: err instanceof Error ? err.message : "Unknown error",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setWeeklyEmailGenerateLoading(false);
+                  }
+                }}
+              >
+                {weeklyEmailGenerateLoading ? "Generating…" : "Generate Email"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!showPremiumContent && !isDemo}
+                onClick={() => {
+                  track("weekly_email_preview", { league_id: leagueId.trim(), week: weeklyCommissionerWeek });
+                  const params = new URLSearchParams({ week: String(weeklyCommissionerWeek) });
+                  if (weeklyCommissionerNote.trim()) params.set("note", weeklyCommissionerNote.trim());
+                  const url = `/api/leagues/${encodeURIComponent(leagueId.trim())}/weekly-email/preview?${params.toString()}`;
+                  window.open(url, "_blank", "noopener,noreferrer");
+                }}
+              >
+                Preview Email
+              </Button>
+            </div>
+          </div>
+          {(showPremiumContent || isDemo) && (
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground">Add a note at the top (optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. Big week — trade deadline Tuesday!"
+                value={weeklyCommissionerNote}
+                onChange={(e) => setWeeklyCommissionerNote(e.target.value)}
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                maxLength={500}
+              />
+            </div>
+          )}
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3 flex-wrap">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs font-medium text-muted-foreground">Commissioner email (for send)</label>
+              <input
+                type="email"
+                placeholder="commissioner@example.com"
+                value={commissionerEmail}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCommissionerEmailState(v);
+                  if (leagueId.trim()) setCommissionerEmail(leagueId.trim(), v);
+                }}
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                disabled={!showPremiumContent && !isDemo}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                We&apos;ll send the report here. You can forward it to your league or BCC everyone.
+              </p>
+              {showPremiumContent && (
+                <WeeklyEmailSentStatus leagueId={leagueId.trim()} week={weeklyCommissionerWeek} />
+              )}
+            </div>
+            <Button
+              size="sm"
+              disabled={(!showPremiumContent && !isDemo) || !commissionerEmail.trim() || weeklyEmailSendLoading}
+              onClick={async () => {
+                if (!commissionerEmail.trim()) {
+                  toast({ title: "Enter commissioner email", variant: "destructive" });
+                  return;
+                }
+                setWeeklyEmailSendLoading(true);
+                try {
+                  const res = await fetch(`/api/leagues/${encodeURIComponent(leagueId.trim())}/weekly-email/send`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      week: weeklyCommissionerWeek,
+                      commissioner_email: commissionerEmail.trim(),
+                      note: weeklyCommissionerNote.trim() || undefined,
+                    }),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    throw new Error(data?.error || "Failed to send email.");
+                  }
+                  track("weekly_email_sent", { league_id: leagueId.trim(), week: weeklyCommissionerWeek });
+                  toast({ title: "Sent", description: "Weekly email sent to commissioner." });
+                  queryClient.invalidateQueries({ queryKey: ["weekly-email-sent", leagueId.trim(), weeklyCommissionerWeek] });
+                } catch (err: unknown) {
+                  toast({
+                    title: "Send failed",
+                    description: err instanceof Error ? err.message : "Unknown error",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setWeeklyEmailSendLoading(false);
+                }
+              }}
+            >
+              {weeklyEmailSendLoading ? "Sending…" : "Send to Commissioner"}
+            </Button>
+          </div>
+        </section>
+      )}
 
       {WEEKLY_ENABLED && hasData && activeMode === "weekly" && !showPremiumContent && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">

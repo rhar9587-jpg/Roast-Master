@@ -1045,3 +1045,65 @@ export function getDemoAutopsy() {
     mode: "DEMO" as const,
   };
 }
+
+// -------------------------
+// Demo Weekly Commissioner Email (preview only — no send)
+// -------------------------
+export interface DemoWeeklyEmailPayload {
+  leagueName: string;
+  week: number;
+  rankings: Array<{
+    rank: number;
+    teamName: string;
+    record: string;
+    powerScore: number;
+    trend: "up" | "down" | "flat";
+    commentary: string;
+  }>;
+  villainOfTheWeek: { teamName: string; reason: string };
+  fraudAlert: { teamName: string; reason: string };
+  introSummary: string;
+  biggestMovers?: { riser?: { teamName: string; change: number }; faller?: { teamName: string; change: number } };
+  weekMatchups?: Array<{ teamA: string; scoreA: number; teamB: string; scoreB: number }>;
+}
+
+export function getDemoWeeklyEmailPayload(week: number): DemoWeeklyEmailPayload {
+  const leagueName = "Group Chat Dynasty";
+  const rankings = [
+    { rank: 1, teamName: "The Landlord", record: "8-2", powerScore: 94, trend: "up" as const, commentary: "The class of the league right now." },
+    { rank: 2, teamName: "Waiver Wizard", record: "7-3", powerScore: 88, trend: "flat" as const, commentary: "Heating up at the right time." },
+    { rank: 3, teamName: "Trade Bandit", record: "7-3", powerScore: 85, trend: "down" as const, commentary: "Record looks better than the underlying numbers." },
+    { rank: 4, teamName: "Sleeper Genius", record: "6-4", powerScore: 82, trend: "up" as const, commentary: "Points are there; wins will come if the schedule softens." },
+    { rank: 5, teamName: "Commissioner Chaos", record: "6-4", powerScore: 78, trend: "flat" as const, commentary: "Middle of the pack. Nothing wrong with that." },
+    { rank: 6, teamName: "Injury Magnet", record: "5-5", powerScore: 72, trend: "down" as const, commentary: "Better than the record suggests." },
+    { rank: 7, teamName: "Trash Talk Titan", record: "5-5", powerScore: 68, trend: "flat" as const, commentary: "Needs a run to get back in the mix." },
+    { rank: 8, teamName: "Playoff Choker", record: "4-6", powerScore: 62, trend: "down" as const, commentary: "Riding a friendly schedule. Regression watch." },
+    { rank: 9, teamName: "Bye Week Victim", record: "4-6", powerScore: 58, trend: "flat" as const, commentary: "Winning games, but the numbers suggest danger ahead." },
+    { rank: 10, teamName: "Heartbreak Hotel", record: "3-7", powerScore: 52, trend: "down" as const, commentary: "Tough breaks so far. The math likes them more than the standings." },
+    { rank: 11, teamName: "Auto-Draft Guy", record: "2-8", powerScore: 44, trend: "flat" as const, commentary: "Points are there; wins will come if the schedule softens." },
+    { rank: 12, teamName: "Rebuild Forever", record: "1-9", powerScore: 36, trend: "down" as const, commentary: "Keeping the basement warm for now." },
+  ];
+  return {
+    leagueName,
+    week,
+    rankings,
+    villainOfTheWeek: {
+      teamName: "Bye Week Victim",
+      reason: "Won by 0.8 points thanks to a garbage-time stat correction.",
+    },
+    fraudAlert: {
+      teamName: "Playoff Choker",
+      reason: "4-6 record but bottom four in points scored. The standings are lying.",
+    },
+    introSummary: `Week ${week} is in the books. ${rankings[0].teamName} leads the power rankings, but ${rankings[8].teamName} is winning games the numbers don't love.`,
+    biggestMovers: {
+      riser: { teamName: "Waiver Wizard", change: 2 },
+      faller: { teamName: "Trade Bandit", change: -1 },
+    },
+    weekMatchups: [
+      { teamA: "The Landlord", scoreA: 142.1, teamB: "Waiver Wizard", scoreB: 98.3 },
+      { teamA: "Trade Bandit", scoreA: 115.0, teamB: "Sleeper Genius", scoreB: 114.2 },
+      { teamA: "Commissioner Chaos", scoreA: 128.5, teamB: "Injury Magnet", scoreB: 101.0 },
+    ],
+  };
+}

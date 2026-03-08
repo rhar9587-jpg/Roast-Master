@@ -122,6 +122,34 @@ export function setStoredUsername(username: string): void {
   }
 }
 
+const COMMISSIONER_EMAIL_KEY = "fantasy-roast-commissioner-email-by-league";
+
+export function getCommissionerEmail(leagueId: string): string {
+  try {
+    const raw = localStorage.getItem(COMMISSIONER_EMAIL_KEY);
+    if (!raw) return "";
+    const obj = JSON.parse(raw) as Record<string, string>;
+    return (obj[leagueId] ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+export function setCommissionerEmail(leagueId: string, email: string): void {
+  try {
+    const raw = localStorage.getItem(COMMISSIONER_EMAIL_KEY);
+    const obj = (raw ? JSON.parse(raw) : {}) as Record<string, string>;
+    if (email.trim()) {
+      obj[leagueId] = email.trim();
+    } else {
+      delete obj[leagueId];
+    }
+    localStorage.setItem(COMMISSIONER_EMAIL_KEY, JSON.stringify(obj));
+  } catch (err) {
+    console.warn("Failed to save commissioner email:", err);
+  }
+}
+
 /** Display name for badges. SMALL SAMPLE → "TOO CLOSE TO CALL" */
 export function getBadgeDisplayName(badge: Badge): string {
   return badge === "SMALL SAMPLE" ? "TOO CLOSE TO CALL" : badge;
