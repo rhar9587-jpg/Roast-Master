@@ -564,6 +564,7 @@ export default function LeagueHistoryPage() {
   const [weeklyCommissionerWeek, setWeeklyCommissionerWeek] = useState(17);
   const [commissionerEmail, setCommissionerEmailState] = useState("");
   const [weeklyCommissionerNote, setWeeklyCommissionerNote] = useState("");
+  const [weeklyCommissionerEmailMode, setWeeklyCommissionerEmailMode] = useState<"recap" | "preview">("recap");
   const [weeklyEmailGenerateLoading, setWeeklyEmailGenerateLoading] = useState(false);
   const [weeklyEmailSendLoading, setWeeklyEmailSendLoading] = useState(false);
   const { toast } = useToast();
@@ -2047,6 +2048,18 @@ export default function LeagueHistoryPage() {
                 disabled={!showPremiumContent && !isDemo}
               />
             </div>
+            <div className="flex-1 min-w-[160px]">
+              <label className="block text-xs font-medium text-muted-foreground">Email type</label>
+              <select
+                value={weeklyCommissionerEmailMode}
+                onChange={(e) => setWeeklyCommissionerEmailMode(e.target.value as "recap" | "preview")}
+                className="mt-1 w-full rounded-lg border px-2 py-1.5 text-sm"
+                disabled={!showPremiumContent && !isDemo}
+              >
+                <option value="recap">Recap (post-week)</option>
+                <option value="preview">Preview (pre-week)</option>
+              </select>
+            </div>
             <div className="flex gap-2 flex-wrap">
               <Button
                 size="sm"
@@ -2082,8 +2095,8 @@ export default function LeagueHistoryPage() {
                 variant="outline"
                 disabled={!showPremiumContent && !isDemo}
                 onClick={() => {
-                  track("weekly_email_preview", { league_id: leagueId.trim(), week: weeklyCommissionerWeek });
-                  const params = new URLSearchParams({ week: String(weeklyCommissionerWeek) });
+                  track("weekly_email_preview", { league_id: leagueId.trim(), week: weeklyCommissionerWeek, mode: weeklyCommissionerEmailMode });
+                  const params = new URLSearchParams({ week: String(weeklyCommissionerWeek), mode: weeklyCommissionerEmailMode });
                   if (weeklyCommissionerNote.trim()) params.set("note", weeklyCommissionerNote.trim());
                   const url = `/api/leagues/${encodeURIComponent(leagueId.trim())}/weekly-email/preview?${params.toString()}`;
                   window.open(url, "_blank", "noopener,noreferrer");

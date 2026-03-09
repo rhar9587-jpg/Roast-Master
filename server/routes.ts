@@ -41,8 +41,10 @@ import {
   getDemoWrapped,
   getDemoAutopsy,
   getDemoWeeklyEmailPayload,
+  getDemoWeeklyPreviewPayload,
 } from "./league-history/demoLeague";
 import { generateWeeklyEmail } from "./lib/weeklyEmail";
+import { getWeeklyPreviewEmail } from "./lib/weeklyPreview";
 
 // -------------------------
 // Analytics (PostgreSQL-backed with in-memory fallback)
@@ -1218,24 +1220,35 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  // Weekly Commissioner Email — preview (returns HTML for browser)
+  // Weekly Commissioner Email — preview (returns HTML for browser). Query: mode=preview|recap (default recap).
   app.get("/api/leagues/:leagueId/weekly-email/preview", async (req: Request, res: Response) => {
     const leagueId = String(req.params.leagueId || "").trim();
     const week = Number(req.query.week) || 6;
     const note = typeof req.query.note === "string" ? req.query.note.trim() : undefined;
+    const mode = String(req.query.mode || "recap").toLowerCase() === "preview" ? "preview" : "recap";
     if (!leagueId) {
       return res.status(400).send("Missing leagueId.");
     }
     try {
       let html: string;
       if (leagueId === STATIC_DEMO_LEAGUE_ID) {
-        const demoPayload = getDemoWeeklyEmailPayload(week);
-        html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), appUrl: CLIENT_URL });
+        if (mode === "preview") {
+          const demoPayload = getDemoWeeklyPreviewPayload(week);
+          html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), appUrl: CLIENT_URL });
+        } else {
+          const demoPayload = getDemoWeeklyEmailPayload(week);
+          html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), appUrl: CLIENT_URL });
+        }
       } else {
         if (week < 1) return res.status(400).send("Week must be 1–18.");
-        const previousRankings = getStoredPreviousRankings(leagueId, week);
-        const result = await generateWeeklyCommissionerEmail(leagueId, week, previousRankings, note, CLIENT_URL);
-        html = result.html;
+        if (mode === "preview") {
+          const result = await getWeeklyPreviewEmail(leagueId, week, note, CLIENT_URL);
+          html = result.emailHtml;
+        } else {
+          const previousRankings = getStoredPreviousRankings(leagueId, week);
+          const result = await generateWeeklyCommissionerEmail(leagueId, week, previousRankings, note, CLIENT_URL);
+          html = result.html;
+        }
       }
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.send(html);

@@ -1107,3 +1107,49 @@ export function getDemoWeeklyEmailPayload(week: number): DemoWeeklyEmailPayload 
     ],
   };
 }
+
+/** Demo payload for weekly preview email (matchup preview, blowout/upset, no rankings). */
+export function getDemoWeeklyPreviewPayload(week: number): {
+  leagueName: string;
+  week: number;
+  introSummary: string;
+  mode: "preview";
+  upcomingMatchups: Array<{ teamA: string; teamB: string; winPctA?: number; winPctB?: number }>;
+  likelyBlowout: { teamA: string; teamB: string; narrative: string };
+  upsetOfTheWeek: { underdog: string; favorite: string; narrative: string };
+  matchupToWatch?: { teamA: string; teamB: string; narrative: string };
+  storyOfTheWeek?: { narrative: string };
+} {
+  return {
+    leagueName: "Group Chat Dynasty",
+    week,
+    introSummary: `Week ${week} is here. Here's what to watch.`,
+    mode: "preview",
+    upcomingMatchups: [
+      { teamA: "The Landlord", teamB: "Waiver Wizard", winPctA: 72, winPctB: 28 },
+      { teamA: "Trade Bandit", teamB: "Sleeper Genius", winPctA: 52, winPctB: 48 },
+      { teamA: "Commissioner Chaos", teamB: "Injury Magnet", winPctA: 58, winPctB: 42 },
+      { teamA: "Trash Talk Titan", teamB: "Playoff Choker", winPctA: 45, winPctB: 55 },
+      { teamA: "Bye Week Victim", teamB: "Heartbreak Hotel", winPctA: 54, winPctB: 46 },
+      { teamA: "Auto-Draft Guy", teamB: "Rebuild Forever", winPctA: 62, winPctB: 38 },
+    ],
+    likelyBlowout: {
+      teamA: "The Landlord",
+      teamB: "Rebuild Forever",
+      narrative: "Biggest power gap this week: The Landlord (rank 1) vs Rebuild Forever (rank 12).",
+    },
+    upsetOfTheWeek: {
+      underdog: "Heartbreak Hotel",
+      favorite: "Bye Week Victim",
+      narrative: "The numbers like Heartbreak Hotel to keep it close—or pull the upset—vs Bye Week Victim.",
+    },
+    matchupToWatch: {
+      teamA: "Trade Bandit",
+      teamB: "Sleeper Genius",
+      narrative: "Rivalry: Trade Bandit vs Sleeper Genius (6-6 H2H).",
+    },
+    storyOfTheWeek: {
+      narrative: "Can Waiver Wizard take down the dynasty? The Landlord leads the league in wins.",
+    },
+  };
+}
