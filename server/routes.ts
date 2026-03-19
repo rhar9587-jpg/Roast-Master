@@ -31,7 +31,7 @@ import { buildTeamsFromSleeper } from "./lib/weeklyCommissioner";
 import { generatePowerRankings } from "./lib/powerRankings";
 import { sendEmail } from "./lib/emailSender";
 import { getStoredPreviousRankings, storeRankingsForWeek } from "./lib/weeklyRankingsStore";
-import { recordSent, getSentRecord, hasUsedFreeSend, markFreeSendUsed, getFreeSendStatus } from "./lib/weeklyReportStore";
+import { recordSent, getSentRecord } from "./lib/weeklyReportStore";
 import { generateWeeklyEmailPlainText } from "./lib/weeklyEmail";
 import { selectCardCopy, interpolateTagline } from "./lib/cardCopy";
 import {
@@ -45,7 +45,13 @@ import {
 } from "./league-history/demoLeague";
 import { generateWeeklyEmail } from "./lib/weeklyEmail";
 import { getWeeklyPreviewEmail, generateWeeklyPreviewEmail } from "./lib/weeklyPreview";
-import { isLeagueUnlocked as isLeagueUnlockedPersistent, markLeagueUnlocked } from "./lib/leagueUnlockStore";
+import {
+  isLeagueUnlocked as isLeagueUnlockedPersistent,
+  markLeagueUnlocked,
+  hasUsedFreeSend,
+  markFreeSendUsed,
+  getFreeSendStatus,
+} from "./lib/entitlementsStore";
 
 // -------------------------
 // Analytics (PostgreSQL-backed with in-memory fallback)
@@ -1280,7 +1286,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ error: "Send is not available for the demo league." });
     }
     const isUnlockedLeague = unlockedLeagueIds.has(leagueId) || await isLeagueUnlockedPersistent(leagueId);
-    if (!isUnlockedLeague && hasUsedFreeSend(leagueId)) {
+    if (!isUnlockedLeague && await hasUsedFreeSend(leagueId)) {
       console.log(JSON.stringify({ event: "weekly_email_send_denied", leagueId, week, mode, reason: "free_send_used" }));
       return res.status(402).json({ code: "FREE_SEND_USED", error: "You've used your free send. Unlock to send again." });
     }
@@ -1291,7 +1297,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         if (!sendResult.ok) {
           return res.status(500).json({ error: sendResult.error || "Failed to send email." });
         }
-        if (!isUnlockedLeague) markFreeSendUsed(leagueId, commissionerEmail);
+        if (!isUnlockedLeague) await markFreeSendUsed(leagueId, commissionerEmail);
         console.log(JSON.stringify({ event: "weekly_email_send_allowed", leagueId, week, mode, unlocked: isUnlockedLeague }));
         recordSent(leagueId, week, commissionerEmail, "preview");
         return res.json({ ok: true, message: "Matchup preview sent to commissioner." });
@@ -1304,7 +1310,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (!sendResult.ok) {
         return res.status(500).json({ error: sendResult.error || "Failed to send email." });
       }
-      if (!isUnlockedLeague) markFreeSendUsed(leagueId, commissionerEmail);
+      if (!isUnlockedLeague) await markFreeSendUsed(leagueId, commissionerEmail);
       console.log(JSON.stringify({ event: "weekly_email_send_allowed", leagueId, week, mode, unlocked: isUnlockedLeague }));
       storeRankingsForWeek(leagueId, week, result.rankings.map((r) => ({ teamId: r.teamId, rank: r.rank })));
       recordSent(leagueId, week, commissionerEmail, "recap");
@@ -1319,7 +1325,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     if (!leagueId) {
       return res.status(400).json({ error: "leagueId is required." });
     }
-    return res.json(getFreeSendStatus(leagueId));
+    return res.json(await getFreeSendStatus(leagueId));
   });
 
   // Weekly Commissioner Email — sent status (recap and preview separately)
