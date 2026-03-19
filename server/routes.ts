@@ -31,7 +31,7 @@ import { buildTeamsFromSleeper } from "./lib/weeklyCommissioner";
 import { generatePowerRankings } from "./lib/powerRankings";
 import { sendEmail } from "./lib/emailSender";
 import { getStoredPreviousRankings, storeRankingsForWeek } from "./lib/weeklyRankingsStore";
-import { recordSent, getSentRecord } from "./lib/weeklyReportStore";
+import { recordSent, getSentRecord, hasUsedFreeSend, markFreeSendUsed, getFreeSendStatus } from "./lib/weeklyReportStore";
 import { generateWeeklyEmailPlainText } from "./lib/weeklyEmail";
 import { selectCardCopy, interpolateTagline } from "./lib/cardCopy";
 import {
@@ -58,6 +58,8 @@ const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
   : null;
 const serverStartedAt = Date.now();
+const WEEKLY_EMAIL_V2_ENABLED = String(process.env.WEEKLY_EMAIL_V2_ENABLED || "false").toLowerCase() === "true";
+const unlockedLeagueIds = new Set<string>();
 
 // Initialize DB on startup (async, runs in background)
 ensureDb().catch((err) => console.error("[Analytics] DB init error:", err));
@@ -1247,7 +1249,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           html = result.emailHtml;
         } else {
           const previousRankings = getStoredPreviousRankings(leagueId, week);
-          const result = await generateWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, CLIENT_URL);
+          const result = await generateWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, CLIENT_URL, WEEKLY_EMAIL_V2_ENABLED);
           html = result.html;
         }
       }
@@ -1276,6 +1278,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     if (leagueId === STATIC_DEMO_LEAGUE_ID) {
       return res.status(400).json({ error: "Send is not available for the demo league." });
     }
+    const isUnlockedLeague = unlockedLeagueIds.has(leagueId);
+    if (!isUnlockedLeague && hasUsedFreeSend(leagueId)) {
+      console.log(JSON.stringify({ event: "weekly_email_send_denied", leagueId, week, mode, reason: "free_send_used" }));
+      return res.status(402).json({ code: "FREE_SEND_USED", error: "You've used your free send. Unlock to send again." });
+    }
     try {
       if (mode === "preview") {
         const result = await generateWeeklyPreviewEmail(leagueId, week, note, signoff, CLIENT_URL);
@@ -1283,23 +1290,35 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         if (!sendResult.ok) {
           return res.status(500).json({ error: sendResult.error || "Failed to send email." });
         }
+        if (!isUnlockedLeague) markFreeSendUsed(leagueId, commissionerEmail);
+        console.log(JSON.stringify({ event: "weekly_email_send_allowed", leagueId, week, mode, unlocked: isUnlockedLeague }));
         recordSent(leagueId, week, commissionerEmail, "preview");
         return res.json({ ok: true, message: "Matchup preview sent to commissioner." });
       }
       const previousRankings = getStoredPreviousRankings(leagueId, week);
-      const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, CLIENT_URL);
+      const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, CLIENT_URL, WEEKLY_EMAIL_V2_ENABLED);
       const subject = getRecapSubject(result.leagueName, result.week, result.emailPayload);
       const text = generateWeeklyEmailPlainText(result.emailPayload);
       const sendResult = await sendEmail({ to: commissionerEmail, subject, html: result.emailHtml, text });
       if (!sendResult.ok) {
         return res.status(500).json({ error: sendResult.error || "Failed to send email." });
       }
+      if (!isUnlockedLeague) markFreeSendUsed(leagueId, commissionerEmail);
+      console.log(JSON.stringify({ event: "weekly_email_send_allowed", leagueId, week, mode, unlocked: isUnlockedLeague }));
       storeRankingsForWeek(leagueId, week, result.rankings.map((r) => ({ teamId: r.teamId, rank: r.rank })));
       recordSent(leagueId, week, commissionerEmail, "recap");
       return res.json({ ok: true, message: "Weekly email sent to commissioner." });
     } catch (err: any) {
       return res.status(500).json({ error: err?.message || "Failed to generate or send email." });
     }
+  });
+
+  app.get("/api/leagues/:leagueId/weekly-email/free-send-status", async (req: Request, res: Response) => {
+    const leagueId = String(req.params.leagueId || "").trim();
+    if (!leagueId) {
+      return res.status(400).json({ error: "leagueId is required." });
+    }
+    return res.json(getFreeSendStatus(leagueId));
   });
 
   // Weekly Commissioner Email — sent status (recap and preview separately)
@@ -1353,7 +1372,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         } else {
           if (week < 1) return res.status(400).json({ error: "week (>= 1) is required" });
           const previousRankings = getStoredPreviousRankings(league_id, week);
-          const result = await getWeeklyCommissionerEmail(league_id, week, previousRankings, undefined, undefined, CLIENT_URL);
+          const result = await getWeeklyCommissionerEmail(league_id, week, previousRankings, undefined, undefined, CLIENT_URL, WEEKLY_EMAIL_V2_ENABLED);
           leagueName = result.leagueName;
           emailHtml = result.emailHtml;
           rankings = result.rankings;
@@ -1660,6 +1679,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
 
     // Success
+    unlockedLeagueIds.add(String(league_id).trim());
     trackEvent("comp_code_success", "/api/comp/unlock", "POST", { league_id });
     return res.json({ ok: true });
   });
@@ -1752,6 +1772,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const customerEmail = session.customer_details?.email || null;
 
       console.log(`[Stripe Webhook] checkout.session.completed: session=${sessionId}, league=${leagueId}, amount=${amountTotal} ${currency}`);
+      if (leagueId) unlockedLeagueIds.add(String(leagueId).trim());
 
       // Track the webhook-confirmed purchase (this is the source of truth)
       trackEvent("purchase_completed_webhook", "/api/stripe/webhook", "POST", {

@@ -35,6 +35,9 @@ type SleeperPlayerLite = {
 
 let nflPlayersCache: Record<string, SleeperPlayerLite> | null = null;
 let nflPlayersCacheTs = 0;
+const POSITION_LEADERS_CACHE_TTL_MS = 10 * 60 * 1000;
+const POSITION_LEADERS_MAX_MS = 3500;
+const positionLeadersCache = new Map<string, { expiresAt: number; value?: WeeklyEmailData["positionLeaders"] }>();
 
 async function getNflPlayers(): Promise<Record<string, SleeperPlayerLite>> {
   const ONE_DAY = 24 * 60 * 60 * 1000;
@@ -46,6 +49,18 @@ async function getNflPlayers(): Promise<Record<string, SleeperPlayerLite>> {
   nflPlayersCache = players;
   nflPlayersCacheTs = now;
   return players;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("timeout")), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 function safeNum(n: unknown): number {
@@ -399,10 +414,15 @@ async function computePositionLeaders(
   throughWeek: number,
   rosterNameByTeamId: (teamId: string) => string,
 ): Promise<WeeklyEmailData["positionLeaders"]> {
+  const cacheKey = `${leagueId}:${throughWeek}`;
+  const cached = positionLeadersCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
   let playersById: Record<string, SleeperPlayerLite>;
   try {
     playersById = await getNflPlayers();
   } catch {
+    console.log(JSON.stringify({ event: "weekly_email_position_leaders_skipped", leagueId, throughWeek, reason: "players_fetch_failed" }));
     return undefined;
   }
   const allowed = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
@@ -441,7 +461,7 @@ async function computePositionLeaders(
   }
   if (!bestByPos.size) return undefined;
   const order = ["QB", "RB", "WR", "TE", "DEF", "K"];
-  return order
+  const out = order
     .filter((pos) => bestByPos.has(pos))
     .map((pos) => {
       const best = bestByPos.get(pos)!;
@@ -454,6 +474,8 @@ async function computePositionLeaders(
         teamName: rosterNameByTeamId(String(best.rosterId)),
       };
     });
+  positionLeadersCache.set(cacheKey, { expiresAt: Date.now() + POSITION_LEADERS_CACHE_TTL_MS, value: out });
+  return out;
 }
 
 /**
@@ -490,7 +512,9 @@ export async function getWeeklyCommissionerEmail(
   commissionerNote?: string,
   commissionerSignoff?: string,
   appUrl?: string,
+  includeV2 = true,
 ): Promise<WeeklyCommissionerResult> {
+  const startMs = Date.now();
   const { leagueName, teams } = await buildTeamsFromSleeper(leagueId, week);
   if (teams.length === 0) {
     throw new Error("No team data available for this league and week.");
@@ -524,10 +548,18 @@ export async function getWeeklyCommissionerEmail(
   } catch {
     playersById = null;
   }
-  const weeklySuperlatives = computeWeeklySuperlatives(weekMatchupsRaw, rosterNameByTeamId, playersById);
-  const leagueAverages = computeLeagueAverages(teams, weekMatchupsRaw);
-  const seasonRaces = computeSeasonRaces(teams, rosters);
-  const positionLeaders = await computePositionLeaders(leagueId, week, rosterNameByTeamId);
+  const weeklySuperlatives = includeV2 ? computeWeeklySuperlatives(weekMatchupsRaw, rosterNameByTeamId, playersById) : undefined;
+  const leagueAverages = includeV2 ? computeLeagueAverages(teams, weekMatchupsRaw) : undefined;
+  const seasonRaces = includeV2 ? computeSeasonRaces(teams, rosters) : undefined;
+  let positionLeaders: WeeklyEmailData["positionLeaders"] | undefined;
+  if (includeV2) {
+    try {
+      positionLeaders = await withTimeout(computePositionLeaders(leagueId, week, rosterNameByTeamId), POSITION_LEADERS_MAX_MS);
+    } catch {
+      positionLeaders = undefined;
+      console.log(JSON.stringify({ event: "weekly_email_position_leaders_skipped", leagueId, week, reason: "timeout_or_error" }));
+    }
+  }
 
   const matchupPairs = weekMatchups.map((m) => ({ teamA: m.teamA, teamB: m.teamB }));
   const narratives = await getLeagueHistoryNarratives(leagueId, matchupPairs);
@@ -581,6 +613,14 @@ export async function getWeeklyCommissionerEmail(
   };
 
   const emailHtml = generateWeeklyEmail(emailPayload);
+  console.log(JSON.stringify({
+    event: "weekly_email_recap_generated",
+    leagueId,
+    week,
+    includeV2,
+    durationMs: Date.now() - startMs,
+    hasPositionLeaders: Boolean(positionLeaders?.length),
+  }));
 
   return {
     leagueName,
@@ -608,8 +648,9 @@ export async function generateWeeklyCommissionerEmail(
   commissionerNote?: string,
   commissionerSignoff?: string,
   appUrl?: string,
+  includeV2 = true,
 ): Promise<{ subject: string; html: string; text: string }> {
-  const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, commissionerNote, commissionerSignoff, appUrl);
+  const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, commissionerNote, commissionerSignoff, appUrl, includeV2);
   const subject = getRecapSubject(result.leagueName, result.week, result.emailPayload);
   const text = generateWeeklyEmailPlainText(result.emailPayload);
   return { subject, html: result.emailHtml, text };

@@ -579,13 +579,40 @@ export default function LeagueHistoryPage() {
   const [weeklyCommissionerEmailMode, setWeeklyCommissionerEmailMode] = useState<"recap" | "preview">("recap");
   const [weeklyEmailGenerateLoading, setWeeklyEmailGenerateLoading] = useState(false);
   const [weeklyEmailSendLoading, setWeeklyEmailSendLoading] = useState(false);
+  const [serverFreeSendUsed, setServerFreeSendUsed] = useState(false);
   const { toast } = useToast();
 
   // Demo league always shows full content (bypasses premium gating)
   const isDemo = leagueId === EXAMPLE_LEAGUE_ID;
   const showPremiumContent = isPremiumState || isDemo;
-  // One free send per league before paywall; after that Send requires unlock
-  const canSendWeeklyEmail = showPremiumContent || isDemo || !hasUsedFreeSend(leagueId.trim());
+  // Preview/generate remains available; Send is limited by unlock or one-free-send.
+  const canGenerateAndPreviewWeeklyEmail = Boolean(leagueId.trim());
+  const freeSendAlreadyUsed = hasUsedFreeSend(leagueId.trim()) || serverFreeSendUsed;
+  const canSendWeeklyEmail = showPremiumContent || isDemo || !freeSendAlreadyUsed;
+
+  useEffect(() => {
+    const trimmed = leagueId.trim();
+    if (!trimmed || isDemo) {
+      setServerFreeSendUsed(false);
+      return;
+    }
+    let cancelled = false;
+    void fetch(`/api/leagues/${encodeURIComponent(trimmed)}/weekly-email/free-send-status`)
+      .then(async (res) => {
+        if (!res.ok) return { used: false };
+        return res.json().catch(() => ({ used: false }));
+      })
+      .then((data: { used?: boolean }) => {
+        if (cancelled) return;
+        setServerFreeSendUsed(Boolean(data?.used));
+      })
+      .catch(() => {
+        if (!cancelled) setServerFreeSendUsed(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [leagueId, isDemo]);
 
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
   const gridExportRef = useRef<HTMLDivElement | null>(null);
@@ -2043,14 +2070,14 @@ export default function LeagueHistoryPage() {
           </p>
           {!showPremiumContent && !isDemo && (
             <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-              {hasUsedFreeSend(leagueId.trim())
+              {freeSendAlreadyUsed
                 ? "You've used your free send. Unlock to keep sending."
                 : "Unlock to send weekly commissioner emails (preview + recap) for this league."}
               <Button size="sm" className="ml-2 mt-1 sm:mt-0" onClick={handleCheckout}>
-                {hasUsedFreeSend(leagueId.trim()) ? "Unlock to send again" : "Unlock weekly emails for this league"}
+                {freeSendAlreadyUsed ? "Unlock to send again" : "Unlock weekly emails for this league"}
               </Button>
               <p className="text-xs text-muted-foreground mt-2">
-                {hasUsedFreeSend(leagueId.trim()) ? "Commissioners send this every week." : "Your first send is free. Commissioners send this every week."}
+                {freeSendAlreadyUsed ? "Commissioners send this every week." : "Your first send is free. Commissioners send this every week."}
               </p>
             </div>
           )}
@@ -2064,7 +2091,7 @@ export default function LeagueHistoryPage() {
                 value={weeklyCommissionerWeek}
                 onChange={(e) => setWeeklyCommissionerWeek(Number(e.target.value) || 1)}
                 className="mt-1 w-20 rounded-lg border px-2 py-1.5 text-sm"
-                disabled={!canSendWeeklyEmail}
+                disabled={!canGenerateAndPreviewWeeklyEmail}
               />
             </div>
             <div className="flex-1 min-w-[160px]">
@@ -2073,7 +2100,7 @@ export default function LeagueHistoryPage() {
                 value={weeklyCommissionerEmailMode}
                 onChange={(e) => setWeeklyCommissionerEmailMode(e.target.value as "recap" | "preview")}
                 className="mt-1 w-full rounded-lg border px-2 py-1.5 text-sm"
-                disabled={!canSendWeeklyEmail}
+                disabled={!canGenerateAndPreviewWeeklyEmail}
               >
                 <option value="recap">Recap (post-week)</option>
                 <option value="preview">Preview (pre-week)</option>
@@ -2084,7 +2111,7 @@ export default function LeagueHistoryPage() {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={!canSendWeeklyEmail || weeklyEmailGenerateLoading}
+                disabled={!canGenerateAndPreviewWeeklyEmail || weeklyEmailGenerateLoading}
                 onClick={async () => {
                   setWeeklyEmailGenerateLoading(true);
                   try {
@@ -2113,7 +2140,7 @@ export default function LeagueHistoryPage() {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={!canSendWeeklyEmail}
+                disabled={!canGenerateAndPreviewWeeklyEmail}
                 onClick={() => {
                   track("weekly_email_preview", { league_id: leagueId.trim(), week: weeklyCommissionerWeek, mode: weeklyCommissionerEmailMode });
                   const params = new URLSearchParams({ week: String(weeklyCommissionerWeek), mode: weeklyCommissionerEmailMode });
@@ -2127,7 +2154,7 @@ export default function LeagueHistoryPage() {
               </Button>
             </div>
           </div>
-          {canSendWeeklyEmail && (
+          {canGenerateAndPreviewWeeklyEmail && (
             <div>
               <label className="block text-xs font-medium text-muted-foreground">Add a note at the top (optional)</label>
               <input
@@ -2194,9 +2221,16 @@ export default function LeagueHistoryPage() {
                   });
                   const data = await res.json().catch(() => ({}));
                   if (!res.ok) {
+                    if (res.status === 402 || data?.code === "FREE_SEND_USED") {
+                      setServerFreeSendUsed(true);
+                      throw new Error("You've used your free send. Unlock to send again.");
+                    }
                     throw new Error(data?.error || "Failed to send email.");
                   }
-                  if (!showPremiumContent && !isDemo) markFreeSendUsed(leagueId.trim());
+                  if (!showPremiumContent && !isDemo) {
+                    markFreeSendUsed(leagueId.trim());
+                    setServerFreeSendUsed(true);
+                  }
                   track("weekly_email_sent", { league_id: leagueId.trim(), week: weeklyCommissionerWeek, mode: weeklyCommissionerEmailMode });
                   toast({
                     title: "Sent",
