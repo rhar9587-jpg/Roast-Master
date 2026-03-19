@@ -24,6 +24,8 @@ export interface WeeklyEmailData {
   introSummary: string;
   /** Optional commissioner note rendered above the intro. */
   commissionerNote?: string;
+  /** Optional short commissioner sign-off line near footer. */
+  commissionerSignoff?: string;
   /** Biggest rank movers from last week (when previous rankings exist). Recap only. */
   biggestMovers?: {
     riser?: { teamName: string; change: number };
@@ -47,6 +49,23 @@ export interface WeeklyEmailData {
   mode?: "recap" | "preview";
   /** Preview only: short disclaimer (e.g. Week 1). */
   previewDisclaimer?: string;
+  /** Recap V2: high/low score and coaching miss callouts. */
+  weeklySuperlatives?: {
+    highScore: { teamName: string; points: number; keyPerformers?: string[] };
+    lowScore: { teamName: string; points: number };
+    worstCoach?: { teamName: string; benchPoints: number; sitStartMiss?: string };
+  };
+  /** Recap V2: scoring context. */
+  leagueAverages?: { weekAverage: number; seasonAverage: number };
+  /** Recap V2: season races. */
+  seasonRaces?: {
+    topScoringPace?: { teamName: string; totalPoints: number; pointsPerGame: number };
+    lowestScoringPace?: { teamName: string; totalPoints: number; pointsPerGame: number };
+    luckiestByPointsAgainst?: { teamName: string; totalPointsAgainst: number; pointsAgainstPerGame: number };
+    unluckiestByPointsAgainst?: { teamName: string; totalPointsAgainst: number; pointsAgainstPerGame: number };
+  };
+  /** Recap V2: best players by position, if available. */
+  positionLeaders?: Array<{ position: string; playerName: string; avgPoints: number; teamName: string }>;
 }
 
 function escapeHtml(str: string | null | undefined): string {
@@ -297,10 +316,57 @@ ${rankingsRows}
             </td>
           </tr>
           ` : ""}
+          ${!isPreview && data.weeklySuperlatives ? `
+          <tr>
+            <td style="padding: 0 24px 16px 24px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #1f2430; border-left: 4px solid #64b5f6; border-radius: 4px;">
+                <tr><td style="padding: 14px 16px;">
+                  <p style="margin: 0 0 8px 0; font-size: 11px; color: #90caf9; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Weekly Superlatives</p>
+                  <p style="margin: 0; font-size: 13px; color: #ffffff;"><strong>High score:</strong> ${escapeHtml(data.weeklySuperlatives.highScore.teamName)} — ${data.weeklySuperlatives.highScore.points.toFixed(1)} pts${data.weeklySuperlatives.highScore.keyPerformers?.length ? `. Key performers: ${escapeHtml(data.weeklySuperlatives.highScore.keyPerformers.join(", "))}.` : "."}</p>
+                  <p style="margin: 8px 0 0 0; font-size: 13px; color: #e0e0e0;"><strong>Low score:</strong> ${escapeHtml(data.weeklySuperlatives.lowScore.teamName)} — ${data.weeklySuperlatives.lowScore.points.toFixed(1)} pts.</p>
+                  ${data.weeklySuperlatives.worstCoach ? `<p style="margin: 8px 0 0 0; font-size: 13px; color: #e0e0e0;"><strong>Worst coach:</strong> ${escapeHtml(data.weeklySuperlatives.worstCoach.teamName)} left ${data.weeklySuperlatives.worstCoach.benchPoints.toFixed(1)} on the bench.${data.weeklySuperlatives.worstCoach.sitStartMiss ? ` ${escapeHtml(data.weeklySuperlatives.worstCoach.sitStartMiss)}` : ""}</p>` : ""}
+                </td></tr>
+              </table>
+            </td>
+          </tr>
+          ` : ""}
+          ${!isPreview && data.leagueAverages ? `
+          <tr>
+            <td style="padding: 0 24px 16px 24px;">
+              <p style="margin: 0; font-size: 13px; color: ${textMuted}; line-height: 1.5;">
+                Scoring average this week: ${data.leagueAverages.weekAverage.toFixed(2)}. Season scoring average: ${data.leagueAverages.seasonAverage.toFixed(2)}.
+              </p>
+            </td>
+          </tr>
+          ` : ""}
+          ${!isPreview && data.seasonRaces ? `
+          <tr>
+            <td style="padding: 0 24px 16px 24px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #26211f; border-left: 4px solid ${accent}; border-radius: 4px;">
+                <tr><td style="padding: 14px 16px;">
+                  <p style="margin: 0 0 8px 0; font-size: 11px; color: ${accent}; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Season Races</p>
+                  ${data.seasonRaces.topScoringPace ? `<p style="margin: 0; font-size: 13px; color: #ffffff;"><strong>High score race:</strong> ${escapeHtml(data.seasonRaces.topScoringPace.teamName)} — ${data.seasonRaces.topScoringPace.totalPoints.toFixed(1)} (${data.seasonRaces.topScoringPace.pointsPerGame.toFixed(1)}/game).</p>` : ""}
+                  ${data.seasonRaces.lowestScoringPace ? `<p style="margin: 8px 0 0 0; font-size: 13px; color: #e0e0e0;"><strong>Season worst:</strong> ${escapeHtml(data.seasonRaces.lowestScoringPace.teamName)} — ${data.seasonRaces.lowestScoringPace.totalPoints.toFixed(1)} (${data.seasonRaces.lowestScoringPace.pointsPerGame.toFixed(1)}/game).</p>` : ""}
+                  ${data.seasonRaces.luckiestByPointsAgainst ? `<p style="margin: 8px 0 0 0; font-size: 13px; color: #e0e0e0;"><strong>Luckiest (PA):</strong> ${escapeHtml(data.seasonRaces.luckiestByPointsAgainst.teamName)} — ${data.seasonRaces.luckiestByPointsAgainst.totalPointsAgainst.toFixed(1)} against (${data.seasonRaces.luckiestByPointsAgainst.pointsAgainstPerGame.toFixed(1)}/game).</p>` : ""}
+                  ${data.seasonRaces.unluckiestByPointsAgainst ? `<p style="margin: 8px 0 0 0; font-size: 13px; color: #e0e0e0;"><strong>Unluckiest (PA):</strong> ${escapeHtml(data.seasonRaces.unluckiestByPointsAgainst.teamName)} — ${data.seasonRaces.unluckiestByPointsAgainst.totalPointsAgainst.toFixed(1)} against (${data.seasonRaces.unluckiestByPointsAgainst.pointsAgainstPerGame.toFixed(1)}/game).</p>` : ""}
+                </td></tr>
+              </table>
+            </td>
+          </tr>
+          ` : ""}
+          ${!isPreview && data.positionLeaders && data.positionLeaders.length > 0 ? `
+          <tr>
+            <td style="padding: 0 24px 16px 24px;">
+              <p style="margin: 0 0 8px 0; font-size: 11px; color: ${textMuted}; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">Best players by position</p>
+              ${data.positionLeaders.map((l) => `<p style="margin: 0 0 4px 0; font-size: 13px; color: #e0e0e0;"><strong>${escapeHtml(l.position)}:</strong> ${escapeHtml(l.playerName)} — ${l.avgPoints.toFixed(1)} avg (${escapeHtml(l.teamName)})</p>`).join("")}
+            </td>
+          </tr>
+          ` : ""}
           ${isPreview ? previewSections : ""}
           ${!isPreview ? historyBlock : ""}
           <tr>
             <td style="padding: 20px 24px 24px 24px; border-top: 1px solid ${border};">
+              ${data.commissionerSignoff ? `<p style="margin: 0 0 10px 0; font-size: 13px; color: #e0e0e0; font-style: italic;">${escapeHtml(data.commissionerSignoff)}</p>` : ""}
               <p style="margin: 0; font-size: 12px; color: ${textMuted}; line-height: 1.5;">This report was generated automatically by Fantasy Roast.<br>Automated weekly power rankings for fantasy commissioners.</p>
               <p style="margin: 14px 0 0 0; font-size: 13px; color: #e0e0e0;">Sent by your commissioner with Fantasy Roast. See you in the group chat.</p>
               ${data.appUrl ? `<p style="margin: 10px 0 0 0; font-size: 12px; color: ${accent};"><a href="${escapeHtml(data.appUrl)}" style="color: ${accent}; text-decoration: none;">Want this for your league?</a></p>` : ""}
@@ -350,6 +416,33 @@ export function generateWeeklyEmailPlainText(data: WeeklyEmailData): string {
     }
     if (data.villainOfTheWeek) lines.push("", "VILLAIN OF THE WEEK", "---", `${data.villainOfTheWeek.teamName}: ${data.villainOfTheWeek.reason}`);
     if (data.fraudAlert) lines.push("", "FRAUD ALERT", "---", `${data.fraudAlert.teamName}: ${data.fraudAlert.reason}`);
+    if (data.weeklySuperlatives) {
+      lines.push("", "WEEKLY SUPERLATIVES", "---");
+      lines.push(`High score: ${data.weeklySuperlatives.highScore.teamName} — ${data.weeklySuperlatives.highScore.points.toFixed(1)} pts.`);
+      if (data.weeklySuperlatives.highScore.keyPerformers?.length) {
+        lines.push(`Key performers: ${data.weeklySuperlatives.highScore.keyPerformers.join(", ")}.`);
+      }
+      lines.push(`Low score: ${data.weeklySuperlatives.lowScore.teamName} — ${data.weeklySuperlatives.lowScore.points.toFixed(1)} pts.`);
+      if (data.weeklySuperlatives.worstCoach) {
+        lines.push(`Worst coach: ${data.weeklySuperlatives.worstCoach.teamName} left ${data.weeklySuperlatives.worstCoach.benchPoints.toFixed(1)} points on the bench.${data.weeklySuperlatives.worstCoach.sitStartMiss ? ` ${data.weeklySuperlatives.worstCoach.sitStartMiss}` : ""}`);
+      }
+    }
+    if (data.leagueAverages) {
+      lines.push("", "LEAGUE AVERAGES", "---", `Week average: ${data.leagueAverages.weekAverage.toFixed(2)}`, `Season average: ${data.leagueAverages.seasonAverage.toFixed(2)}`);
+    }
+    if (data.seasonRaces) {
+      lines.push("", "SEASON RACES", "---");
+      if (data.seasonRaces.topScoringPace) lines.push(`Top scoring pace: ${data.seasonRaces.topScoringPace.teamName} — ${data.seasonRaces.topScoringPace.totalPoints.toFixed(1)} (${data.seasonRaces.topScoringPace.pointsPerGame.toFixed(1)}/game).`);
+      if (data.seasonRaces.lowestScoringPace) lines.push(`Lowest scoring pace: ${data.seasonRaces.lowestScoringPace.teamName} — ${data.seasonRaces.lowestScoringPace.totalPoints.toFixed(1)} (${data.seasonRaces.lowestScoringPace.pointsPerGame.toFixed(1)}/game).`);
+      if (data.seasonRaces.luckiestByPointsAgainst) lines.push(`Luckiest (points against): ${data.seasonRaces.luckiestByPointsAgainst.teamName} — ${data.seasonRaces.luckiestByPointsAgainst.totalPointsAgainst.toFixed(1)} (${data.seasonRaces.luckiestByPointsAgainst.pointsAgainstPerGame.toFixed(1)}/game).`);
+      if (data.seasonRaces.unluckiestByPointsAgainst) lines.push(`Unluckiest (points against): ${data.seasonRaces.unluckiestByPointsAgainst.teamName} — ${data.seasonRaces.unluckiestByPointsAgainst.totalPointsAgainst.toFixed(1)} (${data.seasonRaces.unluckiestByPointsAgainst.pointsAgainstPerGame.toFixed(1)}/game).`);
+    }
+    if (data.positionLeaders?.length) {
+      lines.push("", "BEST PLAYERS BY POSITION", "---");
+      for (const l of data.positionLeaders) {
+        lines.push(`${l.position}: ${l.playerName} — ${l.avgPoints.toFixed(1)} avg (${l.teamName})`);
+      }
+    }
   }
 
   if (isPreview) {
@@ -367,6 +460,7 @@ export function generateWeeklyEmailPlainText(data: WeeklyEmailData): string {
 
   if (data.matchupToWatch) lines.push("", "MATCHUP TO WATCH", "---", `${data.matchupToWatch.teamA} vs ${data.matchupToWatch.teamB}: ${data.matchupToWatch.narrative}`);
   if (data.storyOfTheWeek) lines.push("", data.storyOfTheWeek.narrative);
+  if (data.commissionerSignoff?.trim()) lines.push("", data.commissionerSignoff.trim());
 
   lines.push("", "---", "This report was generated automatically by Fantasy Roast. Automated weekly power rankings for fantasy commissioners.", "", "Sent by your commissioner with Fantasy Roast. See you in the group chat.");
   if (data.appUrl) lines.push("", `Want this for your league? ${data.appUrl}`);

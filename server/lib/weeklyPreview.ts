@@ -125,6 +125,7 @@ export async function getWeeklyPreviewEmail(
   leagueId: string,
   week: number,
   commissionerNote?: string,
+  commissionerSignoff?: string,
   appUrl?: string,
 ): Promise<WeeklyPreviewResult> {
   const throughWeek = Math.max(1, week - 1);
@@ -162,6 +163,7 @@ export async function getWeeklyPreviewEmail(
     introSummary,
     mode: "preview",
     ...(commissionerNote?.trim() ? { commissionerNote: commissionerNote.trim() } : {}),
+    ...(commissionerSignoff?.trim() ? { commissionerSignoff: commissionerSignoff.trim().slice(0, 180) } : {}),
     ...(week === 1 ? { previewDisclaimer: "Win % and blowout/upset picks will appear after Week 1." } : {}),
     ...(upcomingMatchups.length > 0 ? { upcomingMatchups } : {}),
     ...(likelyBlowout ? { likelyBlowout } : {}),
@@ -186,9 +188,10 @@ export async function generateWeeklyPreviewEmail(
   leagueId: string,
   week: number,
   commissionerNote?: string,
+  commissionerSignoff?: string,
   appUrl?: string,
 ): Promise<{ subject: string; html: string; text: string }> {
-  const result = await getWeeklyPreviewEmail(leagueId, week, commissionerNote, appUrl);
+  const result = await getWeeklyPreviewEmail(leagueId, week, commissionerNote, commissionerSignoff, appUrl);
   const subject = `${result.leagueName} — Week ${result.week} Matchup Preview`;
   const text = generateWeeklyEmailPlainText(result.emailPayload);
   return { subject, html: result.emailHtml, text };

@@ -26,9 +26,36 @@ interface RosterWithPoints {
   };
 }
 
+type SleeperPlayerLite = {
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  position?: string;
+};
+
+let nflPlayersCache: Record<string, SleeperPlayerLite> | null = null;
+let nflPlayersCacheTs = 0;
+
+async function getNflPlayers(): Promise<Record<string, SleeperPlayerLite>> {
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  if (nflPlayersCache && now - nflPlayersCacheTs < ONE_DAY) return nflPlayersCache;
+  const res = await fetch("https://api.sleeper.app/v1/players/nfl");
+  if (!res.ok) throw new Error(`Sleeper players API ${res.status}`);
+  const players = (await res.json()) as Record<string, SleeperPlayerLite>;
+  nflPlayersCache = players;
+  nflPlayersCacheTs = now;
+  return players;
+}
+
 function safeNum(n: unknown): number {
   const x = Number(n);
   return Number.isFinite(x) ? x : 0;
+}
+
+function average(values: number[]): number {
+  if (!values.length) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
 function pointsFromRoster(r: RosterWithPoints): number {
@@ -258,6 +285,177 @@ function computeBiggestMovers(
   return { ...(bestRiser && { riser: bestRiser }), ...(bestFaller && { faller: bestFaller }) };
 }
 
+function topPerformersForRow(
+  row: SleeperMatchup,
+  playersById: Record<string, SleeperPlayerLite> | null,
+  limit = 4,
+): string[] {
+  const points = row.players_points || row.starters_points || {};
+  const ids = row.starters && row.starters.length ? row.starters : Object.keys(points);
+  return ids
+    .map((pid) => ({ pid, pts: safeNum(points[pid]) }))
+    .filter((x) => x.pts > 0)
+    .sort((a, b) => b.pts - a.pts)
+    .slice(0, limit)
+    .map(({ pid }) => {
+      if (!playersById) return `Player ${pid}`;
+      const p = playersById[pid];
+      return p?.full_name || [p?.first_name, p?.last_name].filter(Boolean).join(" ") || `Player ${pid}`;
+    });
+}
+
+function computeWeeklySuperlatives(
+  matchups: SleeperMatchup[],
+  rosterNameByTeamId: (teamId: string) => string,
+  playersById: Record<string, SleeperPlayerLite> | null,
+): WeeklyEmailData["weeklySuperlatives"] {
+  if (!matchups.length) return undefined;
+  const sorted = [...matchups].sort((a, b) => safeNum(b.points) - safeNum(a.points));
+  const high = sorted[0];
+  const low = sorted[sorted.length - 1];
+  if (!high || !low) return undefined;
+
+  type WorstCoach = NonNullable<NonNullable<WeeklyEmailData["weeklySuperlatives"]>["worstCoach"]>;
+  let worstCoach: WorstCoach | undefined;
+  for (const row of matchups) {
+    if (!row.players?.length) continue;
+    const pts = row.players_points || row.starters_points || {};
+    const starters = new Set(row.starters || []);
+    const benchPoints = row.players
+      .filter((pid) => !starters.has(pid))
+      .reduce((sum, pid) => sum + Math.max(0, safeNum(pts[pid])), 0);
+    if (!Number.isFinite(benchPoints) || benchPoints <= 0) continue;
+    if (!worstCoach || benchPoints > worstCoach.benchPoints) {
+      const topBench = row.players
+        .filter((pid) => !starters.has(pid))
+        .map((pid) => ({ pid, pts: safeNum(pts[pid]) }))
+        .sort((a, b) => b.pts - a.pts)[0];
+      const lowStarter = (row.starters || [])
+        .map((pid) => ({ pid, pts: safeNum(pts[pid]) }))
+        .sort((a, b) => a.pts - b.pts)[0];
+      const benchName = topBench
+        ? (playersById?.[topBench.pid]?.full_name || [playersById?.[topBench.pid]?.first_name, playersById?.[topBench.pid]?.last_name].filter(Boolean).join(" ") || `Player ${topBench.pid}`)
+        : "";
+      const starterName = lowStarter
+        ? (playersById?.[lowStarter.pid]?.full_name || [playersById?.[lowStarter.pid]?.first_name, playersById?.[lowStarter.pid]?.last_name].filter(Boolean).join(" ") || `Player ${lowStarter.pid}`)
+        : "";
+      worstCoach = {
+        teamName: rosterNameByTeamId(String(row.roster_id)),
+        benchPoints,
+        ...(benchName && starterName ? { sitStartMiss: `${benchName} should have started over ${starterName}.` } : {}),
+      };
+    }
+  }
+
+  return {
+    highScore: {
+      teamName: rosterNameByTeamId(String(high.roster_id)),
+      points: safeNum(high.points),
+      keyPerformers: topPerformersForRow(high, playersById),
+    },
+    lowScore: {
+      teamName: rosterNameByTeamId(String(low.roster_id)),
+      points: safeNum(low.points),
+    },
+    ...(worstCoach ? { worstCoach } : {}),
+  };
+}
+
+function computeLeagueAverages(teams: PowerRankingsTeamInput[], weekMatchups: SleeperMatchup[]): WeeklyEmailData["leagueAverages"] {
+  const weekScores = weekMatchups.map((m) => safeNum(m.points)).filter((x) => x > 0);
+  const seasonScores = teams.flatMap((t) => t.weeklyScores || []).filter((x) => x > 0);
+  if (!weekScores.length && !seasonScores.length) return undefined;
+  return {
+    weekAverage: average(weekScores),
+    seasonAverage: average(seasonScores),
+  };
+}
+
+function computeSeasonRaces(
+  teams: PowerRankingsTeamInput[],
+  rosters: RosterWithPoints[],
+): WeeklyEmailData["seasonRaces"] {
+  if (!teams.length) return undefined;
+  const withGames = teams.map((t) => ({ ...t, games: Math.max(1, t.weeklyScores?.length || t.wins + t.losses || 1) }));
+  const topScoring = [...withGames].sort((a, b) => b.pointsFor - a.pointsFor)[0];
+  const lowestScoring = [...withGames].sort((a, b) => a.pointsFor - b.pointsFor)[0];
+  const pointsAgainstRows = withGames.map((t) => {
+    const r = rosters.find((x) => String(x.roster_id) === t.teamId);
+    const totalPA = safeNum(r?.settings?.fpts_against) + safeNum(r?.settings?.fpts_against_decimal) / 100;
+    return { teamName: t.teamName, totalPA, games: t.games };
+  }).filter((x) => x.totalPA > 0);
+  const luckiest = [...pointsAgainstRows].sort((a, b) => a.totalPA - b.totalPA)[0];
+  const unluckiest = [...pointsAgainstRows].sort((a, b) => b.totalPA - a.totalPA)[0];
+  return {
+    topScoringPace: topScoring ? { teamName: topScoring.teamName, totalPoints: topScoring.pointsFor, pointsPerGame: topScoring.pointsFor / topScoring.games } : undefined,
+    lowestScoringPace: lowestScoring ? { teamName: lowestScoring.teamName, totalPoints: lowestScoring.pointsFor, pointsPerGame: lowestScoring.pointsFor / lowestScoring.games } : undefined,
+    luckiestByPointsAgainst: luckiest ? { teamName: luckiest.teamName, totalPointsAgainst: luckiest.totalPA, pointsAgainstPerGame: luckiest.totalPA / luckiest.games } : undefined,
+    unluckiestByPointsAgainst: unluckiest ? { teamName: unluckiest.teamName, totalPointsAgainst: unluckiest.totalPA, pointsAgainstPerGame: unluckiest.totalPA / unluckiest.games } : undefined,
+  };
+}
+
+async function computePositionLeaders(
+  leagueId: string,
+  throughWeek: number,
+  rosterNameByTeamId: (teamId: string) => string,
+): Promise<WeeklyEmailData["positionLeaders"]> {
+  let playersById: Record<string, SleeperPlayerLite>;
+  try {
+    playersById = await getNflPlayers();
+  } catch {
+    return undefined;
+  }
+  const allowed = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
+  const totals = new Map<string, { points: number; games: number; rosterId: number }>();
+  for (let w = 1; w <= throughWeek; w++) {
+    let rows: SleeperMatchup[] = [];
+    try {
+      rows = await getMatchups(leagueId, w);
+    } catch {
+      continue;
+    }
+    for (const row of rows) {
+      const pp = row.players_points || row.starters_points || {};
+      const starters = row.starters && row.starters.length ? row.starters : Object.keys(pp);
+      for (const pid of starters) {
+        const p = playersById[pid];
+        const pos = p?.position === "DST" ? "DEF" : p?.position;
+        if (!pos || !allowed.has(pos)) continue;
+        const pts = safeNum(pp[pid]);
+        if (pts <= 0) continue;
+        const key = `${pos}:${pid}`;
+        const prev = totals.get(key) || { points: 0, games: 0, rosterId: row.roster_id };
+        prev.points += pts;
+        prev.games += 1;
+        totals.set(key, prev);
+      }
+    }
+  }
+  if (!totals.size) return undefined;
+  const bestByPos = new Map<string, { playerId: string; avg: number; rosterId: number }>();
+  for (const [key, agg] of Array.from(totals.entries())) {
+    const [pos, pid] = key.split(":");
+    const avgPts = agg.points / Math.max(1, agg.games);
+    const prev = bestByPos.get(pos);
+    if (!prev || avgPts > prev.avg) bestByPos.set(pos, { playerId: pid, avg: avgPts, rosterId: agg.rosterId });
+  }
+  if (!bestByPos.size) return undefined;
+  const order = ["QB", "RB", "WR", "TE", "DEF", "K"];
+  return order
+    .filter((pos) => bestByPos.has(pos))
+    .map((pos) => {
+      const best = bestByPos.get(pos)!;
+      const p = playersById[best.playerId];
+      const playerName = p?.full_name || [p?.first_name, p?.last_name].filter(Boolean).join(" ") || `Player ${best.playerId}`;
+      return {
+        position: pos,
+        playerName,
+        avgPoints: best.avg,
+        teamName: rosterNameByTeamId(String(best.rosterId)),
+      };
+    });
+}
+
 /**
  * One-line intro summary for the week (deterministic).
  */
@@ -290,6 +488,7 @@ export async function getWeeklyCommissionerEmail(
   week: number,
   previousRankings: { teamId: string; rank: number }[] = [],
   commissionerNote?: string,
+  commissionerSignoff?: string,
   appUrl?: string,
 ): Promise<WeeklyCommissionerResult> {
   const { leagueName, teams } = await buildTeamsFromSleeper(leagueId, week);
@@ -318,6 +517,17 @@ export async function getWeeklyCommissionerEmail(
   const introSummary = buildIntroSummary(week, rankings);
   const biggestMovers = computeBiggestMovers(rankings, previousRankings);
   const weekMatchups = buildWeekMatchups(weekMatchupsRaw, rosterNameByTeamId);
+  const rosters = (await getRosters(leagueId)) as RosterWithPoints[];
+  let playersById: Record<string, SleeperPlayerLite> | null = null;
+  try {
+    playersById = await getNflPlayers();
+  } catch {
+    playersById = null;
+  }
+  const weeklySuperlatives = computeWeeklySuperlatives(weekMatchupsRaw, rosterNameByTeamId, playersById);
+  const leagueAverages = computeLeagueAverages(teams, weekMatchupsRaw);
+  const seasonRaces = computeSeasonRaces(teams, rosters);
+  const positionLeaders = await computePositionLeaders(leagueId, week, rosterNameByTeamId);
 
   const matchupPairs = weekMatchups.map((m) => ({ teamA: m.teamA, teamB: m.teamB }));
   const narratives = await getLeagueHistoryNarratives(leagueId, matchupPairs);
@@ -358,8 +568,13 @@ export async function getWeeklyCommissionerEmail(
     fraudAlert,
     introSummary,
     ...(commissionerNote?.trim() ? { commissionerNote: commissionerNote.trim() } : {}),
+    ...(commissionerSignoff?.trim() ? { commissionerSignoff: commissionerSignoff.trim().slice(0, 180) } : {}),
     ...(Object.keys(biggestMovers).length > 0 ? { biggestMovers } : {}),
     ...(weekMatchups.length > 0 ? { weekMatchups } : {}),
+    ...(weeklySuperlatives ? { weeklySuperlatives } : {}),
+    ...(leagueAverages ? { leagueAverages } : {}),
+    ...(seasonRaces ? { seasonRaces } : {}),
+    ...(positionLeaders && positionLeaders.length > 0 ? { positionLeaders } : {}),
     ...(narratives.matchupToWatch ? { matchupToWatch: narratives.matchupToWatch } : {}),
     ...(storyOfTheWeek ? { storyOfTheWeek } : {}),
     ...(appUrl?.trim() ? { appUrl: appUrl.trim() } : {}),
@@ -391,9 +606,10 @@ export async function generateWeeklyCommissionerEmail(
   week: number,
   previousRankings: { teamId: string; rank: number }[] = [],
   commissionerNote?: string,
+  commissionerSignoff?: string,
   appUrl?: string,
 ): Promise<{ subject: string; html: string; text: string }> {
-  const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, commissionerNote, appUrl);
+  const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, commissionerNote, commissionerSignoff, appUrl);
   const subject = getRecapSubject(result.leagueName, result.week, result.emailPayload);
   const text = generateWeeklyEmailPlainText(result.emailPayload);
   return { subject, html: result.emailHtml, text };

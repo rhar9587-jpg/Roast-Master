@@ -575,6 +575,7 @@ export default function LeagueHistoryPage() {
   const [weeklyCommissionerWeek, setWeeklyCommissionerWeek] = useState(17);
   const [commissionerEmail, setCommissionerEmailState] = useState("");
   const [weeklyCommissionerNote, setWeeklyCommissionerNote] = useState("");
+  const [weeklyCommissionerSignoff, setWeeklyCommissionerSignoff] = useState("");
   const [weeklyCommissionerEmailMode, setWeeklyCommissionerEmailMode] = useState<"recap" | "preview">("recap");
   const [weeklyEmailGenerateLoading, setWeeklyEmailGenerateLoading] = useState(false);
   const [weeklyEmailSendLoading, setWeeklyEmailSendLoading] = useState(false);
@@ -2117,6 +2118,7 @@ export default function LeagueHistoryPage() {
                   track("weekly_email_preview", { league_id: leagueId.trim(), week: weeklyCommissionerWeek, mode: weeklyCommissionerEmailMode });
                   const params = new URLSearchParams({ week: String(weeklyCommissionerWeek), mode: weeklyCommissionerEmailMode });
                   if (weeklyCommissionerNote.trim()) params.set("note", weeklyCommissionerNote.trim());
+                  if (weeklyCommissionerSignoff.trim()) params.set("signoff", weeklyCommissionerSignoff.trim());
                   const url = `/api/leagues/${encodeURIComponent(leagueId.trim())}/weekly-email/preview?${params.toString()}`;
                   window.open(url, "_blank", "noopener,noreferrer");
                 }}
@@ -2135,6 +2137,15 @@ export default function LeagueHistoryPage() {
                 onChange={(e) => setWeeklyCommissionerNote(e.target.value)}
                 className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
                 maxLength={500}
+              />
+              <label className="mt-2 block text-xs font-medium text-muted-foreground">Sign-off line (optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. Good luck this week!"
+                value={weeklyCommissionerSignoff}
+                onChange={(e) => setWeeklyCommissionerSignoff(e.target.value)}
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                maxLength={180}
               />
             </div>
           )}
@@ -2177,6 +2188,7 @@ export default function LeagueHistoryPage() {
                       week: weeklyCommissionerWeek,
                       commissioner_email: commissionerEmail.trim(),
                       note: weeklyCommissionerNote.trim() || undefined,
+                      signoff: weeklyCommissionerSignoff.trim() || undefined,
                       mode: weeklyCommissionerEmailMode,
                     }),
                   });

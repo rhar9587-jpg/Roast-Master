@@ -51,6 +51,10 @@ export type SleeperMatchup = {
   matchup_id: number;
   roster_id: number;
   points: number;
+  starters?: string[];
+  players?: string[];
+  players_points?: Record<string, number>;
+  starters_points?: Record<string, number>;
 };
 
 export async function getLeague(league_id: string) {
