@@ -1065,6 +1065,20 @@ export interface DemoWeeklyEmailPayload {
   introSummary: string;
   biggestMovers?: { riser?: { teamName: string; change: number }; faller?: { teamName: string; change: number } };
   weekMatchups?: Array<{ teamA: string; scoreA: number; teamB: string; scoreB: number }>;
+  commissionerSignoff?: string;
+  weeklySuperlatives?: {
+    highScore: { teamName: string; points: number; keyPerformers?: string[] };
+    lowScore: { teamName: string; points: number };
+    worstCoach?: { teamName: string; benchPoints: number; sitStartMiss?: string };
+  };
+  leagueAverages?: { weekAverage: number; seasonAverage: number };
+  seasonRaces?: {
+    topScoringPace?: { teamName: string; totalPoints: number; pointsPerGame: number };
+    lowestScoringPace?: { teamName: string; totalPoints: number; pointsPerGame: number };
+    luckiestByPointsAgainst?: { teamName: string; totalPointsAgainst: number; pointsAgainstPerGame: number };
+    unluckiestByPointsAgainst?: { teamName: string; totalPointsAgainst: number; pointsAgainstPerGame: number };
+  };
+  positionLeaders?: Array<{ position: string; playerName: string; avgPoints: number; teamName: string }>;
 }
 
 export function getDemoWeeklyEmailPayload(week: number): DemoWeeklyEmailPayload {
@@ -1104,6 +1118,57 @@ export function getDemoWeeklyEmailPayload(week: number): DemoWeeklyEmailPayload 
       { teamA: "The Landlord", scoreA: 142.1, teamB: "Waiver Wizard", scoreB: 98.3 },
       { teamA: "Trade Bandit", scoreA: 115.0, teamB: "Sleeper Genius", scoreB: 114.2 },
       { teamA: "Commissioner Chaos", scoreA: 128.5, teamB: "Injury Magnet", scoreB: 101.0 },
+    ],
+    commissionerSignoff: "Good luck this week. Keep the group chat toxic.",
+    weeklySuperlatives: {
+      highScore: {
+        teamName: "The Landlord",
+        points: 142.1,
+        keyPerformers: ["Josh Allen", "David Montgomery", "Zay Flowers", "Buccaneers D/ST"],
+      },
+      lowScore: {
+        teamName: "Rebuild Forever",
+        points: 66.5,
+      },
+      worstCoach: {
+        teamName: "Sleeper Genius",
+        benchPoints: 69.5,
+        sitStartMiss: "Baker Mayfield should have started over Kyler Murray.",
+      },
+    },
+    leagueAverages: {
+      weekAverage: 102.64,
+      seasonAverage: 101.49,
+    },
+    seasonRaces: {
+      topScoringPace: {
+        teamName: "Sleeper Genius",
+        totalPoints: 741.74,
+        pointsPerGame: 123.62,
+      },
+      lowestScoringPace: {
+        teamName: "Rebuild Forever",
+        totalPoints: 523.28,
+        pointsPerGame: 87.21,
+      },
+      luckiestByPointsAgainst: {
+        teamName: "Commissioner Chaos",
+        totalPointsAgainst: 555.56,
+        pointsAgainstPerGame: 92.59,
+      },
+      unluckiestByPointsAgainst: {
+        teamName: "Heartbreak Hotel",
+        totalPointsAgainst: 730.02,
+        pointsAgainstPerGame: 121.67,
+      },
+    },
+    positionLeaders: [
+      { position: "QB", playerName: "Lamar Jackson", avgPoints: 23.9, teamName: "Commissioner Chaos" },
+      { position: "RB", playerName: "Derrick Henry", avgPoints: 22.1, teamName: "Trade Bandit" },
+      { position: "WR", playerName: "Ja'Marr Chase", avgPoints: 17.3, teamName: "Waiver Wizard" },
+      { position: "TE", playerName: "George Kittle", avgPoints: 14.5, teamName: "Cash Cons" },
+      { position: "DEF", playerName: "Bears D/ST", avgPoints: 11.5, teamName: "Underachievers" },
+      { position: "K", playerName: "Brandon Aubrey", avgPoints: 13.3, teamName: "Cash Cons" },
     ],
   };
 }
