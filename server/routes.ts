@@ -45,6 +45,7 @@ import {
 } from "./league-history/demoLeague";
 import { generateWeeklyEmail } from "./lib/weeklyEmail";
 import { getWeeklyPreviewEmail, generateWeeklyPreviewEmail } from "./lib/weeklyPreview";
+import { isLeagueUnlocked as isLeagueUnlockedPersistent, markLeagueUnlocked } from "./lib/leagueUnlockStore";
 
 // -------------------------
 // Analytics (PostgreSQL-backed with in-memory fallback)
@@ -1278,7 +1279,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     if (leagueId === STATIC_DEMO_LEAGUE_ID) {
       return res.status(400).json({ error: "Send is not available for the demo league." });
     }
-    const isUnlockedLeague = unlockedLeagueIds.has(leagueId);
+    const isUnlockedLeague = unlockedLeagueIds.has(leagueId) || await isLeagueUnlockedPersistent(leagueId);
     if (!isUnlockedLeague && hasUsedFreeSend(leagueId)) {
       console.log(JSON.stringify({ event: "weekly_email_send_denied", leagueId, week, mode, reason: "free_send_used" }));
       return res.status(402).json({ code: "FREE_SEND_USED", error: "You've used your free send. Unlock to send again." });
@@ -1679,7 +1680,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
 
     // Success
-    unlockedLeagueIds.add(String(league_id).trim());
+    const unlockedId = String(league_id).trim();
+    unlockedLeagueIds.add(unlockedId);
+    void markLeagueUnlocked(unlockedId).catch((err) => {
+      console.error("[unlock-store] failed to persist comp unlock:", err);
+    });
     trackEvent("comp_code_success", "/api/comp/unlock", "POST", { league_id });
     return res.json({ ok: true });
   });
@@ -1772,7 +1777,13 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const customerEmail = session.customer_details?.email || null;
 
       console.log(`[Stripe Webhook] checkout.session.completed: session=${sessionId}, league=${leagueId}, amount=${amountTotal} ${currency}`);
-      if (leagueId) unlockedLeagueIds.add(String(leagueId).trim());
+      if (leagueId) {
+        const unlockedId = String(leagueId).trim();
+        unlockedLeagueIds.add(unlockedId);
+        void markLeagueUnlocked(unlockedId).catch((err) => {
+          console.error("[unlock-store] failed to persist webhook unlock:", err);
+        });
+      }
 
       // Track the webhook-confirmed purchase (this is the source of truth)
       trackEvent("purchase_completed_webhook", "/api/stripe/webhook", "POST", {
