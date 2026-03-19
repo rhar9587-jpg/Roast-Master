@@ -66,7 +66,8 @@ export async function getLeagueHistoryNarratives(
     });
     cells = (result as any).cells ?? [];
     totalsByManager = (result as any).totalsByManager ?? [];
-  } catch {
+  } catch (err) {
+    console.warn("Weekly email narratives skipped (dominance failed):", leagueId, err instanceof Error ? err.message : String(err));
     return {};
   }
 

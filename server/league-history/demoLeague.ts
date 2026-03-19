@@ -1114,6 +1114,7 @@ export function getDemoWeeklyPreviewPayload(week: number): {
   week: number;
   introSummary: string;
   mode: "preview";
+  previewDisclaimer?: string;
   upcomingMatchups: Array<{ teamA: string; teamB: string; winPctA?: number; winPctB?: number }>;
   likelyBlowout: { teamA: string; teamB: string; narrative: string };
   upsetOfTheWeek: { underdog: string; favorite: string; narrative: string };
@@ -1125,6 +1126,7 @@ export function getDemoWeeklyPreviewPayload(week: number): {
     week,
     introSummary: `Week ${week} is here. Here's what to watch.`,
     mode: "preview",
+    ...(week === 1 ? { previewDisclaimer: "Win % and blowout/upset picks will appear after Week 1." } : {}),
     upcomingMatchups: [
       { teamA: "The Landlord", teamB: "Waiver Wizard", winPctA: 72, winPctB: 28 },
       { teamA: "Trade Bandit", teamB: "Sleeper Genius", winPctA: 52, winPctB: 48 },

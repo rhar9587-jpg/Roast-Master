@@ -26,7 +26,7 @@ import {
 // ✅ NEW: League History (Dominance Grid)
 import { handleLeagueHistoryDominance } from "./league-history";
 import { selectTagline } from "./lib/seasonTagline";
-import { getWeeklyCommissionerEmail, generateWeeklyCommissionerEmail } from "./lib/weeklyCommissioner";
+import { getWeeklyCommissionerEmail, generateWeeklyCommissionerEmail, getRecapSubject } from "./lib/weeklyCommissioner";
 import { buildTeamsFromSleeper } from "./lib/weeklyCommissioner";
 import { generatePowerRankings } from "./lib/powerRankings";
 import { sendEmail } from "./lib/emailSender";
@@ -44,7 +44,7 @@ import {
   getDemoWeeklyPreviewPayload,
 } from "./league-history/demoLeague";
 import { generateWeeklyEmail } from "./lib/weeklyEmail";
-import { getWeeklyPreviewEmail } from "./lib/weeklyPreview";
+import { getWeeklyPreviewEmail, generateWeeklyPreviewEmail } from "./lib/weeklyPreview";
 
 // -------------------------
 // Analytics (PostgreSQL-backed with in-memory fallback)
@@ -1257,13 +1257,14 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  // Weekly Commissioner Email — send to commissioner only (V1)
+  // Weekly Commissioner Email — send to commissioner only (V1). Body: mode = "recap" | "preview" (default recap).
   app.post("/api/leagues/:leagueId/weekly-email/send", async (req: Request, res: Response) => {
     const leagueId = String(req.params.leagueId || "").trim();
     const body = req.body || {};
     const week = Number(body.week || 0);
     const commissionerEmail = typeof body.commissioner_email === "string" ? body.commissioner_email.trim() : "";
     const note = typeof body.note === "string" ? body.note.trim() : undefined;
+    const mode = body.mode === "preview" ? "preview" : "recap";
     if (!leagueId || week < 1) {
       return res.status(400).json({ error: "leagueId and week are required." });
     }
@@ -1274,58 +1275,88 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ error: "Send is not available for the demo league." });
     }
     try {
+      if (mode === "preview") {
+        const result = await generateWeeklyPreviewEmail(leagueId, week, note, CLIENT_URL);
+        const sendResult = await sendEmail({ to: commissionerEmail, subject: result.subject, html: result.html, text: result.text });
+        if (!sendResult.ok) {
+          return res.status(500).json({ error: sendResult.error || "Failed to send email." });
+        }
+        recordSent(leagueId, week, commissionerEmail, "preview");
+        return res.json({ ok: true, message: "Matchup preview sent to commissioner." });
+      }
       const previousRankings = getStoredPreviousRankings(leagueId, week);
       const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, note, CLIENT_URL);
-      const subject = `${result.leagueName} — Week ${result.week} Power Rankings`;
+      const subject = getRecapSubject(result.leagueName, result.week, result.emailPayload);
       const text = generateWeeklyEmailPlainText(result.emailPayload);
       const sendResult = await sendEmail({ to: commissionerEmail, subject, html: result.emailHtml, text });
       if (!sendResult.ok) {
         return res.status(500).json({ error: sendResult.error || "Failed to send email." });
       }
       storeRankingsForWeek(leagueId, week, result.rankings.map((r) => ({ teamId: r.teamId, rank: r.rank })));
-      recordSent(leagueId, week, commissionerEmail);
+      recordSent(leagueId, week, commissionerEmail, "recap");
       return res.json({ ok: true, message: "Weekly email sent to commissioner." });
     } catch (err: any) {
       return res.status(500).json({ error: err?.message || "Failed to generate or send email." });
     }
   });
 
-  // Weekly Commissioner Email — sent status (for "Sent on ..." in UI)
+  // Weekly Commissioner Email — sent status (recap and preview separately)
   app.get("/api/leagues/:leagueId/weekly-email/sent", async (req: Request, res: Response) => {
     const leagueId = String(req.params.leagueId || "").trim();
     const week = Number(req.query.week) || 0;
     if (!leagueId || week < 1) {
       return res.status(400).json({ error: "leagueId and week are required." });
     }
-    const record = getSentRecord(leagueId, week);
-    if (!record) return res.json({ sent: false });
-    return res.json({ sent: true, sentAt: record.sentAt });
+    const status = getSentRecord(leagueId, week);
+    return res.json({
+      recap: status.recap ? { sent: true, sentAt: status.recap.sentAt } : { sent: false },
+      preview: status.preview ? { sent: true, sentAt: status.preview.sentAt } : { sent: false },
+    });
   });
 
-  // Weekly Commissioner Email (power rankings + HTML email) — GET (legacy)
+  // Weekly Commissioner Email (power rankings + HTML email) — GET (legacy). Query: mode=preview|recap (default recap).
   app.get("/api/weekly-email", async (req: Request, res: Response) => {
     const league_id = String(req.query.league_id || "").trim();
     const week = Number(req.query.week) || 6;
     const format = String(req.query.format || "json").toLowerCase(); // "json" | "html"
+    const mode = req.query.mode === "preview" ? "preview" : "recap";
     if (!league_id) {
       return res.status(400).json({ error: "league_id is required" });
     }
     try {
       let leagueName: string;
       let emailHtml: string;
-      let rankings: unknown[];
-      if (league_id === STATIC_DEMO_LEAGUE_ID) {
-        const demoPayload = getDemoWeeklyEmailPayload(week);
-        leagueName = demoPayload.leagueName;
-        emailHtml = generateWeeklyEmail(demoPayload);
-        rankings = demoPayload.rankings;
+      let rankings: unknown[] = [];
+      let subject: string;
+      if (mode === "preview") {
+        if (league_id === STATIC_DEMO_LEAGUE_ID) {
+          const demoPayload = getDemoWeeklyPreviewPayload(week);
+          leagueName = demoPayload.leagueName;
+          emailHtml = generateWeeklyEmail({ ...demoPayload, appUrl: CLIENT_URL });
+          subject = `${leagueName} — Week ${week} Matchup Preview`;
+        } else {
+          if (week < 1) return res.status(400).json({ error: "week (>= 1) is required" });
+          const result = await getWeeklyPreviewEmail(league_id, week, undefined, CLIENT_URL);
+          leagueName = result.leagueName;
+          emailHtml = result.emailHtml;
+          subject = `${leagueName} — Week ${week} Matchup Preview`;
+        }
       } else {
-        if (week < 1) return res.status(400).json({ error: "week (>= 1) is required" });
-        const previousRankings = getStoredPreviousRankings(league_id, week);
-        const result = await getWeeklyCommissionerEmail(league_id, week, previousRankings, undefined, CLIENT_URL);
-        leagueName = result.leagueName;
-        emailHtml = result.emailHtml;
-        rankings = result.rankings;
+        if (league_id === STATIC_DEMO_LEAGUE_ID) {
+          const demoPayload = getDemoWeeklyEmailPayload(week);
+          leagueName = demoPayload.leagueName;
+          emailHtml = generateWeeklyEmail(demoPayload);
+          rankings = demoPayload.rankings;
+          subject = `${leagueName} — Week ${week} Power Rankings`;
+        } else {
+          if (week < 1) return res.status(400).json({ error: "week (>= 1) is required" });
+          const previousRankings = getStoredPreviousRankings(league_id, week);
+          const result = await getWeeklyCommissionerEmail(league_id, week, previousRankings, undefined, CLIENT_URL);
+          leagueName = result.leagueName;
+          emailHtml = result.emailHtml;
+          rankings = result.rankings;
+          subject = getRecapSubject(leagueName, week, result.emailPayload);
+        }
       }
       if (format === "html") {
         res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -1336,7 +1367,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         week,
         rankings,
         html: emailHtml,
-        subject: `${leagueName} — Week ${week} Power Rankings`,
+        subject,
       });
     } catch (err: any) {
       return res.status(500).json({ error: err?.message || "Failed to generate weekly email" });

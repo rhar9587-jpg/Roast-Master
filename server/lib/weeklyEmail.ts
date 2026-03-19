@@ -45,6 +45,8 @@ export interface WeeklyEmailData {
   storyOfTheWeek?: { narrative: string };
   /** Explicit mode; inferred from payload if not set. */
   mode?: "recap" | "preview";
+  /** Preview only: short disclaimer (e.g. Week 1). */
+  previewDisclaimer?: string;
 }
 
 function escapeHtml(str: string | null | undefined): string {
@@ -119,6 +121,13 @@ export function generateWeeklyEmail(data: WeeklyEmailData): string {
 
   const previewSections = isPreview
     ? `
+          ${data.previewDisclaimer ? `
+          <tr>
+            <td style="padding: 0 24px 16px 24px;">
+              <p style="margin: 0; font-size: 12px; color: ${textMuted}; line-height: 1.5;">${escapeHtml(data.previewDisclaimer)}</p>
+            </td>
+          </tr>
+          ` : ""}
           ${data.upcomingMatchups && data.upcomingMatchups.length > 0 ? `
           <tr>
             <td style="padding: 0 24px 20px 24px;">
@@ -293,7 +302,7 @@ ${rankingsRows}
           <tr>
             <td style="padding: 20px 24px 24px 24px; border-top: 1px solid ${border};">
               <p style="margin: 0; font-size: 12px; color: ${textMuted}; line-height: 1.5;">This report was generated automatically by Fantasy Roast.<br>Automated weekly power rankings for fantasy commissioners.</p>
-              <p style="margin: 14px 0 0 0; font-size: 13px; color: #e0e0e0;">See you in the group chat. — Fantasy Roast</p>
+              <p style="margin: 14px 0 0 0; font-size: 13px; color: #e0e0e0;">Sent by your commissioner with Fantasy Roast. See you in the group chat.</p>
               ${data.appUrl ? `<p style="margin: 10px 0 0 0; font-size: 12px; color: ${accent};"><a href="${escapeHtml(data.appUrl)}" style="color: ${accent}; text-decoration: none;">Want this for your league?</a></p>` : ""}
             </td>
           </tr>
@@ -344,6 +353,7 @@ export function generateWeeklyEmailPlainText(data: WeeklyEmailData): string {
   }
 
   if (isPreview) {
+    if (data.previewDisclaimer?.trim()) lines.push(data.previewDisclaimer.trim(), "");
     if (data.upcomingMatchups && data.upcomingMatchups.length > 0) {
       lines.push("THIS WEEK'S MATCHUPS", "---");
       for (const mu of data.upcomingMatchups) {
@@ -358,7 +368,7 @@ export function generateWeeklyEmailPlainText(data: WeeklyEmailData): string {
   if (data.matchupToWatch) lines.push("", "MATCHUP TO WATCH", "---", `${data.matchupToWatch.teamA} vs ${data.matchupToWatch.teamB}: ${data.matchupToWatch.narrative}`);
   if (data.storyOfTheWeek) lines.push("", data.storyOfTheWeek.narrative);
 
-  lines.push("", "---", "This report was generated automatically by Fantasy Roast. Automated weekly power rankings for fantasy commissioners.", "", "See you in the group chat. — Fantasy Roast");
+  lines.push("", "---", "This report was generated automatically by Fantasy Roast. Automated weekly power rankings for fantasy commissioners.", "", "Sent by your commissioner with Fantasy Roast. See you in the group chat.");
   if (data.appUrl) lines.push("", `Want this for your league? ${data.appUrl}`);
   return lines.join("\n");
 }

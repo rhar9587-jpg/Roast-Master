@@ -44,7 +44,7 @@ import { RoastCard } from "@/components/RoastCard";
 import { SeasonWrappedCard } from "@/components/SeasonWrappedCard";
 import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
 import { LockedModePreview } from "./LockedModePreview";
-import { isLeagueUnlocked, unlockLeague, lockLeague } from "./premium";
+import { isLeagueUnlocked, unlockLeague, lockLeague, hasUsedFreeSend, markFreeSendUsed } from "./premium";
 import { createCheckoutSession } from "@/lib/checkout";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername, getCommissionerEmail, setCommissionerEmail } from "./utils";
 import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards, type MiniCard } from "./storylines";
@@ -71,18 +71,29 @@ function WeeklyEmailSentStatus({ leagueId, week }: { leagueId: string; week: num
     queryKey: ["weekly-email-sent", leagueId, week],
     queryFn: async () => {
       const res = await fetch(`/api/leagues/${encodeURIComponent(leagueId)}/weekly-email/sent?week=${week}`);
-      if (!res.ok) return { sent: false };
+      if (!res.ok) return { recap: { sent: false }, preview: { sent: false } };
       const json = await res.json();
-      return json as { sent: boolean; sentAt?: string };
+      return json as {
+        recap: { sent: boolean; sentAt?: string };
+        preview: { sent: boolean; sentAt?: string };
+      };
     },
     enabled: !!leagueId && week >= 1,
   });
-  if (!data?.sent || !data.sentAt) return null;
-  const date = new Date(data.sentAt);
-  const label = date.toLocaleDateString(undefined, { dateStyle: "medium" });
+  if (!data?.recap?.sent && !data?.preview?.sent) return null;
+  const lines: string[] = [];
+  if (data.recap?.sent && data.recap.sentAt) {
+    const label = new Date(data.recap.sentAt).toLocaleDateString(undefined, { dateStyle: "medium" });
+    lines.push(`Recap sent on ${label}`);
+  }
+  if (data.preview?.sent && data.preview.sentAt) {
+    const label = new Date(data.preview.sentAt).toLocaleDateString(undefined, { dateStyle: "medium" });
+    lines.push(`Preview sent on ${label}`);
+  }
+  if (lines.length === 0) return null;
   return (
     <p className="mt-1 text-xs text-muted-foreground">
-      Sent on {label}.
+      {lines.join(" · ")}
     </p>
   );
 }
@@ -572,6 +583,8 @@ export default function LeagueHistoryPage() {
   // Demo league always shows full content (bypasses premium gating)
   const isDemo = leagueId === EXAMPLE_LEAGUE_ID;
   const showPremiumContent = isPremiumState || isDemo;
+  // One free send per league before paywall; after that Send requires unlock
+  const canSendWeeklyEmail = showPremiumContent || isDemo || !hasUsedFreeSend(leagueId.trim());
 
   const gridVisibleRef = useRef<HTMLDivElement | null>(null);
   const gridExportRef = useRef<HTMLDivElement | null>(null);
@@ -2025,14 +2038,19 @@ export default function LeagueHistoryPage() {
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <h3 className="text-sm font-semibold text-foreground">Weekly Commissioner Email</h3>
           <p className="text-xs text-muted-foreground">
-            Generate a power rankings recap email, preview it, or send it to the commissioner.
+            Send your league a weekly email with nemesis matchups, villain of the week, and matchup preview—or a post-week recap. Preview or send to the commissioner.
           </p>
           {!showPremiumContent && !isDemo && (
             <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-              Unlock to send weekly power rankings to your league.
+              {hasUsedFreeSend(leagueId.trim())
+                ? "You've used your free send. Unlock to keep sending."
+                : "Unlock to send weekly commissioner emails (preview + recap) for this league."}
               <Button size="sm" className="ml-2 mt-1 sm:mt-0" onClick={handleCheckout}>
-                Unlock for this league
+                {hasUsedFreeSend(leagueId.trim()) ? "Unlock to send again" : "Unlock weekly emails for this league"}
               </Button>
+              <p className="text-xs text-muted-foreground mt-2">
+                {hasUsedFreeSend(leagueId.trim()) ? "Commissioners send this every week." : "Your first send is free. Commissioners send this every week."}
+              </p>
             </div>
           )}
           <div className="flex flex-col sm:flex-row sm:items-end gap-3 flex-wrap">
@@ -2045,7 +2063,7 @@ export default function LeagueHistoryPage() {
                 value={weeklyCommissionerWeek}
                 onChange={(e) => setWeeklyCommissionerWeek(Number(e.target.value) || 1)}
                 className="mt-1 w-20 rounded-lg border px-2 py-1.5 text-sm"
-                disabled={!showPremiumContent && !isDemo}
+                disabled={!canSendWeeklyEmail}
               />
             </div>
             <div className="flex-1 min-w-[160px]">
@@ -2054,17 +2072,18 @@ export default function LeagueHistoryPage() {
                 value={weeklyCommissionerEmailMode}
                 onChange={(e) => setWeeklyCommissionerEmailMode(e.target.value as "recap" | "preview")}
                 className="mt-1 w-full rounded-lg border px-2 py-1.5 text-sm"
-                disabled={!showPremiumContent && !isDemo}
+                disabled={!canSendWeeklyEmail}
               >
                 <option value="recap">Recap (post-week)</option>
                 <option value="preview">Preview (pre-week)</option>
               </select>
+              <p className="mt-0.5 text-xs text-muted-foreground">Recap = after the week; Preview = before the week.</p>
             </div>
             <div className="flex gap-2 flex-wrap">
               <Button
                 size="sm"
                 variant="outline"
-                disabled={(!showPremiumContent && !isDemo) || weeklyEmailGenerateLoading}
+                disabled={!canSendWeeklyEmail || weeklyEmailGenerateLoading}
                 onClick={async () => {
                   setWeeklyEmailGenerateLoading(true);
                   try {
@@ -2093,7 +2112,7 @@ export default function LeagueHistoryPage() {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={!showPremiumContent && !isDemo}
+                disabled={!canSendWeeklyEmail}
                 onClick={() => {
                   track("weekly_email_preview", { league_id: leagueId.trim(), week: weeklyCommissionerWeek, mode: weeklyCommissionerEmailMode });
                   const params = new URLSearchParams({ week: String(weeklyCommissionerWeek), mode: weeklyCommissionerEmailMode });
@@ -2106,7 +2125,7 @@ export default function LeagueHistoryPage() {
               </Button>
             </div>
           </div>
-          {(showPremiumContent || isDemo) && (
+          {canSendWeeklyEmail && (
             <div>
               <label className="block text-xs font-medium text-muted-foreground">Add a note at the top (optional)</label>
               <input
@@ -2132,7 +2151,7 @@ export default function LeagueHistoryPage() {
                   if (leagueId.trim()) setCommissionerEmail(leagueId.trim(), v);
                 }}
                 className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                disabled={!showPremiumContent && !isDemo}
+                disabled={!canSendWeeklyEmail}
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 We&apos;ll send the report here. You can forward it to your league or BCC everyone.
@@ -2143,7 +2162,7 @@ export default function LeagueHistoryPage() {
             </div>
             <Button
               size="sm"
-              disabled={(!showPremiumContent && !isDemo) || !commissionerEmail.trim() || weeklyEmailSendLoading}
+              disabled={!canSendWeeklyEmail || !commissionerEmail.trim() || weeklyEmailSendLoading}
               onClick={async () => {
                 if (!commissionerEmail.trim()) {
                   toast({ title: "Enter commissioner email", variant: "destructive" });
@@ -2158,14 +2177,19 @@ export default function LeagueHistoryPage() {
                       week: weeklyCommissionerWeek,
                       commissioner_email: commissionerEmail.trim(),
                       note: weeklyCommissionerNote.trim() || undefined,
+                      mode: weeklyCommissionerEmailMode,
                     }),
                   });
                   const data = await res.json().catch(() => ({}));
                   if (!res.ok) {
                     throw new Error(data?.error || "Failed to send email.");
                   }
-                  track("weekly_email_sent", { league_id: leagueId.trim(), week: weeklyCommissionerWeek });
-                  toast({ title: "Sent", description: "Weekly email sent to commissioner." });
+                  if (!showPremiumContent && !isDemo) markFreeSendUsed(leagueId.trim());
+                  track("weekly_email_sent", { league_id: leagueId.trim(), week: weeklyCommissionerWeek, mode: weeklyCommissionerEmailMode });
+                  toast({
+                    title: "Sent",
+                    description: weeklyCommissionerEmailMode === "preview" ? "Matchup preview sent to commissioner." : "Weekly email sent to commissioner.",
+                  });
                   queryClient.invalidateQueries({ queryKey: ["weekly-email-sent", leagueId.trim(), weeklyCommissionerWeek] });
                 } catch (err: unknown) {
                   toast({
