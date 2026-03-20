@@ -12,6 +12,10 @@ npm install
 npm run dev
 ```
 
+## Replit deployment
+
+Deployments use **npm** only (`npm ci` + `npm run build`, then `npm start`). Do not run `pnpm install` in the same Repl—mixing package managers corrupts `node_modules` on Replit. If a deploy fails, run `rm -rf node_modules .ignored` in the Shell and redeploy.
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` and configure:
