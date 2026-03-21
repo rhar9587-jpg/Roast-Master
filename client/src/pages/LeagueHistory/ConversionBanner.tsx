@@ -87,7 +87,7 @@ export function ConversionBanner({
       >
         <CardHeader className="text-center pb-4">
           <CardTitle className="text-2xl font-bold tracking-tight">
-            Want this for YOUR league? Unlock for you — ${PRICE}.
+            {`Want this for YOUR league? Unlock for you — $${PRICE}.`}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -106,6 +106,10 @@ export function ConversionBanner({
                 <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                 <span>Drop real receipts in the group chat.</span>
               </li>
+              <li className="flex items-start gap-2">
+                <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <span>Weekly commissioner email — preview or recap, send straight to the commish.</span>
+              </li>
             </ul>
           </div>
 
@@ -123,7 +127,7 @@ export function ConversionBanner({
               size="lg"
               className="font-semibold px-8 interact-cta"
             >
-              Unlock for you — ${PRICE}
+              {`Unlock for you — $${PRICE}`}
             </Button>
           </div>
           <p className="text-sm font-semibold text-center">
@@ -152,7 +156,7 @@ export function ConversionBanner({
     >
       <CardHeader className="text-center pb-4">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          {leagueName?.trim() ? leagueName : "This league"} has receipts waiting. Unlock for you — ${PRICE}.
+          {`${leagueName?.trim() ? leagueName : "This league"} has receipts waiting. Unlock for you — $${PRICE}.`}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -173,6 +177,10 @@ export function ConversionBanner({
             </li>
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <span><strong>Weekly commissioner email</strong> — preview or recap, send to the commissioner</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
               <span><strong>Season Wrapped</strong> — personal highlights for every manager</span>
             </li>
             <li className="flex items-start gap-2">
@@ -189,7 +197,7 @@ export function ConversionBanner({
             size="lg"
             className="font-semibold px-8 interact-cta"
           >
-            Unlock for you — ${PRICE}
+            {`Unlock for you — $${PRICE}`}
           </Button>
         </div>
         <p className="text-sm font-semibold text-center">
