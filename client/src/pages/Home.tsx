@@ -224,8 +224,11 @@ export default function Home() {
                     What just happened this week — league narrative, roast cards, shareables, and commissioner email.
                   </p>
                 </CardHeader>
-                <CardContent className="pt-0 text-xs text-muted-foreground">
-                  Roast / share mode: built for the group chat (highest retention).
+                <CardContent className="pt-0 text-xs text-muted-foreground space-y-1">
+                  <p>Roast / share mode: built for the group chat (highest retention).</p>
+                  <p className="text-foreground/90 font-medium">
+                    5–6 league cards every week + commissioner email (same narrative).
+                  </p>
                 </CardContent>
               </Card>
               <Card className="border-2 border-muted/60 shadow-sm">
@@ -324,13 +327,16 @@ export default function Home() {
                     </span>
                   </div>
                   <div className="text-center space-y-2 flex-1 flex flex-col justify-center">
-                    <h3 className="text-base font-bold tracking-tight">Biggest Blowout</h3>
+                    <h3 className="text-base font-bold tracking-tight">Biggest Embarrassment</h3>
                     <p className="text-sm font-medium text-muted-foreground">MikeGotCooked</p>
+                    <p className="text-xs text-muted-foreground italic px-1">
+                      Week verdict: The Landlord feasted. Rebuild Forever filed a missing score report.
+                    </p>
                     <div className="pt-2 border-t">
                       <p className="text-2xl font-extrabold text-red-600">62.4</p>
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">Margin of Victory</p>
                     </div>
-                    <p className="text-sm italic text-muted-foreground pt-2">"Absolute embarrassment."</p>
+                    <p className="text-sm italic text-muted-foreground pt-2">"Not competitive."</p>
                   </div>
                 </div>
               </div>

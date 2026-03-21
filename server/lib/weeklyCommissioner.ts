@@ -9,6 +9,7 @@ import type { PowerRankingsTeamInput, PowerRankingRow } from "./powerRankings";
 import { generatePowerRankings } from "./powerRankings";
 import { generateWeeklyEmail, generateWeeklyEmailPlainText, type WeeklyEmailData, type WeeklyEmailRankingRow } from "./weeklyEmail";
 import { getLeagueHistoryNarratives } from "./weeklyEmailNarratives";
+import { buildWeeklyRoastNarrative } from "./weeklyRoastEngine";
 
 // Sleeper API returns roster settings with fpts/fpts_decimal; type is extended here for the adapter
 interface RosterWithPoints {
@@ -538,7 +539,27 @@ export async function getWeeklyCommissionerEmail(
     Promise.resolve(pickFraud(rankings)),
   ]);
 
-  const introSummary = buildIntroSummary(week, rankings);
+  let introSummary = buildIntroSummary(week, rankings);
+  if (weekMatchupsRaw.length > 0 && includeV2) {
+    try {
+      const narrative = await buildWeeklyRoastNarrative({
+        league: { league_id: leagueId, name: leagueName, season: undefined },
+        week,
+        matchups: weekMatchupsRaw,
+        rosterName: (rid: number) => rosterNameByTeamId(String(rid)),
+      });
+      introSummary = `${narrative.headline} ${narrative.groupChatSummary}`;
+    } catch (e) {
+      console.log(
+        JSON.stringify({
+          event: "weekly_roast_narrative_email_fallback",
+          leagueId,
+          week,
+          err: String(e),
+        }),
+      );
+    }
+  }
   const biggestMovers = computeBiggestMovers(rankings, previousRankings);
   const weekMatchups = buildWeekMatchups(weekMatchupsRaw, rosterNameByTeamId);
   const rosters = (await getRosters(leagueId)) as RosterWithPoints[];

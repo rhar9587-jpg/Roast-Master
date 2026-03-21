@@ -34,6 +34,7 @@ import { getStoredPreviousRankings, storeRankingsForWeek } from "./lib/weeklyRan
 import { recordSent, getSentRecord } from "./lib/weeklyReportStore";
 import { generateWeeklyEmailPlainText } from "./lib/weeklyEmail";
 import { selectCardCopy, interpolateTagline } from "./lib/cardCopy";
+import { buildWeeklyRoastNarrative } from "./lib/weeklyRoastEngine";
 import {
   DEMO_LEAGUE_ID as STATIC_DEMO_LEAGUE_ID,
   getDemoLeagueTeams,
@@ -285,30 +286,6 @@ function formatPts(n: number) {
 }
 
 // -------------------------
-// Player name lookup (small + cached)
-// -------------------------
-const playerNameCache = new Map<string, string>();
-
-async function getPlayerName(player_id: string): Promise<string> {
-  if (!player_id) return "Unknown Player";
-  const cached = playerNameCache.get(player_id);
-  if (cached) return cached;
-
-  try {
-    const p = await fetchJson<SleeperPlayer>(`https://api.sleeper.app/v1/player/${player_id}`);
-    const name =
-      p.full_name || [p.first_name, p.last_name].filter(Boolean).join(" ") || `Player ${player_id}`;
-    const decorated = p.position && p.team ? `${name} (${p.position}, ${p.team})` : name;
-    playerNameCache.set(player_id, decorated);
-    return decorated;
-  } catch {
-    const fallback = `Player ${player_id}`;
-    playerNameCache.set(player_id, fallback);
-    return fallback;
-  }
-}
-
-// -------------------------
 // Option A: resolve roster_id by username/display_name
 // -------------------------
 async function resolveRosterByUsername(
@@ -357,112 +334,6 @@ async function handleLeagueTeams(league_id: string) {
 }
 
 // -------------------------
-// Weekly: compute Biggest Blowout (league-wide)
-// -------------------------
-function computeBiggestBlowout(matchups: SleeperMatchup[], rosterName: (rid: number) => string) {
-  const byMatchup = new Map<number, SleeperMatchup[]>();
-  for (const m of matchups) {
-    if (!byMatchup.has(m.matchup_id)) byMatchup.set(m.matchup_id, []);
-    byMatchup.get(m.matchup_id)!.push(m);
-  }
-
-  let best: { winner: SleeperMatchup; loser: SleeperMatchup; margin: number } | null = null;
-
-  for (const [, rows] of Array.from(byMatchup.entries())) {
-    if (rows.length < 2) continue;
-    const a = rows[0]!;
-    const b = rows[1]!;
-    const aPts = safeNumber(a.points);
-    const bPts = safeNumber(b.points);
-    const winner = aPts >= bPts ? a : b;
-    const loser = aPts >= bPts ? b : a;
-    const margin = Math.abs(aPts - bPts);
-
-    if (!best || margin > best.margin) best = { winner, loser, margin };
-  }
-
-  if (!best) return null;
-
-  const winnerName = rosterName(best.winner.roster_id);
-  const loserName = rosterName(best.loser.roster_id);
-
-  return {
-    type: "biggest_blowout",
-    title: "Biggest Blowout",
-    subtitle: `${winnerName} put ${loserName} in a body bag.`,
-    stat: `+${formatPts(best.margin)} pts`,
-    meta: {
-      winner_roster_id: best.winner.roster_id,
-      loser_roster_id: best.loser.roster_id,
-      winner_score: safeNumber(best.winner.points),
-      loser_score: safeNumber(best.loser.points),
-      margin: best.margin,
-    },
-  };
-}
-
-// -------------------------
-// Weekly: compute Carry Job (league-wide)
-// -------------------------
-async function computeCarryJob(matchups: SleeperMatchup[], rosterName: (rid: number) => string) {
-  let best:
-    | { roster_id: number; roster_points: number; player_id: string; player_points: number; ratio: number }
-    | null = null;
-
-  for (const row of matchups) {
-    const rosterPts = safeNumber(row.points);
-    const pp = row.players_points || row.starters_points || {};
-    const entries = Object.entries(pp);
-
-    if (!entries.length || rosterPts <= 0) continue;
-
-    let topPlayerId = "";
-    let topPts = -Infinity;
-    for (const [pid, ptsRaw] of entries) {
-      const pts = safeNumber(ptsRaw);
-      if (pts > topPts) {
-        topPts = pts;
-        topPlayerId = pid;
-      }
-    }
-
-    if (!topPlayerId || topPts <= 0) continue;
-
-    const ratio = topPts / rosterPts;
-    if (!best || ratio > best.ratio) {
-      best = {
-        roster_id: row.roster_id,
-        roster_points: rosterPts,
-        player_id: topPlayerId,
-        player_points: topPts,
-        ratio,
-      };
-    }
-  }
-
-  if (!best) return null;
-
-  const manager = rosterName(best.roster_id);
-  const playerName = await getPlayerName(best.player_id);
-  const share = pct(best.ratio);
-
-  return {
-    type: "carry_job",
-    title: "Carry Job",
-    subtitle: `${manager} was basically ${playerName} + vibes.`,
-    stat: `${share} of team points`,
-    meta: {
-      roster_id: best.roster_id,
-      roster_points: best.roster_points,
-      player_id: best.player_id,
-      player_name: playerName,
-      player_points: best.player_points,
-      ratio: best.ratio,
-    },
-  };
-}
-
-// -------------------------
 // Core weekly roast logic (league-wide)
 // -------------------------
 async function handleRoast(params: RoastRequest): Promise<RoastResponse> {
@@ -482,34 +353,12 @@ async function handleRoast(params: RoastRequest): Promise<RoastResponse> {
   const userById = buildUserMap(users);
   const rosterName = (rid: number) => rosterDisplayName(rosters, userById, rid);
 
-  // roster scores
-  const scoreByRoster = new Map<number, number>();
-  for (const m of matchups) scoreByRoster.set(m.roster_id, safeNumber(m.points));
-
-  const entries = Array.from(scoreByRoster.entries()).map(([rid, score]) => ({
-    roster_id: rid,
-    username: rosterName(rid),
-    score,
-  }));
-
-  const total = entries.reduce((acc, e) => acc + e.score, 0);
-  const averageScore = entries.length ? total / entries.length : 0;
-
-  const sorted = [...entries].sort((a, b) => b.score - a.score);
-  const highestScorer = sorted[0] || { roster_id: 0, username: "—", score: 0 };
-  const lowestScorer = sorted[sorted.length - 1] || { roster_id: 0, username: "—", score: 0 };
-
-  // Roast copy (clean + spicy)
-  const headline =
-    highestScorer.roster_id === lowestScorer.roster_id
-      ? `${highestScorer.username} somehow achieved the impossible: a perfectly average week.`
-      : `${highestScorer.username} went nuclear. ${lowestScorer.username} went missing.`;
-
-  // Cards (league-wide MVP)
-  const blowout = computeBiggestBlowout(matchups, rosterName);
-  const carry = await computeCarryJob(matchups, rosterName);
-
-  const cards = [blowout, carry].filter(Boolean) as any[];
+  const narrative = await buildWeeklyRoastNarrative({
+    league: { league_id: league.league_id, name: league.name, season: league.season },
+    week,
+    matchups,
+    rosterName,
+  });
 
   const payload: RoastResponse = {
     league: {
@@ -518,13 +367,11 @@ async function handleRoast(params: RoastRequest): Promise<RoastResponse> {
       season: league.season,
     },
     week,
-    headline,
-    stats: {
-      averageScore,
-      highestScorer,
-      lowestScorer,
-    },
-    cards,
+    headline: narrative.headline,
+    stats: narrative.stats,
+    cards: narrative.cards,
+    groupChatSummary: narrative.groupChatSummary,
+    signals: narrative.signals,
   };
 
   // Optional matchup section if roster_id provided (kept for later “Roast My Matchup”)

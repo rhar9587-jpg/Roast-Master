@@ -639,14 +639,24 @@ export function getDemoWeeklyRoast(params: { week?: number; roster_id?: number }
   // Build cards
   const cards: any[] = [];
   
+  cards.push({
+    type: "top_dog",
+    title: "Top Dog",
+    subtitle: `${highestScorer.username} paced the league this week.`,
+    stat: `${formatPts(highestScorer.score)} pts`,
+    tagline: "Highest score on the board.",
+    meta: { roster_id: highestScorer.roster_id },
+  });
+
   if (biggestBlowout) {
     const winnerName = managerName(biggestBlowout.winner);
     const loserName = managerName(biggestBlowout.loser);
     cards.push({
-      type: "biggest_blowout",
-      title: "Biggest Blowout",
-      subtitle: `${winnerName} put ${loserName} in a body bag.`,
+      type: "biggest_embarrassment",
+      title: "Biggest Embarrassment",
+      subtitle: `${winnerName} dropped ${loserName} by ${formatPts(biggestBlowout.margin)}.`,
       stat: `+${formatPts(biggestBlowout.margin)} pts`,
+      tagline: "Not competitive.",
       meta: {
         winner_roster_id: KEY_TO_ROSTER_ID.get(biggestBlowout.winner) ?? 0,
         loser_roster_id: KEY_TO_ROSTER_ID.get(biggestBlowout.loser) ?? 0,
@@ -656,6 +666,14 @@ export function getDemoWeeklyRoast(params: { week?: number; roster_id?: number }
       },
     });
   }
+
+  cards.push({
+    type: "fraud_watch",
+    title: "Fraud Watch",
+    subtitle: `${lowestScorer.username} scored ${formatPts(lowestScorer.score)} and still believes.`,
+    stat: "Demo roast",
+    tagline: "Numbers hurt.",
+  });
   
   // Carry job card (fictional - use highest scorer with fictional player)
   const carryRosterId = highestScorer.roster_id;
@@ -668,6 +686,7 @@ export function getDemoWeeklyRoast(params: { week?: number; roster_id?: number }
     title: "Carry Job",
     subtitle: `${highestScorer.username} was basically ${carryPlayerName} + vibes.`,
     stat: `${pct(carryRatio)} of team points`,
+    tagline: "One player, most of the points.",
     meta: {
       roster_id: carryRosterId,
       roster_points: highestScorer.score,
@@ -677,7 +696,19 @@ export function getDemoWeeklyRoast(params: { week?: number; roster_id?: number }
       ratio: carryRatio,
     },
   });
-  
+
+  const groupChatSummary = `${highestScorer.username} led at ${formatPts(
+    highestScorer.score,
+  )} pts; ${lowestScorer.username} bottomed at ${formatPts(lowestScorer.score)}. ${headline}`;
+
+  cards.push({
+    type: "group_chat_drop",
+    title: "Group Chat Drop",
+    subtitle: groupChatSummary.slice(0, 280) + (groupChatSummary.length > 280 ? "…" : ""),
+    tagline: "Copy, paste, send.",
+    stat: "League recap",
+  });
+
   const payload: any = {
     league: {
       league_id: DEMO_LEAGUE_ID,
@@ -692,6 +723,8 @@ export function getDemoWeeklyRoast(params: { week?: number; roster_id?: number }
       lowestScorer,
     },
     cards,
+    groupChatSummary,
+    signals: { demo: true },
     mode: "DEMO" as const,
     fallback_reason: null,
   };

@@ -55,6 +55,11 @@ export const roastResponseSchema = z.object({
   // new: league-wide cards for the week
   cards: z.array(cardSchema).default([]),
 
+  /** Short paragraph for SMS/Discord + email intro (same engine as cards). */
+  groupChatSummary: z.string().optional(),
+  /** Optional derived metrics for debugging / regen. */
+  signals: z.record(z.any()).optional(),
+
   // optional matchup roast if roster_id provided
   matchup: z
     .object({

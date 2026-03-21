@@ -4,7 +4,7 @@ import { Download, Share2 } from "lucide-react";
 import { exportCardPng, dataUrlToFile, downloadDataUrl } from "@/lib/exportCardImage";
 import { WatermarkOverlay } from "@/components/ui/WatermarkOverlay";
 
-type WrappedCardProps = {
+export type WrappedCardProps = {
   kicker?: string;
   kickerIcon?: React.ReactNode;
   title: string;

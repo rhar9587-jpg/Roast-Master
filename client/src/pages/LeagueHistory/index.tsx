@@ -63,7 +63,7 @@ import type {
 import type { RoastResponse, WrappedResponse, LeagueAutopsyResponse } from "@shared/schema";
 
 const EXAMPLE_LEAGUE_ID = "demo-group-chat-dynasty";
-const WEEKLY_ENABLED = false; // Disabled for Super Bowl V1 - re-enable post-Super Bowl
+const WEEKLY_ENABLED = true;
 type Mode = "history" | "weekly" | "season" | "end";
 type TeamOption = { roster_id: number; name: string };
 
@@ -560,7 +560,7 @@ export default function LeagueHistoryPage() {
   const [isPremiumState, setIsPremiumState] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [activeMode, setActiveMode] = useState<Mode>("history");
-  const [weeklyWeek, setWeeklyWeek] = useState<number>(17);
+  const [leagueWeek, setLeagueWeek] = useState<number>(17);
   const [weeklyRoastData, setWeeklyRoastData] = useState<RoastResponse | null>(null);
   const [weeklyRoastLoading, setWeeklyRoastLoading] = useState(false);
   const [weeklyRoastError, setWeeklyRoastError] = useState<string | null>(null);
@@ -573,7 +573,6 @@ export default function LeagueHistoryPage() {
   const [autopsyData, setAutopsyData] = useState<LeagueAutopsyResponse | null>(null);
   const [autopsyLoading, setAutopsyLoading] = useState(false);
   const [autopsyError, setAutopsyError] = useState<string | null>(null);
-  const [weeklyCommissionerWeek, setWeeklyCommissionerWeek] = useState(17);
   const [commissionerEmail, setCommissionerEmailState] = useState("");
   const [weeklyCommissionerNote, setWeeklyCommissionerNote] = useState("");
   const [weeklyCommissionerSignoff, setWeeklyCommissionerSignoff] = useState("");
@@ -1473,7 +1472,7 @@ export default function LeagueHistoryPage() {
   // Default weekly commissioner week to current endWeek when data loads
   useEffect(() => {
     if (endWeek >= 1 && endWeek <= 18) {
-      setWeeklyCommissionerWeek((w) => (w < 1 || w > 18 ? endWeek : w));
+      setLeagueWeek((w) => (w < 1 || w > 18 ? endWeek : w));
     }
   }, [endWeek]);
 
@@ -1707,7 +1706,7 @@ export default function LeagueHistoryPage() {
   useEffect(() => {
     if (!leagueId) return;
     setActiveMode("history");
-    setWeeklyWeek(endWeek || 17);
+    setLeagueWeek(endWeek || 17);
     setWeeklyRoastData(null);
     setWeeklyRoastError(null);
     setSeasonWrappedData(null);
@@ -1781,7 +1780,7 @@ export default function LeagueHistoryPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           league_id: leagueId.trim(),
-          week: weeklyWeek,
+          week: leagueWeek,
         }),
       });
       const data = await res.json();
@@ -2075,7 +2074,7 @@ export default function LeagueHistoryPage() {
 
       {/* Weekly Commissioner Email — gated for real leagues; demo gets full access */}
       {hasData && leagueId.trim() && (
-        <section className="rounded-lg border bg-muted/20 p-4 space-y-4">
+        <section id="weekly-commissioner-email" className="rounded-lg border bg-muted/20 p-4 space-y-4 scroll-mt-24">
           <h3 className="text-sm font-semibold text-foreground">Weekly Commissioner Email</h3>
           <p className="text-xs text-muted-foreground">
             Send your league a weekly email with nemesis matchups, villain of the week, and matchup preview—or a post-week recap. Preview or send to the commissioner.
@@ -2107,8 +2106,8 @@ export default function LeagueHistoryPage() {
                   type="number"
                   min={1}
                   max={18}
-                  value={weeklyCommissionerWeek}
-                  onChange={(e) => setWeeklyCommissionerWeek(Number(e.target.value) || 1)}
+                  value={leagueWeek}
+                  onChange={(e) => setLeagueWeek(Number(e.target.value) || 1)}
                   className="mt-1 w-20 rounded-lg border px-2 py-1.5 text-sm"
                   disabled={!canGenerateAndPreviewWeeklyEmail}
                 />
@@ -2136,14 +2135,14 @@ export default function LeagueHistoryPage() {
                   setWeeklyEmailGenerateLoading(true);
                   try {
                     const res = await fetch(
-                      `/api/weekly-email?league_id=${encodeURIComponent(leagueId.trim())}&week=${weeklyCommissionerWeek}`
+                      `/api/weekly-email?league_id=${encodeURIComponent(leagueId.trim())}&week=${leagueWeek}`
                     );
                     if (!res.ok) {
                       const data = await res.json().catch(() => ({}));
                       throw new Error(data?.error || "Failed to generate email.");
                     }
                     toast({ title: "Email ready", description: "Use Preview or Send to Commissioner." });
-                    track("weekly_email_generated", { league_id: leagueId.trim(), week: weeklyCommissionerWeek });
+                    track("weekly_email_generated", { league_id: leagueId.trim(), week: leagueWeek });
                   } catch (err: unknown) {
                     toast({
                       title: "Could not generate email",
@@ -2162,8 +2161,8 @@ export default function LeagueHistoryPage() {
                 variant="outline"
                 disabled={!canGenerateAndPreviewWeeklyEmail}
                 onClick={() => {
-                  track("weekly_email_preview", { league_id: leagueId.trim(), week: weeklyCommissionerWeek, mode: weeklyCommissionerEmailMode });
-                  const params = new URLSearchParams({ week: String(weeklyCommissionerWeek), mode: weeklyCommissionerEmailMode });
+                  track("weekly_email_preview", { league_id: leagueId.trim(), week: leagueWeek, mode: weeklyCommissionerEmailMode });
+                  const params = new URLSearchParams({ week: String(leagueWeek), mode: weeklyCommissionerEmailMode });
                   if (weeklyCommissionerNote.trim()) params.set("note", weeklyCommissionerNote.trim());
                   if (weeklyCommissionerSignoff.trim()) params.set("signoff", weeklyCommissionerSignoff.trim());
                   const url = `/api/leagues/${encodeURIComponent(leagueId.trim())}/weekly-email/preview?${params.toString()}`;
@@ -2221,7 +2220,7 @@ export default function LeagueHistoryPage() {
                   We&apos;ll send the report here. You can forward it to your league or BCC everyone.
                 </p>
                 {showPremiumContent && (
-                  <WeeklyEmailSentStatus leagueId={leagueId.trim()} week={weeklyCommissionerWeek} />
+                  <WeeklyEmailSentStatus leagueId={leagueId.trim()} week={leagueWeek} />
                 )}
               </div>
               <Button
@@ -2239,7 +2238,7 @@ export default function LeagueHistoryPage() {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
-                        week: weeklyCommissionerWeek,
+                        week: leagueWeek,
                         commissioner_email: commissionerEmail.trim(),
                         note: weeklyCommissionerNote.trim() || undefined,
                         signoff: weeklyCommissionerSignoff.trim() || undefined,
@@ -2258,12 +2257,12 @@ export default function LeagueHistoryPage() {
                       markFreeSendUsed(leagueId.trim());
                       setServerFreeSendUsed(true);
                     }
-                    track("weekly_email_sent", { league_id: leagueId.trim(), week: weeklyCommissionerWeek, mode: weeklyCommissionerEmailMode });
+                    track("weekly_email_sent", { league_id: leagueId.trim(), week: leagueWeek, mode: weeklyCommissionerEmailMode });
                     toast({
                       title: "Sent",
                       description: weeklyCommissionerEmailMode === "preview" ? "Matchup preview sent to commissioner." : "Weekly email sent to commissioner.",
                     });
-                    queryClient.invalidateQueries({ queryKey: ["weekly-email-sent", leagueId.trim(), weeklyCommissionerWeek] });
+                    queryClient.invalidateQueries({ queryKey: ["weekly-email-sent", leagueId.trim(), leagueWeek] });
                   } catch (err: unknown) {
                     toast({
                       title: "Send failed",
@@ -2291,8 +2290,8 @@ export default function LeagueHistoryPage() {
                 type="number"
                 min={1}
                 max={18}
-                value={weeklyWeek}
-                onChange={(e) => setWeeklyWeek(Number(e.target.value))}
+                value={leagueWeek}
+                onChange={(e) => setLeagueWeek(Number(e.target.value))}
                 className="mt-1 w-full rounded-lg border px-3 py-2"
                 disabled
               />
@@ -2310,13 +2309,24 @@ export default function LeagueHistoryPage() {
           title="Weekly Roast"
           description="Pick any week and generate the chaos from that slate."
           previewItems={[
-            "Top dog and fraud of the week",
-            "Matchup chaos and blowouts",
-            "Shareable roast cards for the group chat",
+            "Top Dog, Biggest Embarrassment, Fraud Watch, Worst Coaching, Carry Job, Group Chat Drop",
+            "One scroll of league cards + copy-paste group chat summary",
+            "Same week powers Weekly Roast and commissioner email",
           ]}
           onUnlock={handleCheckout}
           lockedTotalCount={lockedTotalCount}
         />
+      )}
+
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && weeklyRoastData && (
+        <RoastCard data={weeklyRoastData} isPremium={showPremiumContent} variant="weekly" />
+      )}
+
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && !weeklyRoastData && !weeklyRoastLoading && (
+        <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
+          <p className="text-sm text-muted-foreground">Choose a week and tap Generate for this week&apos;s league roast.</p>
+          <p className="text-xs text-muted-foreground mt-1">Same week drives the commissioner email below.</p>
+        </div>
       )}
 
       {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && (
@@ -2328,8 +2338,8 @@ export default function LeagueHistoryPage() {
                 type="number"
                 min={1}
                 max={18}
-                value={weeklyWeek}
-                onChange={(e) => setWeeklyWeek(Number(e.target.value))}
+                value={leagueWeek}
+                onChange={(e) => setLeagueWeek(Number(e.target.value))}
                 className="mt-1 w-full rounded-lg border px-3 py-2"
               />
             </div>
@@ -2340,18 +2350,16 @@ export default function LeagueHistoryPage() {
           {weeklyRoastError && (
             <p className="text-xs text-red-600">{weeklyRoastError}</p>
           )}
+          <p className="text-xs text-muted-foreground">
+            <a
+              href="#weekly-commissioner-email"
+              className="font-medium text-primary underline underline-offset-2 hover:no-underline"
+            >
+              Commissioner email for this week
+            </a>{" "}
+            uses the same week number.
+          </p>
         </section>
-      )}
-
-      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && weeklyRoastData && (
-        <RoastCard data={weeklyRoastData} isPremium={showPremiumContent} />
-      )}
-
-      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && !weeklyRoastData && !weeklyRoastLoading && (
-        <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
-          <p className="text-sm text-muted-foreground">Choose a week to generate the roast.</p>
-          <p className="text-xs text-muted-foreground mt-1">History is always available.</p>
-        </div>
       )}
 
       {hasData && activeMode === "season" && !showPremiumContent && (

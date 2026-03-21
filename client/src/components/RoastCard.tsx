@@ -1,24 +1,124 @@
-import { useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { Trophy, TrendingDown, Swords, Users, Zap, Skull } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Trophy, TrendingDown, Swords, Users, Zap, Skull, Copy, Check } from "lucide-react";
 import type { RoastResponse } from "@shared/schema";
+import type { WrappedCardProps } from "@/components/WrappedCard";
 import { WrappedCard } from "@/components/WrappedCard";
+import { Button } from "@/components/ui/button";
 
 type Accent = "green" | "pink" | "blue" | "orange";
 
 interface RoastCardProps {
   data: RoastResponse;
   isPremium?: boolean;
+  /** League Weekly tab: headline + engine cards + optional group chat (single source from API). */
+  variant?: "default" | "weekly";
 }
 
 function safeNum(n: number | undefined | null, fallback = 0) {
   return typeof n === "number" && Number.isFinite(n) ? n : fallback;
 }
 
-export function RoastCard({ data, isPremium = false }: RoastCardProps) {
+function accentForEngineCard(type: string): NonNullable<WrappedCardProps["accent"]> {
+  const t = type.toLowerCase();
+  if (t.includes("top_dog") || t.includes("group_chat")) return "green";
+  if (t.includes("embarrassment") || t.includes("blowout")) return "pink";
+  if (t.includes("fraud")) return "orange";
+  if (t.includes("worst_coach") || t.includes("coaching")) return "blue";
+  if (t.includes("carry")) return "slate";
+  return "green";
+}
+
+function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremium: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const summary = data.groupChatSummary?.trim();
+
+  const copySummary = async () => {
+    if (!summary) return;
+    try {
+      await navigator.clipboard.writeText(summary);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <div className="w-full max-w-3xl mx-auto space-y-4">
+      <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/10 to-muted/30 px-4 py-4 md:px-6 md:py-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Week verdict</p>
+        <p className="text-lg md:text-xl font-semibold text-foreground leading-snug">{data.headline}</p>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <span className="rounded-full border bg-background/80 px-2 py-0.5">
+            Avg {safeNum(data.stats.averageScore).toFixed(1)} pts
+          </span>
+          <span className="rounded-full border bg-background/80 px-2 py-0.5">
+            High {safeNum(data.stats.highestScorer.score).toFixed(1)}
+          </span>
+          <span className="rounded-full border bg-background/80 px-2 py-0.5">
+            Low {safeNum(data.stats.lowestScorer.score).toFixed(1)}
+          </span>
+        </div>
+      </div>
+
+      {summary && (
+        <div className="rounded-lg border bg-muted/30 p-3 flex flex-col sm:flex-row sm:items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Group chat drop</p>
+            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{summary}</p>
+          </div>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={copySummary}>
+            {copied ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+            {copied ? "Copied" : "Copy"}
+          </Button>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        <p className="text-sm font-medium text-muted-foreground">League cards</p>
+        {(data.cards ?? []).map((c, i) => (
+          <WrappedCard
+            key={`${c.type}-${i}`}
+            kicker={c.title}
+            kickerIcon={null}
+            title={(c.subtitle ?? c.title).slice(0, 280)}
+            {...(c.stat
+              ? { bigValue: c.stat, statLabel: "Stat" as const }
+              : {})}
+            tagline={c.tagline}
+            footer="fantasyroast.net"
+            accent={accentForEngineCard(c.type)}
+            isPremium={isPremium}
+          />
+        ))}
+      </div>
+
+      {data.matchup && (
+        <div className="pt-2 space-y-2">
+          <p className="text-sm font-medium text-muted-foreground">Your matchup</p>
+          <WrappedCard
+            kicker="YOUR MATCHUP"
+            kickerIcon={<Swords className="w-3.5 h-3.5" />}
+            title={`${data.matchup.you.username} vs ${data.matchup.opponent.username}`}
+            subtitle={`Result: ${data.matchup.result}`}
+            bigValue={`${safeNum(data.matchup.you.score).toFixed(2)}–${safeNum(data.matchup.opponent.score).toFixed(2)}`}
+            tagline="Receipts attached."
+            footer="fantasyroast.net"
+            accent="green"
+            isPremium={isPremium}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function RoastCard({ data, isPremium = false, variant = "default" }: RoastCardProps) {
   const [index, setIndex] = useState(0);
-  const [isExporting, setIsExporting] = useState(false);
-  const [showScoreBug, setShowScoreBug] = useState(false);
+  const [isExporting] = useState(false);
+
+  const useWeeklyEngine =
+    variant === "weekly" && Array.isArray(data.cards) && data.cards.length > 0;
 
   const kickerIcon = (kicker: string) => {
     const k = kicker.toLowerCase();
@@ -117,7 +217,7 @@ export function RoastCard({ data, isPremium = false }: RoastCardProps) {
           scoreA: aScore,
           teamB: b.username,
           scoreB: bScore,
-        }
+        },
       });
     } else {
       deck.push({
@@ -134,32 +234,19 @@ export function RoastCard({ data, isPremium = false }: RoastCardProps) {
     return deck;
   }, [data]);
 
+  if (useWeeklyEngine) {
+    return <WeeklyEngineLayout data={data} isPremium={isPremium} />;
+  }
+
   const total = cards.length;
   const current = cards[index];
 
   const goPrev = () => {
     setIndex((i) => (i - 1 + total) % total);
-    setShowScoreBug(false);
   };
   const goNext = () => {
     setIndex((i) => (i + 1) % total);
-    setShowScoreBug(false);
   };
-
-  const canShowScoreBug = useMemo(() => {
-    // Check if the current card is a matchup AND has valid matchup data
-    if (!current.isMatchup || !current.matchupData) return false;
-    
-    // Safety check for score values
-    const scoreA = safeNum(current.matchupData.scoreA);
-    const scoreB = safeNum(current.matchupData.scoreB);
-    
-    // Eligibility criteria: blowout (margin >= 35) or defensive battle (total < 170)
-    const margin = Math.abs(scoreA - scoreB);
-    const totalScore = scoreA + scoreB;
-    
-    return margin >= 35 || totalScore < 170;
-  }, [current]);
 
   return (
     <div className="w-full max-w-3xl mx-auto">
