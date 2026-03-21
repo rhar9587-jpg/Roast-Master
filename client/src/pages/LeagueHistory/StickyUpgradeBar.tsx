@@ -121,7 +121,10 @@ export function StickyUpgradeBar({
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">
-                This is demo data. Get the real roasts for YOUR league • ${PRICE}
+                {`This is demo data. Get the real roasts for YOUR league • $${PRICE}`}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                Includes weekly commissioner email (preview + recap).
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -165,7 +168,10 @@ export function StickyUpgradeBar({
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">
-              Unlock the full league for you — ${PRICE}
+              {`Unlock the full league for you — $${PRICE}`}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+              Includes weekly commissioner email (preview + recap).
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -175,7 +181,7 @@ export function StickyUpgradeBar({
                 size="sm"
                 className="font-semibold whitespace-nowrap interact-cta"
               >
-                Unlock for you — ${PRICE}
+                {`Unlock for you — $${PRICE}`}
               </Button>
               {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
                 <p className="text-xs text-muted-foreground text-center mt-1">

@@ -343,6 +343,10 @@ export default function Home() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary font-bold">✓</span>
+                <span><strong>Weekly commissioner email</strong> — preview or recap, send to the commissioner</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-primary font-bold">✓</span>
                 <span><strong>Screenshot-ready cards</strong> for the group chat</span>
               </li>
             </ul>

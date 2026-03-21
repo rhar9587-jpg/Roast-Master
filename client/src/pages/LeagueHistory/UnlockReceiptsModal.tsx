@@ -97,7 +97,7 @@ export function UnlockReceiptsModal({
             Unlock the full league for you
           </DialogTitle>
           <DialogDescription className="pt-2">
-            Unlock the full league experience for you — including the all-time dominance grid, hidden roast cards and storylines, plus shareable receipts made for your group chat. One-time unlock. No subscription.
+            Unlock the full league experience for you — including the all-time dominance grid, hidden roast cards and storylines, shareable receipts, and a weekly commissioner email (preview + recap) you can send to the commish. One-time unlock. No subscription.
           </DialogDescription>
         </DialogHeader>
 
@@ -115,6 +115,10 @@ export function UnlockReceiptsModal({
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <span>Drop chaos in the group chat.</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm">
+              <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <span>Weekly email for the commissioner — preview or recap.</span>
             </div>
           </div>
           <p className="text-xs text-muted-foreground text-center">
@@ -153,7 +157,7 @@ export function UnlockReceiptsModal({
               onClick={handleUnlock}
               className="w-full sm:w-auto font-semibold interact-cta"
             >
-              Unlock for you — ${PRICE}
+              {`Unlock for you — $${PRICE}`}
             </Button>
             {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
               <p className="text-xs text-muted-foreground text-center mt-1">
