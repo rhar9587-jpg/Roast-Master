@@ -1,9 +1,10 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Link } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { BrandLogo } from "@/components/BrandLogo";
 
 import Home from "@/pages/Home";
 import NotFound from "@/pages/not-found";
@@ -24,6 +25,22 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <div className="min-h-screen flex flex-col">
+          <header className="sticky top-0 z-50 border-b border-border/50 bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
+            <div className="mx-auto flex h-[52px] max-w-5xl items-center gap-6 px-4">
+              <Link
+                href="/"
+                className="flex shrink-0 items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                aria-label="Fantasy Roast home"
+              >
+                <span className="hidden md:block">
+                  <BrandLogo variant="horizontal" />
+                </span>
+                <span className="md:hidden">
+                  <BrandLogo variant="icon" />
+                </span>
+              </Link>
+            </div>
+          </header>
           <div className="flex-1">
             <Router />
           </div>

@@ -113,6 +113,10 @@ export function generateWeeklyEmail(data: WeeklyEmailData): string {
 
   const subtitle = isPreview ? "Matchup Preview" : "Weekly Power Rankings";
 
+  /** Absolute URL so Gmail/Outlook load the rooster mark from the deployed site */
+  const assetBase = data.appUrl ? data.appUrl.replace(/\/$/, "") : "";
+  const brandIconUrl = assetBase ? `${assetBase}/brand/logo-icon-light.png` : "";
+
   const historyBlock =
     (data.matchupToWatch || data.storyOfTheWeek)
       ? `
@@ -207,7 +211,7 @@ export function generateWeeklyEmail(data: WeeklyEmailData): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(data.leagueName)} — Week ${data.week}</title>
+  <title>Fantasy Roast — ${escapeHtml(data.leagueName)} — Week ${data.week}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #0d0d0d; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.5; color: #ffffff;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #0d0d0d;">
@@ -215,10 +219,35 @@ export function generateWeeklyEmail(data: WeeklyEmailData): string {
       <td align="center" style="padding: 24px 16px;">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 600px; background-color: ${bgDark}; border-radius: 8px; overflow: hidden; border: 1px solid ${border};">
           <tr>
-            <td style="padding: 28px 24px 16px 24px; border-bottom: 1px solid ${border};">
-              <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #ffffff; letter-spacing: -0.02em;">${escapeHtml(data.leagueName)}</h1>
-              <p style="margin: 6px 0 0 0; font-size: 16px; color: ${accent}; font-weight: 600;">Week ${data.week}</p>
-              <p style="margin: 4px 0 0 0; font-size: 13px; color: ${textMuted}; text-transform: uppercase; letter-spacing: 0.05em;">${subtitle}</p>
+            <td style="padding: 0; border-bottom: 1px solid ${border};">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #0A0F1C;">
+                <tr>
+                  <td style="padding: 16px 20px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="vertical-align: middle; width: 44px;">
+                          ${brandIconUrl
+    ? `<img src="${escapeHtml(brandIconUrl)}" width="36" height="36" alt="Fantasy Roast rooster logo" style="display: block; border: 0; outline: none; text-decoration: none;" />`
+    : `<span style="display: block; width: 36px; height: 36px;">&nbsp;</span>`}
+                        </td>
+                        <td style="vertical-align: middle; padding-left: 12px;">
+                          <p style="margin: 0; line-height: 1.15;">
+                            <span style="font-size: 11px; font-weight: 800; font-style: italic; color: #ffffff; letter-spacing: 0.08em;">FANTASY</span><br />
+                            <span style="font-size: 11px; font-weight: 800; font-style: italic; color: #EAB308; letter-spacing: 0.08em;">ROAST</span>
+                          </p>
+                        </td>
+                        <td style="vertical-align: middle; width: 1px; padding: 0 14px;">
+                          <div style="width: 1px; height: 36px; background-color: #EAB308; font-size: 0; line-height: 0;">&nbsp;</div>
+                        </td>
+                        <td style="vertical-align: middle;">
+                          <p style="margin: 0; font-size: 17px; font-weight: 700; color: #ffffff; line-height: 1.25;">${escapeHtml(data.leagueName)} &mdash; Week ${data.week}</p>
+                          <p style="margin: 6px 0 0 0; font-size: 13px; color: #a3a3a3; line-height: 1.4;">${escapeHtml(subtitle)}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           ${data.commissionerNote ? `
@@ -386,6 +415,7 @@ export function generateWeeklyEmailPlainText(data: WeeklyEmailData): string {
     data.mode === "preview" ||
     (Array.isArray(data.upcomingMatchups) && data.upcomingMatchups.length > 0 && !(data.rankings?.length));
   const lines: string[] = [
+    "Fantasy Roast",
     `${data.leagueName} — Week ${data.week}`,
     isPreview ? "Matchup Preview" : "Weekly Power Rankings",
     "",
