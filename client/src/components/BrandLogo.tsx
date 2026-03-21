@@ -20,11 +20,15 @@ export function BrandLogo({ variant, className }: BrandLogoProps) {
         width={32}
         height={32}
         decoding="async"
-        className={cn("h-8 w-8 object-contain object-left", className)}
+        className={cn(
+          "block h-8 w-8 max-h-8 max-w-8 object-contain object-left shrink-0",
+          className,
+        )}
       />
     );
   }
 
+  /** Height-driven sizing keeps 180×48 aspect ratio (avoid fixed width + short height = “thin” look). */
   return (
     <img
       src="/brand/logo-header-180x48.png"
@@ -33,7 +37,7 @@ export function BrandLogo({ variant, className }: BrandLogoProps) {
       height={48}
       decoding="async"
       className={cn(
-        "h-9 w-[180px] max-w-[min(180px,70vw)] object-contain object-left md:h-10",
+        "block h-10 w-auto max-w-[min(200px,78vw)] object-contain object-left shrink-0 md:h-12",
         className,
       )}
     />

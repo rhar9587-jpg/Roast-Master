@@ -26,7 +26,7 @@ function App() {
       <TooltipProvider>
         <div className="min-h-screen flex flex-col">
           <header className="sticky top-0 z-50 border-b border-border/50 bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
-            <div className="mx-auto flex h-[52px] max-w-5xl items-center gap-6 px-4">
+            <div className="mx-auto flex min-h-14 max-w-5xl items-center gap-6 px-4 py-2 md:py-2.5">
               <Link
                 href="/"
                 className="flex shrink-0 items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"

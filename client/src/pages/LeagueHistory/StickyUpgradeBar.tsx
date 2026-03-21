@@ -124,7 +124,7 @@ export function StickyUpgradeBar({
                 {`This is demo data. Get the real roasts for YOUR league • $${PRICE}`}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                Includes weekly commissioner email (preview + recap).
+                League receipts, weekly roast, season recap — one unlock.
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -171,7 +171,7 @@ export function StickyUpgradeBar({
               {`Unlock the full league for you — $${PRICE}`}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-              Includes weekly commissioner email (preview + recap).
+              League receipts, weekly roast, season recap — one unlock.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">

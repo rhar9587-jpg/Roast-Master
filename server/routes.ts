@@ -58,6 +58,26 @@ import {
 // -------------------------
 const ADMIN_KEY = process.env.ADMIN_KEY || "";
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+
+/**
+ * Public origin for email images and absolute links when generating HTML for this request.
+ * Replit/proxies set X-Forwarded-*; default CLIENT_URL is localhost and breaks &lt;img src&gt; on Replit.
+ */
+function publicAppUrl(req: Request): string {
+  const forwardedHost = req.get("x-forwarded-host");
+  const host = (forwardedHost || req.get("host") || "").trim();
+  if (host) {
+    const rawProto = req.get("x-forwarded-proto");
+    const proto =
+      rawProto === "http" || rawProto === "https"
+        ? rawProto
+        : host.includes("localhost") || host.startsWith("127.")
+          ? "http"
+          : "https";
+    return `${proto}://${host.replace(/\/$/, "")}`;
+  }
+  return CLIENT_URL.replace(/\/$/, "");
+}
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || "";
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
@@ -1241,22 +1261,23 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
     try {
       let html: string;
+      const appOrigin = publicAppUrl(req);
       if (leagueId === STATIC_DEMO_LEAGUE_ID) {
         if (mode === "preview") {
           const demoPayload = getDemoWeeklyPreviewPayload(week);
-          html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), ...(signoff ? { commissionerSignoff: signoff.slice(0, 180) } : {}), appUrl: CLIENT_URL });
+          html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), ...(signoff ? { commissionerSignoff: signoff.slice(0, 180) } : {}), appUrl: appOrigin });
         } else {
           const demoPayload = getDemoWeeklyEmailPayload(week);
-          html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), ...(signoff ? { commissionerSignoff: signoff.slice(0, 180) } : {}), appUrl: CLIENT_URL });
+          html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), ...(signoff ? { commissionerSignoff: signoff.slice(0, 180) } : {}), appUrl: appOrigin });
         }
       } else {
         if (week < 1) return res.status(400).send("Week must be 1–18.");
         if (mode === "preview") {
-          const result = await getWeeklyPreviewEmail(leagueId, week, note, signoff, CLIENT_URL);
+          const result = await getWeeklyPreviewEmail(leagueId, week, note, signoff, appOrigin);
           html = result.emailHtml;
         } else {
           const previousRankings = getStoredPreviousRankings(leagueId, week);
-          const result = await generateWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, CLIENT_URL, WEEKLY_EMAIL_V2_ENABLED);
+          const result = await generateWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
           html = result.html;
         }
       }
@@ -1291,8 +1312,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(402).json({ code: "FREE_SEND_USED", error: "You've used your free send. Unlock to send again." });
     }
     try {
+      const appOrigin = publicAppUrl(req);
       if (mode === "preview") {
-        const result = await generateWeeklyPreviewEmail(leagueId, week, note, signoff, CLIENT_URL);
+        const result = await generateWeeklyPreviewEmail(leagueId, week, note, signoff, appOrigin);
         const sendResult = await sendEmail({ to: commissionerEmail, subject: result.subject, html: result.html, text: result.text });
         if (!sendResult.ok) {
           return res.status(500).json({ error: sendResult.error || "Failed to send email." });
@@ -1303,7 +1325,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         return res.json({ ok: true, message: "Matchup preview sent to commissioner." });
       }
       const previousRankings = getStoredPreviousRankings(leagueId, week);
-      const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, CLIENT_URL, WEEKLY_EMAIL_V2_ENABLED);
+      const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
       const subject = getRecapSubject(result.leagueName, result.week, result.emailPayload);
       const text = generateWeeklyEmailPlainText(result.emailPayload);
       const sendResult = await sendEmail({ to: commissionerEmail, subject, html: result.emailHtml, text });
@@ -1352,6 +1374,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ error: "league_id is required" });
     }
     try {
+      const appOrigin = publicAppUrl(req);
       let leagueName: string;
       let emailHtml: string;
       let rankings: unknown[] = [];
@@ -1360,11 +1383,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         if (league_id === STATIC_DEMO_LEAGUE_ID) {
           const demoPayload = getDemoWeeklyPreviewPayload(week);
           leagueName = demoPayload.leagueName;
-          emailHtml = generateWeeklyEmail({ ...demoPayload, appUrl: CLIENT_URL });
+          emailHtml = generateWeeklyEmail({ ...demoPayload, appUrl: appOrigin });
           subject = `${leagueName} — Week ${week} Matchup Preview`;
         } else {
           if (week < 1) return res.status(400).json({ error: "week (>= 1) is required" });
-          const result = await getWeeklyPreviewEmail(league_id, week, undefined, undefined, CLIENT_URL);
+          const result = await getWeeklyPreviewEmail(league_id, week, undefined, undefined, appOrigin);
           leagueName = result.leagueName;
           emailHtml = result.emailHtml;
           subject = `${leagueName} — Week ${week} Matchup Preview`;
@@ -1373,13 +1396,13 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         if (league_id === STATIC_DEMO_LEAGUE_ID) {
           const demoPayload = getDemoWeeklyEmailPayload(week);
           leagueName = demoPayload.leagueName;
-          emailHtml = generateWeeklyEmail(demoPayload);
+          emailHtml = generateWeeklyEmail({ ...demoPayload, appUrl: appOrigin });
           rankings = demoPayload.rankings;
           subject = `${leagueName} — Week ${week} Power Rankings`;
         } else {
           if (week < 1) return res.status(400).json({ error: "week (>= 1) is required" });
           const previousRankings = getStoredPreviousRankings(league_id, week);
-          const result = await getWeeklyCommissionerEmail(league_id, week, previousRankings, undefined, undefined, CLIENT_URL, WEEKLY_EMAIL_V2_ENABLED);
+          const result = await getWeeklyCommissionerEmail(league_id, week, previousRankings, undefined, undefined, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
           leagueName = result.leagueName;
           emailHtml = result.emailHtml;
           rankings = result.rankings;

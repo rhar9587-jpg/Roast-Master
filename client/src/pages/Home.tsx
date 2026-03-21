@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FplRoastCard } from "@/components/FplRoastCard";
 import type { FplRoastResponse } from "@shared/schema";
 import { ChevronDown, ChevronRight, HelpCircle } from "lucide-react";
@@ -184,6 +185,11 @@ export default function Home() {
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
               See who owns who. Roast accordingly.
             </p>
+            <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+              One product, three outcomes: <strong className="text-foreground font-semibold">league receipts</strong>,{" "}
+              <strong className="text-foreground font-semibold">weekly roast</strong>, and{" "}
+              <strong className="text-foreground font-semibold">season recap</strong> — one unlock.
+            </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" onClick={handleViewLeagueHistory} className="font-semibold interact-cta">
                 Unlock for you — $2.99
@@ -194,18 +200,63 @@ export default function Home() {
             </p>
           </section>
 
+          {/* Three jobs — IA core */}
+          <section className="space-y-4" aria-labelledby="three-jobs-heading">
+            <h2 id="three-jobs-heading" className="sr-only">
+              What you get
+            </h2>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card className="border-2 border-muted/60 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-bold tracking-tight">League Receipts</CardTitle>
+                  <p className="text-sm text-muted-foreground leading-snug">
+                    Who actually runs your league — all-time dominance, grids, records, and archetypes.
+                  </p>
+                </CardHeader>
+                <CardContent className="pt-0 text-xs text-muted-foreground">
+                  Explore mode: receipts-first, built for arguments you can prove.
+                </CardContent>
+              </Card>
+              <Card className="border-2 border-primary/25 shadow-sm ring-1 ring-primary/10">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-bold tracking-tight">Weekly Roast</CardTitle>
+                  <p className="text-sm text-muted-foreground leading-snug">
+                    What just happened this week — league narrative, roast cards, shareables, and commissioner email.
+                  </p>
+                </CardHeader>
+                <CardContent className="pt-0 text-xs text-muted-foreground">
+                  Roast / share mode: built for the group chat (highest retention).
+                </CardContent>
+              </Card>
+              <Card className="border-2 border-muted/60 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-bold tracking-tight">Season Recap</CardTitle>
+                  <p className="text-sm text-muted-foreground leading-snug">
+                    How your season really went — personal story, identity, and defining moments (plus the league finale).
+                  </p>
+                </CardHeader>
+                <CardContent className="pt-0 text-xs text-muted-foreground">
+                  Story mode: yours vs the league&apos;s last word.
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
           {/* Example Cards */}
           <section className="pt-2 pb-6 space-y-4">
-            <p className="text-center text-sm text-muted-foreground">See the roast</p>
+            <p className="text-center text-sm font-medium text-foreground">See it in action</p>
             <p className="text-center text-xs text-muted-foreground">
-              This is what you'll drop in the group chat.
+              Demo tiles tagged by outcome — same unlock covers all three.
             </p>
 
             <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory md:grid md:grid-cols-4 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0">
               {/* Tile 1: Hero Card mock */}
               <div className="flex-none w-[240px] md:w-auto snap-center">
                 <div className="rounded-xl border-2 border-amber-400/60 bg-gradient-to-br from-amber-50 via-white to-amber-100/50 p-4 shadow-lg h-full min-h-[280px] flex flex-col">
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                      League receipts
+                    </span>
                     <span className="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
                       OWNED
                     </span>
@@ -228,7 +279,12 @@ export default function Home() {
               {/* Tile 2: Dominance Grid Thumbnail mock */}
               <div className="flex-none w-[240px] md:w-auto snap-center">
                 <div className="rounded-xl border bg-white p-4 shadow-lg h-full min-h-[280px] flex flex-col">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                      League receipts
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                     Who Owns Who
                   </p>
                   <div className="grid grid-cols-4 gap-1 text-[10px] flex-1">
@@ -259,7 +315,10 @@ export default function Home() {
               {/* Tile 3: Storyline Mini Card mock */}
               <div className="flex-none w-[240px] md:w-auto snap-center">
                 <div className="rounded-xl border-2 border-red-400/60 bg-gradient-to-br from-red-50 via-white to-red-100/50 p-4 shadow-lg h-full min-h-[280px] flex flex-col">
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                      Weekly roast
+                    </span>
                     <span className="text-xs font-bold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
                       BLOWOUT
                     </span>
@@ -279,6 +338,11 @@ export default function Home() {
               {/* Tile 4: Share Moment mock */}
               <div className="flex-none w-[240px] md:w-auto snap-center">
                 <div className="rounded-xl border bg-gradient-to-br from-blue-50 to-blue-100/50 p-4 shadow-lg h-full min-h-[280px] flex flex-col">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground bg-white/80 px-2 py-0.5 rounded border">
+                      Weekly roast
+                    </span>
+                  </div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-3">
                     💬 Group Chat Ready
                   </p>
@@ -307,49 +371,40 @@ export default function Home() {
             </div>
           </section>
 
-          {/* What's Inside Section */}
-          <section className="rounded-xl border-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 p-6 md:p-8 space-y-4">
+          {/* What's Inside — grouped by the three jobs */}
+          <section className="rounded-xl border-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 p-6 md:p-8 space-y-6">
             <h2 className="text-xl md:text-2xl font-bold text-center">
-              What's Inside Your League's Roast
+              Everything in one unlock
             </h2>
-            <ul className="max-w-xl mx-auto space-y-2 text-sm md:text-base">
-              <li className="flex items-start gap-2">
-                <span className="text-primary font-bold">✓</span>
-                <span><strong>All-time dominance grid</strong> — who owns who, every season</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary font-bold">✓</span>
-                <span><strong>THE LANDLORD</strong> — the manager who runs the league</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary font-bold">✓</span>
-                <span><strong>BIGGEST VICTIM</strong> — the one who gets owned</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary font-bold">✓</span>
-                <span><strong>PLAYOFF CHOKER</strong> — great record, no trophy</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary font-bold">✓</span>
-                <span><strong>HEARTBREAKER</strong> — lost by inches, repeatedly</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary font-bold">✓</span>
-                <span><strong>Personal storylines</strong> — your nemesis, your choke jobs</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary font-bold">✓</span>
-                <span><strong>Season-by-season receipts</strong></span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary font-bold">✓</span>
-                <span><strong>Weekly commissioner email</strong> — preview or recap, send to the commissioner</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary font-bold">✓</span>
-                <span><strong>Screenshot-ready cards</strong> for the group chat</span>
-              </li>
-            </ul>
+            <p className="text-center text-sm text-muted-foreground max-w-2xl mx-auto">
+              Same $2.99 — explore receipts, run weekly roasts, and close the season with your story.
+            </p>
+            <div className="grid gap-6 md:grid-cols-3 md:gap-4 text-left max-w-5xl mx-auto">
+              <div className="space-y-2 rounded-lg border border-muted/60 bg-background/80 p-4">
+                <h3 className="text-sm font-bold text-foreground">League Receipts</h3>
+                <ul className="space-y-1.5 text-sm text-muted-foreground">
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>All-time dominance grid &amp; head-to-head records</span></li>
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Hero archetypes: Landlord, Victim, Choker, Heartbreaker…</span></li>
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Storylines &amp; receipts across seasons</span></li>
+                </ul>
+              </div>
+              <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-4 ring-1 ring-primary/10">
+                <h3 className="text-sm font-bold text-foreground">Weekly Roast</h3>
+                <ul className="space-y-1.5 text-sm text-muted-foreground">
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Week-by-week chaos &amp; matchup narratives</span></li>
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Screenshot-ready cards for the group chat</span></li>
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Commissioner email — preview or recap</span></li>
+                </ul>
+              </div>
+              <div className="space-y-2 rounded-lg border border-muted/60 bg-background/80 p-4">
+                <h3 className="text-sm font-bold text-foreground">Season Recap</h3>
+                <ul className="space-y-1.5 text-sm text-muted-foreground">
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Your season — highlights &amp; choke jobs</span></li>
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>League autopsy &amp; final verdict</span></li>
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Defining moments &amp; identity cards</span></li>
+                </ul>
+              </div>
+            </div>
             <div className="text-center pt-4 border-t border-primary/10">
               <p className="text-lg font-bold">
                 Unlock the full league for you — <span className="text-primary">$2.99</span>
@@ -371,7 +426,9 @@ export default function Home() {
           <section className="rounded-lg border border-muted/50 bg-muted/20 p-6 space-y-4">
             <div className="mb-4">
               <h2 className="text-lg font-semibold">Get Started</h2>
-              <p className="text-sm text-muted-foreground mt-1">Enter your league to generate your roasts</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Enter your Sleeper league — then explore receipts, weekly roast, and your season story.
+              </p>
             </div>
             <div className="space-y-4">
               <div>

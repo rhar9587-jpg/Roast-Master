@@ -97,28 +97,24 @@ export function UnlockReceiptsModal({
             Unlock the full league for you
           </DialogTitle>
           <DialogDescription className="pt-2">
-            Unlock the full league experience for you — including the all-time dominance grid, hidden roast cards and storylines, shareable receipts, and a weekly commissioner email (preview + recap) you can send to the commish. One-time unlock. No subscription.
+            One unlock opens all three outcomes: league receipts, weekly roast (cards + commissioner email), and season recap. No subscription.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Features */}
+          {/* Features — three jobs */}
           <div className="space-y-2">
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Every matchup. Every roast.</span>
+              <span><strong>League Receipts</strong> — dominance, grids, archetypes, storylines</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>The moments your league will argue about.</span>
+              <span><strong>Weekly Roast</strong> — narratives, shareable cards, commissioner email</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Drop chaos in the group chat.</span>
-            </div>
-            <div className="flex items-start gap-2 text-sm">
-              <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span>Weekly email for the commissioner — preview or recap.</span>
+              <span><strong>Season Recap</strong> — your season + league finale</span>
             </div>
           </div>
           <p className="text-xs text-muted-foreground text-center">

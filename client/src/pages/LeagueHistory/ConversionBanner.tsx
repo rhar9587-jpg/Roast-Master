@@ -96,19 +96,15 @@ export function ConversionBanner({
             <ul className="space-y-3 text-sm">
               <li className="flex items-start gap-2">
                 <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <span>See who really owns YOUR league.</span>
+                <span><strong>League Receipts</strong> — who runs YOUR league: dominance, grids, archetypes.</span>
               </li>
               <li className="flex items-start gap-2">
                 <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <span>Expose the choke jobs YOUR friends won't admit.</span>
+                <span><strong>Weekly Roast</strong> — week narrative, cards, group chat, commissioner email.</span>
               </li>
               <li className="flex items-start gap-2">
                 <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <span>Drop real receipts in the group chat.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <span>Weekly commissioner email — preview or recap, send straight to the commish.</span>
+                <span><strong>Season Recap</strong> — your season story and the league finale.</span>
               </li>
             </ul>
           </div>
@@ -165,27 +161,15 @@ export function ConversionBanner({
           <ul className="space-y-3 text-sm">
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span><strong>All-time Dominance</strong> — who owns who, every season</span>
+              <span><strong>League Receipts</strong> — dominance grid, hero roasts, storylines, all-time records</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span><strong>Hero Roasts</strong> — Landlord, Biggest Victim, Playoff Choker, and more</span>
+              <span><strong>Weekly Roast</strong> — week-by-week chaos, shareable cards, commissioner email (preview + recap)</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span><strong>Weekly Roasts</strong> — chaos from every matchup week</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span><strong>Weekly commissioner email</strong> — preview or recap, send to the commissioner</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span><strong>Season Wrapped</strong> — personal highlights for every manager</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span><strong>End-of-Season Recap</strong> — the full league story</span>
+              <span><strong>Season Recap</strong> — season wrapped, personal story, league autopsy &amp; finale</span>
             </li>
           </ul>
         </div>

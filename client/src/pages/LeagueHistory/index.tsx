@@ -1988,25 +1988,36 @@ export default function LeagueHistoryPage() {
       )}
 
       {hasData && (
-        <div className="flex flex-wrap gap-2 rounded-xl border bg-muted/20 p-1">
-          {[
-            { id: "history", label: "History" },
-            ...(WEEKLY_ENABLED ? [{ id: "weekly", label: "Weekly" }] : []),
-            { id: "season", label: "Your Season" },
-            { id: "end", label: "Recap" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveMode(tab.id as Mode)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                activeMode === tab.id
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2 rounded-xl border bg-muted/20 p-1">
+            {(
+              [
+                { id: "history" as const, label: "History", job: "League receipts" },
+                ...(WEEKLY_ENABLED ? [{ id: "weekly" as const, label: "Weekly", job: "Weekly roast" }] : []),
+                { id: "season" as const, label: "Your Season", job: "Your season story" },
+                { id: "end" as const, label: "Recap", job: "League finale" },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveMode(tab.id as Mode)}
+                className={`flex flex-col items-stretch gap-0.5 px-3 py-2 rounded-lg text-left transition min-w-[7.5rem] ${
+                  activeMode === tab.id
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span className="text-sm font-medium leading-tight">{tab.label}</span>
+                <span className="text-[10px] font-normal text-muted-foreground leading-tight">{tab.job}</span>
+              </button>
+            ))}
+          </div>
+          {!WEEKLY_ENABLED && (
+            <p className="text-xs text-muted-foreground px-1">
+              <strong className="text-foreground font-medium">Weekly Roast</strong> tab is coming soon — weekly cards and commissioner email are already included in your unlock.
+            </p>
+          )}
         </div>
       )}
 

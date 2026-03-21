@@ -5,6 +5,8 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 
 const app = express();
+/** So X-Forwarded-Proto / Host behave behind Replit and other reverse proxies */
+app.set("trust proxy", 1);
 const httpServer = createServer(app);
 
 declare module "http" {
