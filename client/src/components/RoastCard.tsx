@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Trophy, TrendingDown, Swords, Users, Zap, Skull, Copy, Check } from "lucide-react";
-import type { RoastResponse } from "@shared/schema";
+import type { Card, RoastResponse } from "@shared/schema";
 import type { WrappedCardProps } from "@/components/WrappedCard";
 import { WrappedCard } from "@/components/WrappedCard";
 import { Button } from "@/components/ui/button";
@@ -33,12 +33,74 @@ type WeeklySlide =
   | { kind: "engine"; idx: number }
   | { kind: "matchup" };
 
+/**
+ * Some responses arrive with a truncated `cards` array (e.g. only `carry_job`), which makes the
+ * UI show "Card 1 of 1" even though headline/stats/groupChatSummary are full. When we see fewer
+ * than 2 engine cards, rebuild the baseline deck from stats + summary, then append any extra
+ * API-only types (carry, blowout, etc.) so the carousel matches the full weekly roast.
+ */
+function normalizeWeeklyEngineCards(data: RoastResponse): Card[] {
+  const raw = data.cards;
+  const incoming: Card[] = Array.isArray(raw) ? raw : [];
+
+  if (incoming.length >= 2) {
+    return incoming;
+  }
+
+  const high = data.stats?.highestScorer;
+  const low = data.stats?.lowestScorer;
+  if (!high?.username || !low?.username) {
+    return incoming;
+  }
+
+  const synthesized: Card[] = [
+    {
+      type: "top_dog",
+      title: "Top Dog",
+      subtitle: `${high.username} paced the league this week.`,
+      stat: `${safeNum(high.score).toFixed(1)} pts`,
+      tagline: "Highest score on the board.",
+    },
+    {
+      type: "fraud_watch",
+      title: "Fraud Watch",
+      subtitle: `${low.username} scraped the bottom this week.`,
+      stat: `${safeNum(low.score).toFixed(1)} pts`,
+      tagline: "Call it a rebuild.",
+    },
+  ];
+
+  const g = data.groupChatSummary?.trim();
+  if (g) {
+    synthesized.push({
+      type: "group_chat_drop",
+      title: "Group Chat Drop",
+      subtitle: g.slice(0, 280) + (g.length > 280 ? "…" : ""),
+      tagline: "Copy, paste, send.",
+      stat: "League recap",
+    });
+  }
+
+  const seen = new Set(synthesized.map((c) => c.type));
+  for (const c of incoming) {
+    if (!seen.has(c.type)) {
+      synthesized.push(c);
+      seen.add(c.type);
+    }
+  }
+
+  return synthesized;
+}
+
 function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremium: boolean }) {
   const [copied, setCopied] = useState(false);
   const [cardIndex, setCardIndex] = useState(0);
   const summary = data.groupChatSummary?.trim();
 
-  const engineCards = useMemo(() => data.cards ?? [], [data.cards]);
+  const engineCards = useMemo(
+    () => normalizeWeeklyEngineCards(data),
+    [data.cards, data.stats, data.groupChatSummary, data.headline],
+  );
   const hasMatchup = Boolean(data.matchup);
 
   const slides: WeeklySlide[] = useMemo(() => {

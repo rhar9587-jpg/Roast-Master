@@ -1764,9 +1764,13 @@ export default function LeagueHistoryPage() {
             : {}),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to fetch weekly roast.");
-      setWeeklyRoastData(data);
+      const raw = await res.json();
+      if (!res.ok) throw new Error(raw.error || "Failed to fetch weekly roast.");
+      // Always keep `cards` as an array so weekly UI can count slides reliably.
+      setWeeklyRoastData({
+        ...raw,
+        cards: Array.isArray(raw.cards) ? raw.cards : [],
+      });
     } catch (err: any) {
       setWeeklyRoastError(err.message || "Failed to fetch weekly roast.");
       setWeeklyRoastData(null);
