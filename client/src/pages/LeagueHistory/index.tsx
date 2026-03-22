@@ -44,6 +44,7 @@ import { SeasonWrappedCard } from "@/components/SeasonWrappedCard";
 import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
 import { LockedModePreview } from "./LockedModePreview";
 import { WeeklyCommissionerEmailSection } from "./WeeklyCommissionerEmailSection";
+import { WeeklyEmailBridgeStrip } from "./WeeklyEmailBridgeStrip";
 import { isLeagueUnlocked, unlockLeague, lockLeague, hasUsedFreeSend } from "./premium";
 import { createCheckoutSession } from "@/lib/checkout";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername, getCommissionerEmail, setCommissionerEmail } from "./utils";
@@ -2094,43 +2095,54 @@ export default function LeagueHistoryPage() {
         />
       )}
 
-      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && weeklyRoastData && (
-        <RoastCard data={weeklyRoastData} isPremium={showPremiumContent} variant="weekly" />
-      )}
-
-      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && !weeklyRoastData && !weeklyRoastLoading && (
-        <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
-          <p className="text-sm text-muted-foreground">Choose a week and tap Generate for this week&apos;s league roast.</p>
-          <p className="text-xs text-muted-foreground mt-1">Email tools below use the same week.</p>
-        </div>
-      )}
-
       {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && (
-        <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
-          <p className="text-xs font-medium text-foreground">Week &amp; generate roast</p>
-          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-            <div className="flex-1">
-              <label className="block text-sm font-semibold text-foreground">Week</label>
-              <input
-                type="number"
-                min={1}
-                max={18}
-                value={leagueWeek}
-                onChange={(e) => setLeagueWeek(Number(e.target.value))}
-                className="mt-1 w-full rounded-lg border px-3 py-2"
-              />
-            </div>
-            <Button onClick={fetchWeeklyRoast} disabled={weeklyRoastLoading}>
-              {weeklyRoastLoading ? "Generating…" : "Generate Weekly Roast"}
-            </Button>
-          </div>
-          {weeklyRoastError && (
-            <p className="text-xs text-red-600">{weeklyRoastError}</p>
+        <>
+          {weeklyRoastData && (
+            <RoastCard data={weeklyRoastData} isPremium={showPremiumContent} variant="weekly" />
           )}
-          <p className="text-xs text-muted-foreground">
-            Commissioner email preview and send are in the section below — same week.
-          </p>
-        </section>
+          {weeklyRoastData && (
+            <WeeklyEmailBridgeStrip
+              leagueWeek={leagueWeek}
+              leagueName={weeklyRoastData.league?.name}
+              emailMode={weeklyCommissionerEmailMode}
+            />
+          )}
+          {!weeklyRoastData && !weeklyRoastLoading && (
+            <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Choose a week and tap Generate for this week&apos;s league roast.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Week {leagueWeek} — powers roast and commissioner email below.
+              </p>
+            </div>
+          )}
+          <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
+            <p className="text-xs font-medium text-foreground">Week &amp; generate roast</p>
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+              <div className="flex-1">
+                <label className="block text-sm font-semibold text-foreground">Week</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={18}
+                  value={leagueWeek}
+                  onChange={(e) => setLeagueWeek(Number(e.target.value))}
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </div>
+              <Button onClick={fetchWeeklyRoast} disabled={weeklyRoastLoading}>
+                {weeklyRoastLoading ? "Generating…" : "Generate Weekly Roast"}
+              </Button>
+            </div>
+            {weeklyRoastError && (
+              <p className="text-xs text-red-600">{weeklyRoastError}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Week {leagueWeek} — powers roast + email. Commissioner tools are in the section below.
+            </p>
+          </section>
+        </>
       )}
 
       {WEEKLY_ENABLED && hasData && activeMode === "weekly" && leagueId.trim() && (

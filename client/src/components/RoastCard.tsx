@@ -1,10 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Trophy, TrendingDown, Swords, Users, Zap, Skull, Copy, Check } from "lucide-react";
+import {
+  Trophy,
+  TrendingDown,
+  Swords,
+  Users,
+  Zap,
+  Skull,
+  Copy,
+  Check,
+  ChevronDown,
+} from "lucide-react";
 import type { Card, RoastResponse } from "@shared/schema";
 import type { WrappedCardProps } from "@/components/WrappedCard";
 import { WrappedCard } from "@/components/WrappedCard";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 type Accent = "green" | "pink" | "blue" | "orange";
 
@@ -92,10 +107,56 @@ function normalizeWeeklyEngineCards(data: RoastResponse): Card[] {
   return synthesized;
 }
 
+/** Safe read of engine `signals` (Zod record) for optional UI chips / “more this week”. */
+function parseWeeklySignals(data: RoastResponse) {
+  const s = data.signals;
+  if (!s || typeof s !== "object") return null;
+  const rec = s as Record<string, unknown>;
+  const medianScore = typeof rec.medianScore === "number" ? rec.medianScore : null;
+  const closestMargin =
+    typeof rec.closestMargin === "number" ? rec.closestMargin : null;
+  const blowoutMargin =
+    typeof rec.blowoutMargin === "number" ? rec.blowoutMargin : null;
+  let closestGame: {
+    teamA: string;
+    teamB: string;
+    scoreA: number;
+    scoreB: number;
+  } | null = null;
+  const cg = rec.closestGame;
+  if (cg && typeof cg === "object" && cg !== null) {
+    const g = cg as Record<string, unknown>;
+    if (
+      typeof g.teamA === "string" &&
+      typeof g.teamB === "string" &&
+      (typeof g.scoreA === "number" || typeof g.scoreA === "string") &&
+      (typeof g.scoreB === "number" || typeof g.scoreB === "string")
+    ) {
+      closestGame = {
+        teamA: g.teamA,
+        teamB: g.teamB,
+        scoreA: Number(g.scoreA),
+        scoreB: Number(g.scoreB),
+      };
+    }
+  }
+  const hasAny =
+    medianScore != null ||
+    closestMargin != null ||
+    blowoutMargin != null ||
+    closestGame != null;
+  if (!hasAny) return null;
+  return { medianScore, closestMargin, blowoutMargin, closestGame };
+}
+
 function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremium: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [copiedOneLiner, setCopiedOneLiner] = useState(false);
+  const [copiedMatchup, setCopiedMatchup] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [cardIndex, setCardIndex] = useState(0);
   const summary = data.groupChatSummary?.trim();
+  const signalsParsed = useMemo(() => parseWeeklySignals(data), [data.signals]);
 
   const engineCards = useMemo(
     () => normalizeWeeklyEngineCards(data),
@@ -126,6 +187,32 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
       await navigator.clipboard.writeText(summary);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const copyWeekOneLiner = async () => {
+    const text = summary
+      ? `${data.headline}\n\n${summary}`
+      : data.headline;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedOneLiner(true);
+      setTimeout(() => setCopiedOneLiner(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const copyMatchupLine = async () => {
+    if (!data.matchup) return;
+    const m = data.matchup;
+    const line = `${m.you.username} vs ${m.opponent.username} — ${safeNum(m.you.score).toFixed(2)}–${safeNum(m.opponent.score).toFixed(2)} — ${m.result}`;
+    try {
+      await navigator.clipboard.writeText(line);
+      setCopiedMatchup(true);
+      setTimeout(() => setCopiedMatchup(false), 2000);
     } catch {
       /* ignore */
     }
@@ -165,18 +252,82 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
           <span className="rounded-full border bg-background/80 px-2 py-0.5">
             Low {safeNum(data.stats.lowestScorer.score).toFixed(1)}
           </span>
+          {signalsParsed?.medianScore != null && (
+            <span className="rounded-full border bg-background/80 px-2 py-0.5">
+              Median {safeNum(signalsParsed.medianScore).toFixed(1)}
+            </span>
+          )}
         </div>
       </div>
 
+      {signalsParsed && (
+        <Collapsible open={moreOpen} onOpenChange={setMoreOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full max-w-3xl mx-auto items-center justify-between rounded-lg border border-dashed border-border/80 bg-muted/20 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted/40"
+            >
+              <span>More from this week</span>
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 transition-transform ${moreOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="max-w-3xl mx-auto space-y-2 pt-2 text-xs text-muted-foreground">
+            {signalsParsed.closestGame && (
+              <p>
+                <span className="font-medium text-foreground">Closest game: </span>
+                {signalsParsed.closestGame.teamA} {signalsParsed.closestGame.scoreA.toFixed(2)} –{" "}
+                {signalsParsed.closestGame.teamB} {signalsParsed.closestGame.scoreB.toFixed(2)}
+              </p>
+            )}
+            {signalsParsed.closestMargin != null && (
+              <p>
+                <span className="font-medium text-foreground">Closest margin: </span>
+                {safeNum(signalsParsed.closestMargin).toFixed(2)} pts
+              </p>
+            )}
+            {signalsParsed.blowoutMargin != null && (
+              <p>
+                <span className="font-medium text-foreground">Biggest blowout margin: </span>
+                {safeNum(signalsParsed.blowoutMargin).toFixed(2)} pts
+              </p>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+
       {summary && (
-        <div className="rounded-lg border bg-muted/30 p-3 flex flex-col sm:flex-row sm:items-start gap-2">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Group chat drop</p>
-            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{summary}</p>
+        <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                Group chat drop
+              </p>
+              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{summary}</p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0 justify-end sm:flex-col sm:items-stretch">
+              <Button type="button" variant="outline" size="sm" onClick={copySummary}>
+                {copied ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+                {copied ? "Copied" : "Copy drop"}
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={copyWeekOneLiner}>
+                {copiedOneLiner ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+                {copiedOneLiner ? "Copied" : "Copy week one-liner"}
+              </Button>
+            </div>
           </div>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={copySummary}>
-            {copied ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-            {copied ? "Copied" : "Copy"}
+          <p className="text-[11px] text-muted-foreground">
+            Week one-liner = verdict headline + group chat paragraph (one paste for iMessage / Discord).
+          </p>
+        </div>
+      )}
+
+      {!summary && (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={copyWeekOneLiner}>
+            {copiedOneLiner ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+            {copiedOneLiner ? "Copied" : "Copy week one-liner"}
           </Button>
         </div>
       )}
@@ -241,6 +392,19 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
           </>
         )}
       </div>
+
+      {data.matchup && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2.5">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Your matchup</span> — copy a one-line brag or shame
+            for your chat.
+          </p>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={copyMatchupLine}>
+            {copiedMatchup ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+            {copiedMatchup ? "Copied" : "Copy matchup line"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
