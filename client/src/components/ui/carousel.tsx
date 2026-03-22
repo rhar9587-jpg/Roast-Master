@@ -182,7 +182,8 @@ const CarouselItem = React.forwardRef<
       role="group"
       aria-roledescription="slide"
       className={cn(
-        "min-w-0 shrink-0 grow-0 basis-full",
+        /* No default basis-full — it fought responsive basis-* in twMerge and forced 100% width on desktop (huge gutter beside slide 1). Callers must set basis (see RoastDeckCarousel). */
+        "min-w-0 shrink-0 grow-0",
         orientation === "horizontal" ? "pl-4" : "pt-4",
         className
       )}

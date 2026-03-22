@@ -66,6 +66,13 @@ const WEEKLY_ENABLED = true;
 type Mode = "history" | "weekly" | "season" | "end";
 type TeamOption = { roster_id: number; name: string };
 
+const PAGE_TITLE_BY_MODE: Record<Mode, string> = {
+  history: "League History",
+  weekly: "Weekly Roast",
+  season: "Your Season",
+  end: "League Recap",
+};
+
 function isCountable(c: DominanceCellDTO) {
   return (c?.games ?? 0) >= 3;
 }
@@ -1742,12 +1749,19 @@ export default function LeagueHistoryPage() {
     setWeeklyRoastLoading(true);
     setWeeklyRoastError(null);
     try {
+      const viewerRosterId =
+        viewerKey.trim() && /^\d+$/.test(viewerKey.trim())
+          ? Number(viewerKey.trim())
+          : undefined;
       const res = await fetch("/api/roast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           league_id: leagueId.trim(),
           week: leagueWeek,
+          ...(typeof viewerRosterId === "number" && viewerRosterId > 0
+            ? { roster_id: viewerRosterId }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -1913,7 +1927,7 @@ export default function LeagueHistoryPage() {
           <div className="space-y-1 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold">
-                League History
+                {PAGE_TITLE_BY_MODE[activeMode]}
               </h1>
               <Link href="/">
                 <Button variant="ghost" size="sm" className="h-8 text-xs">
@@ -2038,17 +2052,6 @@ export default function LeagueHistoryPage() {
           season={data?.league?.season}
         />
       </div>
-
-      {WEEKLY_ENABLED && hasData && leagueId.trim() && activeMode === "history" && (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-lg border bg-muted/30 px-3 py-2.5 text-sm">
-          <span className="text-muted-foreground">
-            Send the weekly recap email from the <span className="font-medium text-foreground">Weekly</span> tab.
-          </span>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setActiveMode("weekly")}>
-            Open Weekly
-          </Button>
-        </div>
-      )}
 
       {WEEKLY_ENABLED && hasData && activeMode === "weekly" && !showPremiumContent && (
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">

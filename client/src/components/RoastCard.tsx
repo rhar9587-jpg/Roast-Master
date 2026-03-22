@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { Trophy, TrendingDown, Swords, Users, Zap, Skull, Copy, Check } from "lucide-react";
 import type { RoastResponse } from "@shared/schema";
 import type { WrappedCardProps } from "@/components/WrappedCard";
@@ -28,9 +29,34 @@ function accentForEngineCard(type: string): NonNullable<WrappedCardProps["accent
   return "green";
 }
 
+type WeeklySlide =
+  | { kind: "engine"; idx: number }
+  | { kind: "matchup" };
+
 function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremium: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [cardIndex, setCardIndex] = useState(0);
   const summary = data.groupChatSummary?.trim();
+
+  const engineCards = useMemo(() => data.cards ?? [], [data.cards]);
+  const hasMatchup = Boolean(data.matchup);
+
+  const slides: WeeklySlide[] = useMemo(() => {
+    const s: WeeklySlide[] = engineCards.map((_, idx) => ({ kind: "engine" as const, idx }));
+    if (hasMatchup) s.push({ kind: "matchup" });
+    return s;
+  }, [engineCards, hasMatchup]);
+
+  const slideCount = slides.length;
+
+  useEffect(() => {
+    setCardIndex(0);
+  }, [data.week, data.league?.league_id, slideCount]);
+
+  const goPrev = () =>
+    setCardIndex((i) => (slideCount > 0 ? (i - 1 + slideCount) % slideCount : 0));
+  const goNext = () =>
+    setCardIndex((i) => (slideCount > 0 ? (i + 1) % slideCount : 0));
 
   const copySummary = async () => {
     if (!summary) return;
@@ -41,6 +67,25 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
     } catch {
       /* ignore */
     }
+  };
+
+  const currentSlide = slides[cardIndex];
+
+  const renderEngineCard = (idx: number) => {
+    const c = engineCards[idx];
+    if (!c) return null;
+    return (
+      <WrappedCard
+        kicker={c.title}
+        kickerIcon={null}
+        title={(c.subtitle ?? c.title).slice(0, 280)}
+        {...(c.stat ? { bigValue: c.stat, statLabel: "Stat" as const } : {})}
+        tagline={c.tagline}
+        footer="fantasyroast.net"
+        accent={accentForEngineCard(c.type)}
+        isPremium={isPremium}
+      />
+    );
   };
 
   return (
@@ -74,41 +119,66 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
         </div>
       )}
 
-      <div className="space-y-4">
+      {/* Same interaction model as Season Wrapped: one card + ‹ › (not a vertical list). */}
+      <div className="space-y-2">
         <p className="text-sm font-medium text-muted-foreground">League cards</p>
-        {(data.cards ?? []).map((c, i) => (
-          <WrappedCard
-            key={`${c.type}-${i}`}
-            kicker={c.title}
-            kickerIcon={null}
-            title={(c.subtitle ?? c.title).slice(0, 280)}
-            {...(c.stat
-              ? { bigValue: c.stat, statLabel: "Stat" as const }
-              : {})}
-            tagline={c.tagline}
-            footer="fantasyroast.net"
-            accent={accentForEngineCard(c.type)}
-            isPremium={isPremium}
-          />
-        ))}
-      </div>
+        {slideCount === 0 ? (
+          <p className="text-sm text-muted-foreground rounded-lg border border-dashed bg-muted/20 px-3 py-4">
+            No shareable league cards for this response. Generate again after scores are in.
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm text-muted-foreground">
+                Card {cardIndex + 1} of {slideCount}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={goPrev}
+                  className="h-10 w-10 rounded-xl border bg-background flex items-center justify-center interact-icon"
+                  aria-label="Previous card"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="h-10 w-10 rounded-xl border bg-background flex items-center justify-center interact-icon"
+                  aria-label="Next card"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
 
-      {data.matchup && (
-        <div className="pt-2 space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">Your matchup</p>
-          <WrappedCard
-            kicker="YOUR MATCHUP"
-            kickerIcon={<Swords className="w-3.5 h-3.5" />}
-            title={`${data.matchup.you.username} vs ${data.matchup.opponent.username}`}
-            subtitle={`Result: ${data.matchup.result}`}
-            bigValue={`${safeNum(data.matchup.you.score).toFixed(2)}–${safeNum(data.matchup.opponent.score).toFixed(2)}`}
-            tagline="Receipts attached."
-            footer="fantasyroast.net"
-            accent="green"
-            isPremium={isPremium}
-          />
-        </div>
-      )}
+            {currentSlide && (
+              <motion.div
+                key={`${currentSlide.kind}-${currentSlide.kind === "engine" ? currentSlide.idx : "m"}`}
+                initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.25 }}
+              >
+                {currentSlide.kind === "engine"
+                  ? renderEngineCard(currentSlide.idx)
+                  : data.matchup ? (
+                      <WrappedCard
+                        kicker="YOUR MATCHUP"
+                        kickerIcon={<Swords className="w-3.5 h-3.5" />}
+                        title={`${data.matchup.you.username} vs ${data.matchup.opponent.username}`}
+                        subtitle={`Result: ${data.matchup.result}`}
+                        bigValue={`${safeNum(data.matchup.you.score).toFixed(2)}–${safeNum(data.matchup.opponent.score).toFixed(2)}`}
+                        tagline="Receipts attached."
+                        footer="fantasyroast.net"
+                        accent="green"
+                        isPremium={isPremium}
+                      />
+                    ) : null}
+              </motion.div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -117,8 +187,12 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
   const [index, setIndex] = useState(0);
   const [isExporting] = useState(false);
 
-  const useWeeklyEngine =
-    variant === "weekly" && Array.isArray(data.cards) && data.cards.length > 0;
+  /**
+   * Weekly tab always uses the engine layout (headline + stacked league cards + matchup).
+   * Do not require `data.cards.length > 0`: if that was empty/missing (older payloads, parse
+   * quirks), we used to fall back to the legacy one-card-at-a-time carousel — felt broken.
+   */
+  const useWeeklyEngine = variant === "weekly";
 
   const kickerIcon = (kicker: string) => {
     const k = kicker.toLowerCase();
