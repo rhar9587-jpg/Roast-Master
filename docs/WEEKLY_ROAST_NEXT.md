@@ -10,7 +10,7 @@
 - `groupChatSummary` — paragraph for SMS/Discord + **aligned commissioner email intro** (`weeklyCommissioner.ts` concatenates headline + summary)  
 - `signals` — optional debug metrics (median, closest game, blowout margin, etc.)
 
-**Client:** League History → **Weekly** tab uses `RoastCard` with `variant="weekly"` (verdict + chips + group chat copy + stacked cards). **Week** picker is shared with **Weekly Commissioner Email** via `leagueWeek`. Anchor: `#weekly-commissioner-email`.
+**Client:** League History → **Weekly** tab uses `RoastCard` with `variant="weekly"` (verdict + chips + group chat copy + stacked cards). **Week** picker is shared with **Weekly Commissioner Email** via `leagueWeek`. The commissioner email panel (`WeeklyCommissionerEmailSection`, `id="weekly-commissioner-email"`) only renders on the **Weekly** tab (below week + generate). **History** tab shows a compact “Open Weekly” hint instead.
 
 **Feature flag:** `WEEKLY_ENABLED` in `client/src/pages/LeagueHistory/index.tsx` (currently **on**).
 

@@ -37,7 +37,7 @@ export function BrandLogo({ variant, className }: BrandLogoProps) {
       height={48}
       decoding="async"
       className={cn(
-        "block h-10 w-auto max-w-[min(200px,78vw)] object-contain object-left shrink-0 md:h-12",
+        "block h-11 w-auto max-w-[min(240px,85vw)] object-contain object-left shrink-0 md:h-14",
         className,
       )}
     />
