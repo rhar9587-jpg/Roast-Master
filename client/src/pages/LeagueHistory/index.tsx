@@ -1222,7 +1222,7 @@ export default function LeagueHistoryPage() {
         const dg = computeNflDoppelganger(
           m.key,
           data?.seasonStats,
-          data.weeklyMatchups,
+          data.weeklyMatchups ?? [],
           managers,
           data?.league?.season,
         );
@@ -1422,13 +1422,17 @@ export default function LeagueHistoryPage() {
       target_roster_id: entry.rosterId,
     });
 
+    const sharePayload = {
+      title: "Fantasy Roast",
+      text: `${entry.managerName}'s NFL Doppelgänger: ${entry.team} — ${entry.label}`,
+      url,
+    };
     try {
-      if (navigator.share && navigator.canShare) {
-        await navigator.share({
-          title: "Fantasy Roast",
-          text: `${entry.managerName}'s NFL Doppelgänger: ${entry.team} — ${entry.label}`,
-          url,
-        });
+      if (
+        navigator.share &&
+        (!navigator.canShare || navigator.canShare(sharePayload))
+      ) {
+        await navigator.share(sharePayload);
         toast({ title: "Link shared" });
         return;
       }

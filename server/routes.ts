@@ -83,7 +83,7 @@ const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || "";
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
 const stripe = STRIPE_SECRET_KEY
-  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
+  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2026-02-25.clover" })
   : null;
 const serverStartedAt = Date.now();
 const WEEKLY_EMAIL_V2_ENABLED = String(process.env.WEEKLY_EMAIL_V2_ENABLED || "false").toLowerCase() === "true";

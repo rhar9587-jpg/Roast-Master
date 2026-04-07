@@ -138,7 +138,8 @@ export function InsightsDashboard({
   // Build NFL Doppelgänger card (second card after Landlord)
   const nflDoppelgangerCard = nflDoppelganger ? (
     <BaseballCard
-      badge={nflDoppelganger.label.toUpperCase()}
+      badge="EDGE"
+      badgeText={nflDoppelganger.label.toUpperCase()}
       title="NFL DOPPELGÄNGER 🏈"
       name={nflDoppelganger.team}
       avatarUrl={viewerAvatarUrl ?? null}
@@ -167,7 +168,8 @@ export function InsightsDashboard({
   // Build personal hook card as BaseballCard (always visible, creates emotional hook)
   const personalHookBaseballCard = personalHookCard ? (
     <BaseballCard
-      badge={
+      badge="EDGE"
+      badgeText={
         personalHookCard.type === "undefeated"
           ? "UNTOUCHABLE"
           : personalHookCard.type === "second_most_points_loss"

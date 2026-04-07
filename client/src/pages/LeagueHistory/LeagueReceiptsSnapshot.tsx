@@ -28,6 +28,14 @@ export type LeagueReceiptsSnapshotProps = {
 
 export function buildLeagueRoastClipboardText(p: LeagueReceiptsSnapshotProps): string {
   const lines: string[] = ["🔥 Fantasy Roast 🔥", ""];
+  const hasInsights =
+    p.landlord || p.mostOwned || p.biggestRivalry || p.bonusRoastLine?.trim();
+
+  if (!hasInsights) {
+    lines.push("This league is chaos. No clear landlord… yet.", "");
+    lines.push("Get yours: https://fantasyroast.net");
+    return lines.join("\n");
+  }
 
   if (p.landlord) {
     lines.push(
@@ -48,7 +56,7 @@ export function buildLeagueRoastClipboardText(p: LeagueReceiptsSnapshotProps): s
     lines.push(p.bonusRoastLine.trim(), "");
   }
 
-  lines.push("Get yours: fantasyroast.net");
+  lines.push("Get yours: https://fantasyroast.net");
   return lines.join("\n");
 }
 
@@ -63,8 +71,7 @@ export function LeagueReceiptsSnapshot({
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
-  const hasAny = landlord || mostOwned || biggestRivalry || bonusRoastLine?.trim();
-  if (!hasAny) return null;
+  const hasInsights = landlord || mostOwned || biggestRivalry || bonusRoastLine?.trim();
 
   async function copyLeagueRoast() {
     const text = buildLeagueRoastClipboardText({
@@ -110,35 +117,44 @@ export function LeagueReceiptsSnapshot({
         </Button>
       </div>
 
-      <ul className="space-y-2 text-sm text-foreground">
-        {landlord && (
-          <li>
-            <span className="font-semibold text-primary">League landlord: </span>
-            {landlord.landlordName} — owns {landlord.victimCount} manager
-            {landlord.victimCount === 1 ? "" : "s"} head-to-head.
-          </li>
-        )}
-        {mostOwned && (
-          <li>
-            <span className="font-semibold text-primary">Biggest victim: </span>
-            {mostOwned.victimName} — owned in {mostOwned.timesOwned} different head-to-head
-            {mostOwned.timesOwned === 1 ? "" : "s"} ({mostOwned.worstNemesisName}&apos;s favorite
-            punching bag).
-          </li>
-        )}
-        {biggestRivalry && (
-          <li>
-            <span className="font-semibold text-primary">Strongest rivalry: </span>
-            {biggestRivalry.aName} vs {biggestRivalry.bName} ({biggestRivalry.record}).
-          </li>
-        )}
-        {bonusRoastLine?.trim() && (
-          <li>
-            <span className="font-semibold text-primary">Also: </span>
-            {bonusRoastLine.trim()}
-          </li>
-        )}
-      </ul>
+      {!hasInsights ? (
+        <div className="rounded-lg border border-dashed border-primary/25 bg-muted/20 px-3 py-3 text-sm text-foreground leading-relaxed">
+          <p className="font-bold tracking-tight">🔥 LEAGUE ROAST</p>
+          <p className="mt-1 text-muted-foreground">
+            This league is chaos. No clear landlord… yet.
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-2 text-sm text-foreground">
+          {landlord && (
+            <li>
+              <span className="font-semibold text-primary">League landlord: </span>
+              {landlord.landlordName} — owns {landlord.victimCount} manager
+              {landlord.victimCount === 1 ? "" : "s"} head-to-head.
+            </li>
+          )}
+          {mostOwned && (
+            <li>
+              <span className="font-semibold text-primary">Biggest victim: </span>
+              {mostOwned.victimName} — owned in {mostOwned.timesOwned} different head-to-head
+              {mostOwned.timesOwned === 1 ? "" : "s"} ({mostOwned.worstNemesisName}&apos;s favorite
+              punching bag).
+            </li>
+          )}
+          {biggestRivalry && (
+            <li>
+              <span className="font-semibold text-primary">Strongest rivalry: </span>
+              {biggestRivalry.aName} vs {biggestRivalry.bName} ({biggestRivalry.record}).
+            </li>
+          )}
+          {bonusRoastLine?.trim() && (
+            <li>
+              <span className="font-semibold text-primary">Also: </span>
+              {bonusRoastLine.trim()}
+            </li>
+          )}
+        </ul>
+      )}
     </section>
   );
 }

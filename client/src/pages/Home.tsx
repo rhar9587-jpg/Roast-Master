@@ -42,6 +42,15 @@ export default function Home() {
     }
   }, []);
 
+  // Deep link from league page sticky CTA: /#get-started
+  useEffect(() => {
+    if (window.location.hash !== "#get-started") return;
+    const id = window.setTimeout(() => {
+      document.getElementById("get-started")?.scrollIntoView({ behavior: "smooth" });
+    }, 150);
+    return () => clearTimeout(id);
+  }, []);
+
   // Fetch current FPL gameweek on mount
   useEffect(() => {
     fetch("/api/fpl/current-gameweek")

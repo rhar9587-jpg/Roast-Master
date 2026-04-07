@@ -12,6 +12,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type { Card, RoastResponse } from "@shared/schema";
+import { track } from "@/lib/track";
 import type { WrappedCardProps } from "@/components/WrappedCard";
 import { WrappedCard } from "@/components/WrappedCard";
 import { Button } from "@/components/ui/button";
@@ -149,10 +150,53 @@ function parseWeeklySignals(data: RoastResponse) {
   return { medianScore, closestMargin, blowoutMargin, closestGame };
 }
 
+function buildWeeklyRoastClipboardText(data: RoastResponse): string {
+  const lines = ["🔥 Fantasy Roast 🔥", ""];
+  lines.push(data.headline, "");
+
+  const engineCards = normalizeWeeklyEngineCards(data);
+  const embarrass = engineCards.find((c) =>
+    /embarrass|blowout|fraud|disaster/i.test(c.type)
+  );
+  if (embarrass?.subtitle?.trim()) {
+    lines.push(`💀 Biggest embarrassment: ${embarrass.subtitle.trim()}`, "");
+  } else if (embarrass?.title) {
+    lines.push(`💀 Biggest embarrassment: ${embarrass.title}`, "");
+  } else {
+    const low = data.stats.lowestScorer;
+    lines.push(
+      `💀 Biggest embarrassment: ${low.username} (${safeNum(low.score).toFixed(1)} pts)`,
+      ""
+    );
+  }
+
+  const sig = parseWeeklySignals(data);
+  if (sig?.closestGame) {
+    lines.push(
+      `🔥 Rivalry: ${sig.closestGame.teamA} vs ${sig.closestGame.teamB}`,
+      ""
+    );
+  } else if (data.matchup) {
+    lines.push(
+      `🔥 Rivalry: ${data.matchup.you.username} vs ${data.matchup.opponent.username}`,
+      ""
+    );
+  }
+
+  const summary = data.groupChatSummary?.trim();
+  if (summary) {
+    lines.push(summary, "");
+  }
+
+  lines.push("Get yours: https://fantasyroast.net");
+  return lines.join("\n");
+}
+
 function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremium: boolean }) {
   const [copied, setCopied] = useState(false);
   const [copiedOneLiner, setCopiedOneLiner] = useState(false);
   const [copiedMatchup, setCopiedMatchup] = useState(false);
+  const [copiedFullRoast, setCopiedFullRoast] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [cardIndex, setCardIndex] = useState(0);
   const summary = data.groupChatSummary?.trim();
@@ -218,6 +262,21 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
     }
   };
 
+  const copyFullWeeklyRoast = async () => {
+    const text = buildWeeklyRoastClipboardText(data);
+    try {
+      await navigator.clipboard.writeText(text);
+      track("weekly_roast_copied", {
+        league_id: data.league.league_id,
+        week: data.week,
+      });
+      setCopiedFullRoast(true);
+      setTimeout(() => setCopiedFullRoast(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const currentSlide = slides[cardIndex];
 
   const renderEngineCard = (idx: number) => {
@@ -238,11 +297,33 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-4">
-      <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/10 to-muted/30 px-4 py-4 md:px-6 md:py-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Week verdict</p>
-        <p className="text-lg md:text-xl font-semibold text-foreground leading-snug">{data.headline}</p>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+    <div className="w-full max-w-3xl mx-auto space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1 min-w-0">
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
+            🔥 THIS WEEK&apos;S ROAST
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Week {data.week}
+            {data.league?.name ? ` · ${data.league.name}` : ""}
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          className="shrink-0 font-semibold interact-cta"
+          onClick={copyFullWeeklyRoast}
+        >
+          {copiedFullRoast ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+          {copiedFullRoast ? "Copied" : "🔥 Copy full roast"}
+        </Button>
+      </div>
+
+      <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/10 to-muted/30 px-4 py-6 md:px-8 md:py-8">
+        <p className="text-2xl md:text-3xl font-bold text-foreground leading-tight tracking-tight">
+          {data.headline}
+        </p>
+        <div className="mt-5 flex flex-wrap gap-2 text-xs text-muted-foreground">
           <span className="rounded-full border bg-background/80 px-2 py-0.5">
             Avg {safeNum(data.stats.averageScore).toFixed(1)} pts
           </span>
@@ -341,9 +422,14 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
           </p>
         ) : (
           <>
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm text-muted-foreground">
-                Card {cardIndex + 1} of {slideCount}
+            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+              <div className="space-y-0.5">
+                <p className="text-sm font-bold text-foreground tracking-tight">
+                  🔥 {slideCount} ROAST{slideCount === 1 ? "" : "S"} THIS WEEK — KEEP GOING →
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Swipe or tap to see who got cooked
+                </p>
               </div>
               <div className="flex gap-2">
                 <button

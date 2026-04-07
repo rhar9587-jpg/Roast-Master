@@ -145,7 +145,9 @@ export function StickyUpgradeBar({
             <div className="flex items-center gap-2 shrink-0">
               <div className="flex flex-col items-center">
                 <Button
-                  onClick={handleScrollToTop}
+                  onClick={() => {
+                    window.location.href = "/#get-started";
+                  }}
                   size="sm"
                   className="font-semibold whitespace-nowrap interact-cta"
                 >
