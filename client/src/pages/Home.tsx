@@ -190,13 +190,22 @@ export default function Home() {
               <strong className="text-foreground font-semibold">weekly roast</strong>, and{" "}
               <strong className="text-foreground font-semibold">season recap</strong> — one unlock.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" onClick={handleViewLeagueHistory} className="font-semibold interact-cta">
-                Unlock for you — $2.99
+            <p className="text-base text-foreground/90 max-w-lg mx-auto font-medium leading-snug italic border-l-4 border-primary/40 pl-4 py-1 text-left">
+              &ldquo;The Landlord owns half the league. Rent is due.&rdquo;
+              <span className="block text-xs font-normal not-italic text-muted-foreground mt-1">
+                Example roast — see the real grid and cards in 1 click.
+              </span>
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center items-stretch sm:items-center">
+              <Button size="lg" onClick={handleTryExampleLeague} className="font-semibold interact-cta">
+                Try demo league — free
+              </Button>
+              <Button size="lg" variant="outline" onClick={() => document.getElementById("get-started")?.scrollIntoView({ behavior: "smooth" })} className="font-semibold interact-secondary">
+                Use my Sleeper league
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground">
-              One-time payment • No subscription
+            <p className="text-xs text-muted-foreground">
+              No login for demo • Unlock your league later for $2.99 (one-time)
             </p>
           </section>
 
@@ -429,7 +438,7 @@ export default function Home() {
           </section>
 
           {/* Form Section */}
-          <section className="rounded-lg border border-muted/50 bg-muted/20 p-6 space-y-4">
+          <section id="get-started" className="rounded-lg border border-muted/50 bg-muted/20 p-6 space-y-4 scroll-mt-24">
             <div className="mb-4">
               <h2 className="text-lg font-semibold">Get Started</h2>
               <p className="text-sm text-muted-foreground mt-1">

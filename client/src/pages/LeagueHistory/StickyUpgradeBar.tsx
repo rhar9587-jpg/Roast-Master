@@ -42,6 +42,7 @@ export function StickyUpgradeBar({
 }: Props) {
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissedState, setIsDismissedState] = useState(false);
+  const [demoStickyReady, setDemoStickyReady] = useState(!isDemo);
 
   useEffect(() => {
     if (isDismissed()) {
@@ -52,9 +53,23 @@ export function StickyUpgradeBar({
   }, []);
 
   useEffect(() => {
+    if (!isDemo) {
+      setDemoStickyReady(true);
+      return;
+    }
+    setDemoStickyReady(false);
+    const id = window.setTimeout(() => setDemoStickyReady(true), 12000);
+    return () => window.clearTimeout(id);
+  }, [isDemo]);
+
+  useEffect(() => {
     if (isDismissedState) return;
 
     const handleScroll = () => {
+      if (!demoStickyReady) {
+        setIsVisible(false);
+        return;
+      }
       const banner = document.getElementById("conversion-banner");
       if (!banner) {
         setIsVisible(false);
@@ -63,8 +78,8 @@ export function StickyUpgradeBar({
 
       const rect = banner.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
-      // Show when banner is ~50% past viewport bottom
-      const threshold = viewportHeight * 0.5;
+      // Demo: show once banner scrolls past sooner. Real league: wait until user scrolls further.
+      const threshold = viewportHeight * (isDemo ? 0.5 : 1.1);
 
       if (rect.bottom < -threshold) {
         setIsVisible(true);
@@ -79,7 +94,7 @@ export function StickyUpgradeBar({
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [isDismissedState]);
+  }, [isDismissedState, demoStickyReady, isDemo]);
 
   const handleDismiss = () => {
     setDismissed();

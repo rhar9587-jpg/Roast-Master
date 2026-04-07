@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/tooltip";
 import { LeagueSelector } from "./LeagueSelector";
 import { InsightsDashboard } from "./InsightsDashboard";
+import { LeagueReceiptsSnapshot } from "./LeagueReceiptsSnapshot";
 import { HeroReceipts } from "./HeroReceipts";
 import { DominanceGrid } from "./DominanceGrid";
 import { StorylinesMiniCards } from "./StorylinesMiniCards";
@@ -1282,6 +1283,13 @@ export default function LeagueHistoryPage() {
     return [...heroReceipts, card];
   }, [heroReceipts, nflDoppelganger]);
 
+  const snapshotBonusLine = useMemo(() => {
+    const h = heroReceiptsWithDoppelganger[0];
+    if (!h) return null;
+    const punch = h.punchline?.trim();
+    return punch ? `${h.title}: ${h.name} — ${punch}` : `${h.title}: ${h.name}`;
+  }, [heroReceiptsWithDoppelganger]);
+
   // Compute additional mini cards from seasonStats and weeklyMatchups
   const additionalMiniCards = useMemo(
     () =>
@@ -2361,6 +2369,32 @@ export default function LeagueHistoryPage() {
       {/* InsightsDashboard - Personal hook cards ABOVE the grid for conversion */}
       {activeMode === "history" && hasData && hasEnoughData && (
         <section>
+          <div className="mb-4">
+            <LeagueReceiptsSnapshot
+              leagueId={leagueId.trim()}
+              leagueName={data?.league?.name ?? "Your league"}
+              landlord={landlord}
+              mostOwned={
+                mostOwned
+                  ? {
+                      victimName: mostOwned.victimName,
+                      timesOwned: mostOwned.timesOwned,
+                      worstNemesisName: mostOwned.worstNemesisName,
+                    }
+                  : null
+              }
+              biggestRivalry={
+                biggestRivalry
+                  ? {
+                      aName: biggestRivalry.aName,
+                      bName: biggestRivalry.bName,
+                      record: biggestRivalry.record,
+                    }
+                  : null
+              }
+              bonusRoastLine={snapshotBonusLine}
+            />
+          </div>
           <h2 className="text-sm font-medium text-muted-foreground mb-2">
             Your league's biggest moments
           </h2>
@@ -2634,14 +2668,6 @@ export default function LeagueHistoryPage() {
             )}
           </DialogContent>
         </Dialog>
-      )}
-
-      {activeMode === "history" && hasData && hasEnoughData && !showPremiumContent && (
-        <section className="pt-2">
-          <Button onClick={handleCheckout} className="w-full sm:w-auto font-semibold interact-cta">
-            See the rest of your roast — $2.99
-          </Button>
-        </section>
       )}
 
       {/* Conversion Banner - appears after Storylines */}
