@@ -28,35 +28,24 @@ export type LeagueReceiptsSnapshotProps = {
 
 export function buildLeagueRoastClipboardText(p: LeagueReceiptsSnapshotProps): string {
   const lines: string[] = ["🔥 Fantasy Roast 🔥", ""];
-  const hasInsights =
-    p.landlord || p.mostOwned || p.biggestRivalry || p.bonusRoastLine?.trim();
-
-  if (!hasInsights) {
-    lines.push("This league is chaos. No clear landlord… yet.", "");
-    lines.push("Get yours: https://fantasyroast.net");
-    return lines.join("\n");
-  }
 
   if (p.landlord) {
-    lines.push(
-      `${p.landlord.landlordName} owns ${p.landlord.victimCount} manager${p.landlord.victimCount === 1 ? "" : "s"}. Rent is due.`,
-      "",
-    );
+    lines.push(`${p.landlord.landlordName} owns ${p.landlord.victimCount} manager${p.landlord.victimCount === 1 ? "" : "s"}. Rent is due.`);
+  } else {
+    lines.push("This league is chaos. No clear landlord yet.");
   }
 
   if (p.mostOwned) {
-    lines.push(`Biggest victim: ${p.mostOwned.victimName}`, "");
+    lines.push(
+      `💀 Biggest victim: ${p.mostOwned.victimName} — ${p.mostOwned.timesOwned} loss${p.mostOwned.timesOwned === 1 ? "" : "es"} to ${p.mostOwned.worstNemesisName}`
+    );
   }
 
   if (p.biggestRivalry) {
-    lines.push(`Rivalry: ${p.biggestRivalry.aName} vs ${p.biggestRivalry.bName}`, "");
+    lines.push(`🔥 Rivalry: ${p.biggestRivalry.aName} vs ${p.biggestRivalry.bName} — dead even`);
   }
 
-  if (p.bonusRoastLine?.trim()) {
-    lines.push(p.bonusRoastLine.trim(), "");
-  }
-
-  lines.push("Get yours: https://fantasyroast.net");
+  lines.push("", "Get yours: https://fantasyroast.net");
   return lines.join("\n");
 }
 
@@ -107,14 +96,17 @@ export function LeagueReceiptsSnapshot({
             {leagueName ? `${leagueName} — ` : null}the receipts in one glance.
           </p>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          className="shrink-0 font-semibold interact-cta"
-          onClick={copyLeagueRoast}
-        >
-          {copied ? "Copied" : "🔥 Copy league roast"}
-        </Button>
+        <div className="shrink-0">
+          <Button
+            type="button"
+            size="sm"
+            className="font-semibold interact-cta"
+            onClick={copyLeagueRoast}
+          >
+            {copied ? "Copied" : "🔥 Send this to your league"}
+          </Button>
+          <p className="text-[11px] text-muted-foreground mt-1">Perfect for your group chat 💬</p>
+        </div>
       </div>
 
       {!hasInsights ? (

@@ -151,44 +151,21 @@ function parseWeeklySignals(data: RoastResponse) {
 }
 
 function buildWeeklyRoastClipboardText(data: RoastResponse): string {
-  const lines = ["🔥 Fantasy Roast 🔥", ""];
-  lines.push(data.headline, "");
+  const lines: string[] = ["🔥 Fantasy Roast 🔥", ""];
 
-  const engineCards = normalizeWeeklyEngineCards(data);
-  const embarrass = engineCards.find((c) =>
-    /embarrass|blowout|fraud|disaster/i.test(c.type)
-  );
-  if (embarrass?.subtitle?.trim()) {
-    lines.push(`💀 Biggest embarrassment: ${embarrass.subtitle.trim()}`, "");
-  } else if (embarrass?.title) {
-    lines.push(`💀 Biggest embarrassment: ${embarrass.title}`, "");
-  } else {
-    const low = data.stats.lowestScorer;
-    lines.push(
-      `💀 Biggest embarrassment: ${low.username} (${safeNum(low.score).toFixed(1)} pts)`,
-      ""
-    );
-  }
+  lines.push(data.headline.trim());
+
+  const low = data.stats.lowestScorer;
+  lines.push(`💀 Biggest embarrassment: ${low.username} (${safeNum(low.score).toFixed(1)} pts 💀)`);
 
   const sig = parseWeeklySignals(data);
   if (sig?.closestGame) {
-    lines.push(
-      `🔥 Rivalry: ${sig.closestGame.teamA} vs ${sig.closestGame.teamB}`,
-      ""
-    );
+    lines.push(`🔥 Rivalry: ${sig.closestGame.teamA} vs ${sig.closestGame.teamB}`);
   } else if (data.matchup) {
-    lines.push(
-      `🔥 Rivalry: ${data.matchup.you.username} vs ${data.matchup.opponent.username}`,
-      ""
-    );
+    lines.push(`🔥 Rivalry: ${data.matchup.you.username} vs ${data.matchup.opponent.username}`);
   }
 
-  const summary = data.groupChatSummary?.trim();
-  if (summary) {
-    lines.push(summary, "");
-  }
-
-  lines.push("Get yours: https://fantasyroast.net");
+  lines.push("", "Get yours: https://fantasyroast.net");
   return lines.join("\n");
 }
 
@@ -308,15 +285,18 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
             {data.league?.name ? ` · ${data.league.name}` : ""}
           </p>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          className="shrink-0 font-semibold interact-cta"
-          onClick={copyFullWeeklyRoast}
-        >
-          {copiedFullRoast ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-          {copiedFullRoast ? "Copied" : "🔥 Copy full roast"}
-        </Button>
+        <div className="shrink-0">
+          <Button
+            type="button"
+            size="sm"
+            className="font-semibold interact-cta"
+            onClick={copyFullWeeklyRoast}
+          >
+            {copiedFullRoast ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+            {copiedFullRoast ? "Copied" : "🔥 Copy and drop in your group chat"}
+          </Button>
+          <p className="text-[11px] text-muted-foreground mt-1">Perfect for your group chat 💬</p>
+        </div>
       </div>
 
       <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/10 to-muted/30 px-4 py-6 md:px-8 md:py-8">
