@@ -107,7 +107,7 @@ export function WeeklyCommissionerEmailSection({
     >
       <h3 className="text-sm font-semibold text-foreground">Weekly Commissioner Email</h3>
       <p className="text-xs text-muted-foreground">
-        Same week as your roast above. Preview or send the league recap — power rankings and matchups ship in the email.
+        This email matches the same week as your roast. Preview it first, then send rankings and matchup notes to your commissioner.
       </p>
       {!showPremiumContent && !isDemo && (
         <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-3 text-sm text-amber-800 dark:text-amber-200">

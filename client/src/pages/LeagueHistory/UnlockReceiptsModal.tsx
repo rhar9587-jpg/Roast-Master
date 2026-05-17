@@ -97,7 +97,7 @@ export function UnlockReceiptsModal({
             Unlock the full league for you
           </DialogTitle>
           <DialogDescription className="pt-2">
-            One unlock opens all three outcomes: league receipts, weekly roast (cards + commissioner email), and season recap. No subscription.
+            Unlock once to get league receipts, weekly roast content (cards + commissioner email), and your season recap. No subscription.
           </DialogDescription>
         </DialogHeader>
 
@@ -118,7 +118,7 @@ export function UnlockReceiptsModal({
             </div>
           </div>
           <p className="text-xs text-muted-foreground text-center">
-            Why pay? Because every group chat needs a roast.
+            Built for league chats, weekly rivalries, and commissioner chaos.
           </p>
         </div>
 
@@ -168,7 +168,7 @@ export function UnlockReceiptsModal({
 
         {/* CTA Subtext */}
         <p className="text-sm font-semibold text-center mt-2">
-          Risk-free • 30-day money-back guarantee
+          Try it with a 30-day money-back guarantee.
         </p>
 
         {/* Comp Code Section */}

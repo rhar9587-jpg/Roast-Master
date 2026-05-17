@@ -107,7 +107,7 @@ export function WrappedCard({
 
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareUrl);
-        alert(isPremium ? "Link copied ✅" : "Link copied ✅ (Unlock for clean exports)");
+        alert(isPremium ? "Link copied ✅" : "Link copied ✅. Unlock for clean exports.");
         return;
       }
 

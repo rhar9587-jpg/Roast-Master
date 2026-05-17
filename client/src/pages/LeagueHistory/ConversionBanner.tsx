@@ -127,7 +127,7 @@ export function ConversionBanner({
             </Button>
           </div>
           <p className="text-sm font-semibold text-center">
-            Risk-free • 30-day money-back guarantee
+            Try it with a 30-day money-back guarantee.
           </p>
 
           {/* Trust & Social Proof */}
@@ -185,7 +185,7 @@ export function ConversionBanner({
           </Button>
         </div>
         <p className="text-sm font-semibold text-center">
-          Risk-free • 30-day money-back guarantee
+          Try it with a 30-day money-back guarantee.
         </p>
 
         {/* Comp Code Section */}

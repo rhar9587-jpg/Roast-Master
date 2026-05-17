@@ -139,7 +139,7 @@ export function StickyUpgradeBar({
                 {`This is demo data. Get the real roasts for YOUR league • $${PRICE}`}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                League receipts, weekly roast, season recap — one unlock.
+                Get league receipts, weekly roast content, and your season recap.
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -188,7 +188,7 @@ export function StickyUpgradeBar({
               {`Unlock the full league for you — $${PRICE}`}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-              League receipts, weekly roast, season recap — one unlock.
+              Get league receipts, weekly roast content, and your season recap.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -218,7 +218,7 @@ export function StickyUpgradeBar({
           </div>
         </div>
         <div className="text-xs font-semibold text-muted-foreground mt-1">
-          Risk-free • 30-day money-back guarantee
+          Try it with a 30-day money-back guarantee.
         </div>
       </div>
     </div>

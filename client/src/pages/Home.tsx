@@ -195,9 +195,9 @@ export default function Home() {
               See who owns who. Roast accordingly.
             </p>
             <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-              One product, three outcomes: <strong className="text-foreground font-semibold">league receipts</strong>,{" "}
+              One unlock gives you <strong className="text-foreground font-semibold">league receipts</strong>,{" "}
               <strong className="text-foreground font-semibold">weekly roast</strong>, and{" "}
-              <strong className="text-foreground font-semibold">season recap</strong> — one unlock.
+              <strong className="text-foreground font-semibold">season recap</strong>.
             </p>
             <p className="text-base text-foreground/90 max-w-lg mx-auto font-medium leading-snug italic border-l-4 border-primary/40 pl-4 py-1 text-left">
               &ldquo;The Landlord owns half the league. Rent is due.&rdquo;
@@ -214,7 +214,7 @@ export default function Home() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              No login for demo • Unlock your league later for $2.99 (one-time)
+              No login for demo. Unlock your league later for a one-time $2.99.
             </p>
           </section>
 
@@ -243,9 +243,9 @@ export default function Home() {
                   </p>
                 </CardHeader>
                 <CardContent className="pt-0 text-xs text-muted-foreground space-y-1">
-                  <p>Roast / share mode: built for the group chat (highest retention).</p>
+                  <p>Roast and share mode: made for league group chats.</p>
                   <p className="text-foreground/90 font-medium">
-                    5–6 league cards every week + commissioner email (same narrative).
+                    5–6 league cards each week plus a commissioner email in the same voice.
                   </p>
                 </CardContent>
               </Card>

@@ -538,7 +538,7 @@ export function BaseballCard(props: LegacyProps | V2Props) {
 
   const renderBack = () => {
     const backHeadline = back?.headline ?? "ROAST NOTES";
-    const backSubhead = back?.subhead ?? "Scouting report (unverified)";
+    const backSubhead = back?.subhead ?? "Scouting report - unofficial";
     const backLines = (back?.lines?.length ? back.lines : lines).slice(0, 5);
 
     return (
