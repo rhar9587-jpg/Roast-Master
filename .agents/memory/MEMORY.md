@@ -1,0 +1,1 @@
+- [Vitest publishing constraint](vitest-publishing-constraint.md) — Replit blocks Node 20-compatible Vitest releases; do not re-add one without checking publish compatibility.
