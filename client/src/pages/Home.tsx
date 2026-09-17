@@ -15,7 +15,7 @@ export default function Home() {
   const [sport, setSport] = useState<Sport>("nfl");
   
   const [leagueId, setLeagueId] = useState("");
-  const [season, setSeason] = useState("2025");
+  const [season, setSeason] = useState("2026");
   const [username, setUsername] = useState("");
 
   const [leagues, setLeagues] = useState<LeagueOption[]>([]);
@@ -484,6 +484,7 @@ export default function Home() {
                 >
                   <option value="2024">2024</option>
                   <option value="2025">2025</option>
+                  <option value="2026">2026</option>
                 </select>
               </div>
 
