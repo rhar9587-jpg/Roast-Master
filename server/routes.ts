@@ -89,8 +89,27 @@ const serverStartedAt = Date.now();
 const WEEKLY_EMAIL_V2_ENABLED = String(process.env.WEEKLY_EMAIL_V2_ENABLED || "false").toLowerCase() === "true";
 const unlockedLeagueIds = new Set<string>();
 
+function parseFreeLeagueIds(raw: string | undefined): Set<string> {
+  return new Set(
+    String(raw || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
+  );
+}
+
+const freeLeagueIds = parseFreeLeagueIds(process.env.FREE_LEAGUE_IDS);
+
 // Initialize DB on startup (async, runs in background)
 ensureDb().catch((err) => console.error("[Analytics] DB init error:", err));
+
+// Persist free-league allowlist as unlocked so server gates stay consistent across restarts
+for (const leagueId of freeLeagueIds) {
+  unlockedLeagueIds.add(leagueId);
+  void markLeagueUnlocked(leagueId, "free_allowlist").catch((err) => {
+    console.error("[unlock-store] failed to persist free league unlock:", leagueId, err);
+  });
+}
 
 function trackEvent(
   type: string,
@@ -1153,7 +1172,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     if (leagueId === STATIC_DEMO_LEAGUE_ID) {
       return res.status(400).json({ error: "Send is not available for the demo league." });
     }
-    const isUnlockedLeague = unlockedLeagueIds.has(leagueId) || await isLeagueUnlockedPersistent(leagueId);
+    const isUnlockedLeague =
+      freeLeagueIds.has(leagueId) ||
+      unlockedLeagueIds.has(leagueId) ||
+      (await isLeagueUnlockedPersistent(leagueId));
     if (!isUnlockedLeague && await hasUsedFreeSend(leagueId)) {
       console.log(JSON.stringify({ event: "weekly_email_send_denied", leagueId, week, mode, reason: "free_send_used" }));
       return res.status(402).json({ code: "FREE_SEND_USED", error: "You've used your free send. Unlock to send again." });

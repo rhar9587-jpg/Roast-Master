@@ -1,6 +1,16 @@
 const UNLOCKED_LEAGUES_KEY = "fantasy-roast-unlockedLeagues";
 const FREE_SEND_USED_KEY_PREFIX = "fantasy-roast-freeSendUsed-";
 
+function getFreeLeagueIds(): Set<string> {
+  const raw = String(import.meta.env.VITE_FREE_LEAGUE_IDS || "");
+  return new Set(
+    raw
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
+  );
+}
+
 export function hasUsedFreeSend(leagueId: string): boolean {
   if (typeof window === "undefined") return false;
   const trimmed = leagueId.trim();
@@ -31,6 +41,7 @@ export function isLeagueUnlocked(leagueId: string): boolean {
   if (typeof window === "undefined") return false;
   const trimmed = leagueId.trim();
   if (!trimmed) return false;
+  if (getFreeLeagueIds().has(trimmed)) return true;
   return getUnlockedLeagues().includes(trimmed);
 }
 

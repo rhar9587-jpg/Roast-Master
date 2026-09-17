@@ -7,4 +7,5 @@ project.zip
 ziJIX1mB
 .env
 .env.*
+!.env.example
 *.log
