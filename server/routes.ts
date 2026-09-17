@@ -1055,6 +1055,36 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true });
   });
 
+  // Current NFL season week (Sleeper state) — used for weekly roast / email defaults
+  app.get("/api/nfl/state", async (_req: Request, res: Response) => {
+    try {
+      const state = await fetchJson<{
+        week?: number;
+        display_week?: number;
+        leg?: number;
+        season?: string;
+        season_type?: string;
+      }>("https://api.sleeper.app/v1/state/nfl");
+
+      const previewWeekRaw = Number(state.display_week ?? state.week ?? state.leg ?? 0);
+      const previewWeek = Math.min(18, Math.max(1, previewWeekRaw || 1));
+      const recapWeek = Math.max(1, previewWeek - 1);
+
+      return res.json({
+        season: state.season ?? null,
+        season_type: state.season_type ?? null,
+        week: state.week ?? null,
+        display_week: state.display_week ?? null,
+        leg: state.leg ?? null,
+        previewWeek,
+        recapWeek,
+      });
+    } catch (error: any) {
+      console.error("NFL state fetch error:", error);
+      return res.status(500).json({ error: error?.message || "Failed to fetch NFL state" });
+    }
+  });
+
   // Option A: resolve roster_id by username/display_name
   app.get("/api/resolve-roster", async (req: Request, res: Response) => {
     const league_id = String(req.query.league_id || "").trim();
@@ -1118,12 +1148,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   // Weekly Commissioner Email — preview (returns HTML for browser). Query: mode=preview|recap (default recap).
   app.get("/api/leagues/:leagueId/weekly-email/preview", async (req: Request, res: Response) => {
     const leagueId = String(req.params.leagueId || "").trim();
-    const week = Number(req.query.week) || 6;
+    const week = Number(req.query.week);
     const note = typeof req.query.note === "string" ? req.query.note.trim() : undefined;
     const signoff = typeof req.query.signoff === "string" ? req.query.signoff.trim() : undefined;
     const mode = String(req.query.mode || "recap").toLowerCase() === "preview" ? "preview" : "recap";
     if (!leagueId) {
       return res.status(400).send("Missing leagueId.");
+    }
+    if (!Number.isFinite(week) || week < 1) {
+      return res.status(400).send("Week must be 1–18.");
     }
     try {
       let html: string;
@@ -1137,7 +1170,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), ...(signoff ? { commissionerSignoff: signoff.slice(0, 180) } : {}), appUrl: appOrigin });
         }
       } else {
-        if (week < 1) return res.status(400).send("Week must be 1–18.");
         if (mode === "preview") {
           const result = await getWeeklyPreviewEmail(leagueId, week, note, signoff, appOrigin);
           html = result.emailHtml;
@@ -1236,11 +1268,16 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   // Weekly Commissioner Email (power rankings + HTML email) — GET (legacy). Query: mode=preview|recap (default recap).
   app.get("/api/weekly-email", async (req: Request, res: Response) => {
     const league_id = String(req.query.league_id || "").trim();
-    const week = Number(req.query.week) || 6;
+    const week = Number(req.query.week);
     const format = String(req.query.format || "json").toLowerCase(); // "json" | "html"
     const mode = req.query.mode === "preview" ? "preview" : "recap";
+    const note = typeof req.query.note === "string" ? req.query.note.trim() : undefined;
+    const signoff = typeof req.query.signoff === "string" ? req.query.signoff.trim().slice(0, 180) : undefined;
     if (!league_id) {
       return res.status(400).json({ error: "league_id is required" });
+    }
+    if (!Number.isFinite(week) || week < 1) {
+      return res.status(400).json({ error: "week (>= 1) is required" });
     }
     try {
       const appOrigin = publicAppUrl(req);
@@ -1252,11 +1289,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         if (league_id === STATIC_DEMO_LEAGUE_ID) {
           const demoPayload = getDemoWeeklyPreviewPayload(week);
           leagueName = demoPayload.leagueName;
-          emailHtml = generateWeeklyEmail({ ...demoPayload, appUrl: appOrigin });
+          emailHtml = generateWeeklyEmail({
+            ...demoPayload,
+            ...(note ? { commissionerNote: note } : {}),
+            ...(signoff ? { commissionerSignoff: signoff } : {}),
+            appUrl: appOrigin,
+          });
           subject = `${leagueName} — Week ${week} Matchup Preview`;
         } else {
-          if (week < 1) return res.status(400).json({ error: "week (>= 1) is required" });
-          const result = await getWeeklyPreviewEmail(league_id, week, undefined, undefined, appOrigin);
+          const result = await getWeeklyPreviewEmail(league_id, week, note, signoff, appOrigin);
           leagueName = result.leagueName;
           emailHtml = result.emailHtml;
           subject = `${leagueName} — Week ${week} Matchup Preview`;
@@ -1265,13 +1306,17 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         if (league_id === STATIC_DEMO_LEAGUE_ID) {
           const demoPayload = getDemoWeeklyEmailPayload(week);
           leagueName = demoPayload.leagueName;
-          emailHtml = generateWeeklyEmail({ ...demoPayload, appUrl: appOrigin });
+          emailHtml = generateWeeklyEmail({
+            ...demoPayload,
+            ...(note ? { commissionerNote: note } : {}),
+            ...(signoff ? { commissionerSignoff: signoff } : {}),
+            appUrl: appOrigin,
+          });
           rankings = demoPayload.rankings;
           subject = `${leagueName} — Week ${week} Power Rankings`;
         } else {
-          if (week < 1) return res.status(400).json({ error: "week (>= 1) is required" });
           const previousRankings = getStoredPreviousRankings(league_id, week);
-          const result = await getWeeklyCommissionerEmail(league_id, week, previousRankings, undefined, undefined, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
+          const result = await getWeeklyCommissionerEmail(league_id, week, previousRankings, note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
           leagueName = result.leagueName;
           emailHtml = result.emailHtml;
           rankings = result.rankings;

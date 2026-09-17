@@ -50,7 +50,6 @@ export type WeeklyCommissionerEmailSectionProps = {
   leagueId: string;
   leagueWeek: number;
   weeklyCommissionerEmailMode: "recap" | "preview";
-  setWeeklyCommissionerEmailMode: (m: "recap" | "preview") => void;
   weeklyCommissionerNote: string;
   setWeeklyCommissionerNote: (v: string) => void;
   weeklyCommissionerSignoff: string;
@@ -74,7 +73,6 @@ export function WeeklyCommissionerEmailSection({
   leagueId,
   leagueWeek,
   weeklyCommissionerEmailMode,
-  setWeeklyCommissionerEmailMode,
   weeklyCommissionerNote,
   setWeeklyCommissionerNote,
   weeklyCommissionerSignoff,
@@ -99,15 +97,25 @@ export function WeeklyCommissionerEmailSection({
   const [sendOpen, setSendOpen] = useState(false);
 
   const trimmedId = leagueId.trim();
+  const modeLabel = weeklyCommissionerEmailMode === "recap" ? "Recap" : "Preview";
+  const helperText =
+    weeklyCommissionerEmailMode === "recap"
+      ? `Recap looks back at Week ${leagueWeek}.`
+      : `Preview looks ahead at Week ${leagueWeek}.`;
 
   return (
     <section
       id="weekly-commissioner-email"
       className="rounded-lg border bg-muted/20 p-4 space-y-4 scroll-mt-24"
     >
-      <h3 className="text-sm font-semibold text-foreground">Weekly Commissioner Email</h3>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-foreground">
+          Commissioner email · Week {leagueWeek} · {modeLabel}
+        </h3>
+      </div>
       <p className="text-xs text-muted-foreground">
-        This email matches the same week as your roast. Preview it first, then send rankings and matchup notes to your commissioner.
+        {helperText} Preview it first, then send rankings and matchup notes to your commissioner.
+        Week and Recap/Preview are set in Week context above.
       </p>
       {!showPremiumContent && !isDemo && (
         <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-3 text-sm text-amber-800 dark:text-amber-200">
@@ -129,22 +137,6 @@ export function WeeklyCommissionerEmailSection({
 
       <div className="space-y-3">
         <p className="text-xs font-medium text-foreground">Build email</p>
-        <div>
-          <label className="block text-xs font-medium text-muted-foreground">Email type</label>
-          <select
-            value={weeklyCommissionerEmailMode}
-            onChange={(e) => setWeeklyCommissionerEmailMode(e.target.value as "recap" | "preview")}
-            className="mt-1 w-full max-w-md rounded-lg border px-2 py-1.5 text-sm"
-            disabled={!canGenerateAndPreviewWeeklyEmail}
-            title="Recap = after scores are in; Preview = before the week."
-          >
-            <option value="recap">Recap (post-week)</option>
-            <option value="preview">Preview (pre-week)</option>
-          </select>
-        </div>
-        <p className="text-xs text-muted-foreground -mt-1">
-          Recap = after scores are in; Preview = before the week kicks off.
-        </p>
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
@@ -153,15 +145,24 @@ export function WeeklyCommissionerEmailSection({
             onClick={async () => {
               setWeeklyEmailGenerateLoading(true);
               try {
-                const res = await fetch(
-                  `/api/weekly-email?league_id=${encodeURIComponent(trimmedId)}&week=${leagueWeek}`,
-                );
+                const params = new URLSearchParams({
+                  league_id: trimmedId,
+                  week: String(leagueWeek),
+                  mode: weeklyCommissionerEmailMode,
+                });
+                if (weeklyCommissionerNote.trim()) params.set("note", weeklyCommissionerNote.trim());
+                if (weeklyCommissionerSignoff.trim()) params.set("signoff", weeklyCommissionerSignoff.trim());
+                const res = await fetch(`/api/weekly-email?${params.toString()}`);
                 if (!res.ok) {
                   const data = await res.json().catch(() => ({}));
                   throw new Error(data?.error || "Failed to generate email.");
                 }
                 toast({ title: "Email ready", description: "Use Preview or Send to Commissioner." });
-                track("weekly_email_generated", { league_id: trimmedId, week: leagueWeek });
+                track("weekly_email_generated", {
+                  league_id: trimmedId,
+                  week: leagueWeek,
+                  mode: weeklyCommissionerEmailMode,
+                });
               } catch (err: unknown) {
                 toast({
                   title: "Could not generate email",
