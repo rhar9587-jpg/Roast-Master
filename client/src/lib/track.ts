@@ -1,33 +1,64 @@
-// Simple client-side analytics tracker
-// Non-blocking, never throws
+type AnalyticsValue = string | number | boolean;
+type TrackProperties = Record<string, AnalyticsValue | null | undefined>;
+type AnalyticsData = Record<string, AnalyticsValue>;
 
-type TrackProperties = Record<string, string | number | boolean | null | undefined>;
-
-export function track(event: string, properties?: TrackProperties): void {
-  // Fire and forget - never block UI
-  try {
-    fetch("/api/track", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event, properties: properties || {} }),
-    }).catch(() => {
-      // Silently fail - analytics should never break the app
-    });
-  } catch {
-    // Silently fail
+declare global {
+  interface Window {
+    umami?: {
+      track(name: string, data?: AnalyticsData): void;
+    };
   }
 }
 
+const PRIVATE_PROPERTY_KEYS = new Set([
+  "username",
+  "league_id",
+  "league_name",
+  "card_name",
+]);
+
+export function trackEvent(event: string, properties?: TrackProperties): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    const data = properties
+      ? Object.entries(properties).reduce<AnalyticsData>((safe, [key, value]) => {
+          if (
+            !PRIVATE_PROPERTY_KEYS.has(key) &&
+            (typeof value === "string" ||
+              typeof value === "number" ||
+              typeof value === "boolean")
+          ) {
+            safe[key] = value;
+          }
+          return safe;
+        }, {})
+      : undefined;
+
+    window.umami?.track(event, data);
+  } catch {
+    // Analytics must never break the app.
+  }
+}
+
+// Backwards-compatible alias used by existing components.
+export const track = trackEvent;
+
 // Convenience helpers for common events
 export const trackFunnel = {
-  homeVisit: () => track("home_visit"),
-  exampleClicked: () => track("example_clicked"),
-  usernameSubmitted: (username: string) => track("username_submitted", { username }),
-  leaguesReturned: (count: number, username: string) => track("leagues_returned", { count, username }),
-  leagueSelected: (leagueId: string, leagueName: string) => track("league_selected", { league_id: leagueId, league_name: leagueName }),
-  leagueHistoryLoaded: (leagueId: string) => track("league_history_loaded", { league_id: leagueId }),
-  unlockClicked: (leagueId: string, source: string) => track("unlock_clicked", { league_id: leagueId, source }),
-  shareClicked: (cardType: string, leagueId: string, isPremium: boolean) => track("share_clicked", { card_type: cardType, league_id: leagueId, is_premium: isPremium }),
-  purchaseSuccess: (leagueId: string) => track("purchase_success", { league_id: leagueId }),
-  purchaseCancel: (leagueId: string) => track("purchase_cancel", { league_id: leagueId }),
+  exampleClicked: () => trackEvent("demo_league_opened"),
+  usernameSubmitted: (season: string) =>
+    trackEvent("league_search_submitted", { season }),
+  leaguesReturned: (count: number, season: string) =>
+    trackEvent("league_search_completed", { count, season }),
+  leagueSelected: (season: string) =>
+    trackEvent("league_selected", { season }),
+  leagueHistoryLoaded: (isDemo: boolean, isPremium: boolean) =>
+    trackEvent("league_analysis_loaded", { is_demo: isDemo, is_premium: isPremium }),
+  unlockClicked: (source: string) =>
+    trackEvent("checkout_started", { source }),
+  shareClicked: (cardType: string, isPremium: boolean) =>
+    trackEvent("share_clicked", { card_type: cardType, is_premium: isPremium }),
+  purchaseSuccess: () => trackEvent("purchase_completed"),
+  purchaseCancel: () => trackEvent("purchase_canceled"),
 };

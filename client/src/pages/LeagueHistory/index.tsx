@@ -763,14 +763,14 @@ export default function LeagueHistoryPage() {
       if (urlLeagueId) {
         unlockLeague(urlLeagueId);
         setIsPremiumState(isLeagueUnlocked(urlLeagueId));
-        trackFunnel.purchaseSuccess(urlLeagueId);
+        trackFunnel.purchaseSuccess();
       }
       toast({
         title: "🔥 League unlocked. Drop the receipts.",
       });
     } else if (canceled === "true") {
       if (urlLeagueId) {
-        trackFunnel.purchaseCancel(urlLeagueId);
+        trackFunnel.purchaseCancel();
       }
       toast({
         title: "Payment canceled.",
@@ -827,7 +827,7 @@ export default function LeagueHistoryPage() {
       // Track league history loaded (once per session per league)
       if (!hasTrackedLoad.current && leagueId) {
         hasTrackedLoad.current = true;
-        trackFunnel.leagueHistoryLoaded(leagueId);
+        trackFunnel.leagueHistoryLoaded(isDemo, isPremiumState);
       }
     }
   }, [isFetching, hasData, leagueId]);
@@ -1733,7 +1733,7 @@ export default function LeagueHistoryPage() {
       });
       return;
     }
-    trackFunnel.unlockClicked(leagueId, "page");
+    trackFunnel.unlockClicked("league_history");
     try {
       const url = await createCheckoutSession(leagueId.trim());
       window.location.href = url;

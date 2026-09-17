@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FplRoastCard } from "@/components/FplRoastCard";
@@ -33,15 +33,6 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const EXAMPLE_LEAGUE_ID = "demo-group-chat-dynasty";
 
-  // Track home visit once on mount
-  const hasTrackedVisit = useRef(false);
-  useEffect(() => {
-    if (!hasTrackedVisit.current) {
-      hasTrackedVisit.current = true;
-      trackFunnel.homeVisit();
-    }
-  }, []);
-
   // Deep link from league page sticky CTA: /#get-started
   useEffect(() => {
     if (window.location.hash !== "#get-started") return;
@@ -70,7 +61,7 @@ export default function Home() {
       setError("Please enter your Sleeper username.");
       return;
     }
-    trackFunnel.usernameSubmitted(username);
+    trackFunnel.usernameSubmitted(season);
     setLoading(true);
     setError(null);
     try {
@@ -81,7 +72,7 @@ export default function Home() {
       }
       const data = await res.json();
       setLeagues(data);
-      trackFunnel.leaguesReturned(data.length, username);
+      trackFunnel.leaguesReturned(data.length, season);
       if (data.length === 0) {
         setError(`No leagues found for ${username} in ${season}.`);
       }
@@ -97,8 +88,7 @@ export default function Home() {
     if (!lId) return;
 
     // Track league selection
-    const selectedLeague = leagues.find(l => l.league_id === lId);
-    trackFunnel.leagueSelected(lId, selectedLeague?.name || "Unknown");
+    trackFunnel.leagueSelected(season);
 
     const params = new URLSearchParams({
       league_id: lId,
