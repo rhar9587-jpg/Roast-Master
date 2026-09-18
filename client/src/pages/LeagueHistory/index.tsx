@@ -47,8 +47,9 @@ import { LockedModePreview } from "./LockedModePreview";
 import { WeeklyCommissionerEmailSection } from "./WeeklyCommissionerEmailSection";
 import { WeeklyEmailBridgeStrip } from "./WeeklyEmailBridgeStrip";
 import { WeeklyWeekContextBar } from "./WeeklyWeekContextBar";
-import { isLeagueUnlocked, unlockLeague, lockLeague, hasUsedFreeSend } from "./premium";
+import { isLeagueUnlocked, unlockLeague, unlockLeagues, lockLeague, hasUsedFreeSend } from "./premium";
 import { createCheckoutSession } from "@/lib/checkout";
+import { RestorePurchaseModal } from "./RestorePurchaseModal";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername, getCommissionerEmail, setCommissionerEmail } from "./utils";
 import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards, type MiniCard } from "./storylines";
 import { computeHeroReceipts } from "./computeHeroReceipts";
@@ -543,6 +544,9 @@ export default function LeagueHistoryPage() {
   const [showPostAnalysisToast, setShowPostAnalysisToast] = useState(false);
   const [isPremiumState, setIsPremiumState] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [restoreModalMode, setRestoreModalMode] = useState<"save" | "restore">("restore");
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   const [activeMode, setActiveMode] = useState<Mode>("history");
   const [leagueWeek, setLeagueWeek] = useState<number>(1);
   const [nflRecapWeek, setNflRecapWeek] = useState(1);
@@ -779,9 +783,13 @@ export default function LeagueHistoryPage() {
         setIsPremiumState(isLeagueUnlocked(urlLeagueId));
         trackFunnel.purchaseSuccess();
       }
+      const sessionFromUrl = params.get("session_id")?.trim() || null;
+      setCheckoutSessionId(sessionFromUrl);
       toast({
         title: "🔥 League unlocked. Drop the receipts.",
       });
+      setRestoreModalMode("save");
+      setShowRestoreModal(true);
     } else if (canceled === "true") {
       if (urlLeagueId) {
         trackFunnel.purchaseCancel();
@@ -794,6 +802,7 @@ export default function LeagueHistoryPage() {
     const url = new URL(window.location.href);
     url.searchParams.delete("success");
     url.searchParams.delete("canceled");
+    url.searchParams.delete("session_id");
     const nextSearch = url.searchParams.toString();
     window.history.replaceState(
       {},
@@ -2811,7 +2820,50 @@ export default function LeagueHistoryPage() {
             unlockLeague(leagueId);
             setIsPremiumState(true);
           }}
+          onRestorePurchase={() => {
+            setRestoreModalMode("restore");
+            setShowRestoreModal(true);
+          }}
         />
+      )}
+
+      {!isDemo && (
+        <RestorePurchaseModal
+          open={showRestoreModal}
+          onOpenChange={setShowRestoreModal}
+          leagueId={leagueId}
+          sessionId={checkoutSessionId}
+          mode={restoreModalMode}
+          onRestored={(leagueIds) => {
+            unlockLeagues(leagueIds);
+            if (leagueId.trim() && leagueIds.includes(leagueId.trim())) {
+              setIsPremiumState(true);
+            } else if (leagueIds.length > 0) {
+              setIsPremiumState(isLeagueUnlocked(leagueId.trim()));
+            }
+            toast({
+              title:
+                restoreModalMode === "save"
+                  ? "Unlock saved to your email."
+                  : `Restored ${leagueIds.length} league unlock${leagueIds.length === 1 ? "" : "s"}.`,
+            });
+          }}
+        />
+      )}
+
+      {activeMode === "history" && hasData && !showPremiumContent && !isDemo && (
+        <p className="text-center text-xs text-muted-foreground pb-2">
+          <button
+            type="button"
+            className="underline hover:text-foreground"
+            onClick={() => {
+              setRestoreModalMode("restore");
+              setShowRestoreModal(true);
+            }}
+          >
+            Already paid? Restore purchase
+          </button>
+        </p>
       )}
 
       {activeMode === "history" && hasData && (

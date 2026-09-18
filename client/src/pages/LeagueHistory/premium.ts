@@ -55,6 +55,20 @@ export function unlockLeague(leagueId: string): void {
   localStorage.setItem(UNLOCKED_LEAGUES_KEY, JSON.stringify(next));
 }
 
+/** Rehydrate multiple league unlocks (e.g. after restore-by-email). */
+export function unlockLeagues(leagueIds: string[]): string[] {
+  if (typeof window === "undefined") return [];
+  const existing = getUnlockedLeagues();
+  const next = [...existing];
+  for (const id of leagueIds) {
+    const trimmed = String(id || "").trim();
+    if (!trimmed || next.includes(trimmed)) continue;
+    next.push(trimmed);
+  }
+  localStorage.setItem(UNLOCKED_LEAGUES_KEY, JSON.stringify(next));
+  return next;
+}
+
 export function lockLeague(leagueId: string): void {
   if (typeof window === "undefined") return;
   const trimmed = leagueId.trim();

@@ -24,6 +24,7 @@ type Props = {
   lockedTotalCount?: number;
   leagueId?: string;
   onCompUnlock?: () => void;
+  onRestorePurchase?: () => void;
 };
 
 export function UnlockReceiptsModal({
@@ -38,6 +39,7 @@ export function UnlockReceiptsModal({
   lockedTotalCount,
   leagueId,
   onCompUnlock,
+  onRestorePurchase,
 }: Props) {
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [codeValue, setCodeValue] = useState("");
@@ -162,7 +164,19 @@ export function UnlockReceiptsModal({
         </p>
 
         {/* Comp Code Section */}
-        <div className="text-center pt-2">
+        <div className="text-center pt-2 space-y-2">
+          {onRestorePurchase && (
+            <button
+              type="button"
+              className="block mx-auto text-xs text-muted-foreground underline hover:text-foreground"
+              onClick={() => {
+                onOpenChange(false);
+                onRestorePurchase();
+              }}
+            >
+              Already paid? Restore purchase
+            </button>
+          )}
           {!showCodeInput ? (
             <button
               type="button"

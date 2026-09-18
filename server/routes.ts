@@ -49,6 +49,9 @@ import { getWeeklyPreviewEmail, generateWeeklyPreviewEmail } from "./lib/weeklyP
 import {
   isLeagueUnlocked as isLeagueUnlockedPersistent,
   markLeagueUnlocked,
+  recordUnlockEntitlement,
+  findUnlocksByEmail,
+  findCustomerIdByEmail,
   hasUsedFreeSend,
   markFreeSendUsed,
   getFreeSendStatus,
@@ -1647,7 +1650,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
       const success_url = `${CLIENT_URL}/league-history/dominance?league_id=${encodeURIComponent(
         league_id
-      )}&success=true`;
+      )}&success=true&session_id={CHECKOUT_SESSION_ID}`;
       const cancel_url = `${CLIENT_URL}/league-history/dominance?league_id=${encodeURIComponent(
         league_id
       )}&canceled=true`;
@@ -1657,6 +1660,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
         success_url,
         cancel_url,
+        customer_creation: "if_required",
         metadata: {
           league_id,
         },
@@ -1723,8 +1727,20 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (leagueId) {
         const unlockedId = String(leagueId).trim();
         unlockedLeagueIds.add(unlockedId);
-        void markLeagueUnlocked(unlockedId).catch((err) => {
-          console.error("[unlock-store] failed to persist webhook unlock:", err);
+        const customerId =
+          typeof session.customer === "string"
+            ? session.customer
+            : session.customer && typeof session.customer === "object" && "id" in session.customer
+              ? String((session.customer as { id: string }).id)
+              : null;
+        void recordUnlockEntitlement({
+          leagueId: unlockedId,
+          email: customerEmail,
+          sessionId,
+          customerId,
+          source: "stripe_webhook",
+        }).catch((err) => {
+          console.error("[unlock-store] failed to persist webhook unlock entitlement:", err);
         });
       }
 
@@ -1741,6 +1757,131 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
     // Acknowledge receipt
     return res.json({ received: true });
+  });
+
+  // -------------------------
+  // Restore unlock by purchase email (no full accounts)
+  // -------------------------
+  const restoreAttempts = new Map<string, { count: number; resetAt: number }>();
+  const RESTORE_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+  const RESTORE_RATE_LIMIT_MAX = 10;
+
+  /** Post-checkout: bind purchase email to this league for later restore. */
+  app.post("/api/unlock/save-email", async (req: Request, res: Response) => {
+    const email = String(req.body?.email || "").trim();
+    const leagueId = String(req.body?.league_id || "").trim();
+    const sessionId = String(req.body?.session_id || "").trim() || null;
+    if (!leagueId) {
+      return res.status(400).json({ error: "league_id is required" });
+    }
+    if (!email || !email.includes("@")) {
+      return res.status(400).json({ error: "Enter the email you used at checkout." });
+    }
+
+    try {
+      unlockedLeagueIds.add(leagueId);
+      await recordUnlockEntitlement({
+        leagueId,
+        email,
+        sessionId,
+        source: "client_save_email",
+      });
+      trackEvent("unlock_save_email", "/api/unlock/save-email", "POST", {
+        league_id: leagueId,
+        has_session: !!sessionId,
+      });
+      return res.json({ ok: true, league_ids: [leagueId] });
+    } catch (err) {
+      console.error("[/api/unlock/save-email] Error:", err);
+      return res.status(500).json({ error: "Failed to save unlock email" });
+    }
+  });
+
+  app.post("/api/unlock/restore", async (req: Request, res: Response) => {
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const now = Date.now();
+    const record = restoreAttempts.get(ip);
+    if (record) {
+      if (now < record.resetAt) {
+        if (record.count >= RESTORE_RATE_LIMIT_MAX) {
+          return res.status(429).json({ error: "Too many attempts. Try again later." });
+        }
+        record.count++;
+      } else {
+        restoreAttempts.set(ip, { count: 1, resetAt: now + RESTORE_RATE_LIMIT_WINDOW_MS });
+      }
+    } else {
+      restoreAttempts.set(ip, { count: 1, resetAt: now + RESTORE_RATE_LIMIT_WINDOW_MS });
+    }
+
+    const email = String(req.body?.email || "").trim();
+    const leagueId = String(req.body?.league_id || "").trim() || null;
+    if (!email || !email.includes("@")) {
+      return res.status(400).json({ error: "Enter the email you used at checkout." });
+    }
+
+    try {
+      const { leagueIds, customerId } = await findUnlocksByEmail(email, leagueId);
+      for (const id of leagueIds) {
+        unlockedLeagueIds.add(id);
+      }
+      trackEvent("unlock_restore", "/api/unlock/restore", "POST", {
+        league_count: leagueIds.length,
+        scoped_league: !!leagueId,
+        has_customer: !!customerId,
+      });
+      if (leagueIds.length === 0) {
+        return res.status(404).json({
+          error: leagueId
+            ? "No unlock found for that email and league. Check the email from your Stripe receipt."
+            : "No unlocks found for that email. Check the email from your Stripe receipt.",
+          league_ids: [],
+        });
+      }
+      return res.json({
+        ok: true,
+        league_ids: leagueIds,
+        has_customer_portal: !!customerId,
+      });
+    } catch (err) {
+      console.error("[/api/unlock/restore] Error:", err);
+      return res.status(500).json({ error: "Failed to restore unlock" });
+    }
+  });
+
+  // Optional: Stripe Customer Portal (when we have a customer id from checkout)
+  app.post("/api/stripe/portal", async (req: Request, res: Response) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ error: "Stripe is not configured" });
+      }
+      const email = String(req.body?.email || "").trim();
+      if (!email || !email.includes("@")) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      const customerId = await findCustomerIdByEmail(email);
+      if (!customerId) {
+        return res.status(404).json({
+          error: "No Stripe customer found for that email yet. Unlock once via checkout first.",
+        });
+      }
+      const portal = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: `${CLIENT_URL}/league-history/dominance`,
+      });
+      if (!portal.url) {
+        return res.status(500).json({ error: "Failed to create portal session" });
+      }
+      trackEvent("stripe_portal_created", "/api/stripe/portal", "POST", {
+        has_customer: true,
+      });
+      return res.json({ url: portal.url });
+    } catch (err) {
+      console.error("[/api/stripe/portal] Error:", err);
+      return res.status(500).json({
+        error: "Failed to open billing portal. Ensure Customer Portal is enabled in Stripe.",
+      });
+    }
   });
 
   // -------------------------
