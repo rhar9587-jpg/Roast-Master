@@ -139,6 +139,8 @@ function computeNflDoppelganger(
   managers: ManagerRow[],
   _leagueSeason?: string | number, // kept for API compatibility but not used
 ) {
+  const MIN_COMPLETED_GAMES = 4;
+
   // Get all unique seasons from the data for display
   const matchupSeasons = [...new Set(weeklyMatchups.map((m) => m.season).filter(Boolean))].sort();
   
@@ -177,6 +179,12 @@ function computeNflDoppelganger(
   const perfList = Array.from(statsByManager.values()).filter((p) => Number.isFinite(p.totalPF));
   if (!perfList.length) return null;
 
+  const viewerPerf = statsByManager.get(viewerKey);
+  if (!viewerPerf) return null;
+
+  const viewerCompletedGames = viewerPerf.wins + viewerPerf.losses;
+  if (viewerCompletedGames < MIN_COMPLETED_GAMES) return null;
+
   const leagueSize = perfList.length;
   const topCount = Math.max(2, Math.ceil(leagueSize * 0.25)); // Widened to 25%
   const bottomCount = Math.max(2, Math.ceil(leagueSize * 0.25)); // Bottom 25%
@@ -194,9 +202,6 @@ function computeNflDoppelganger(
   const pointsRank = (key: string) => pointsRanked.findIndex((p) => p.managerKey === key) + 1;
   const recordRank = (key: string) => recordRanked.findIndex((p) => p.managerKey === key) + 1;
   const varianceRank = (key: string) => varianceRanked.findIndex((p) => p.managerKey === key) + 1;
-
-  const viewerPerf = statsByManager.get(viewerKey);
-  if (!viewerPerf) return null;
 
   const viewerPointsRank = pointsRank(viewerKey);
   const viewerRecordRank = recordRank(viewerKey);

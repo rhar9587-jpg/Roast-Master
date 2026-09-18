@@ -70,6 +70,11 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+/** Unplayed Sleeper shells are 0–0; do not count them as games or W/L. */
+function isCompletedMatchupPair(aPoints: number, bPoints: number): boolean {
+  return aPoints > 0 || bPoints > 0;
+}
+
 /**
  * Badge logic:
  * - SMALL SAMPLE: < 4 games
@@ -201,6 +206,9 @@ function buildDominanceGrid(managers: Manager[], matchupsByWeek: WeekMatchups[])
         const [, pair] = matchupPairs[i]!;
       if (pair.length !== 2) continue;
       const [a, b] = pair;
+
+      // Skip unplayed future-week shells (both 0) — they inflate ties / sample size
+      if (!isCompletedMatchupPair(a.points, b.points)) continue;
 
       const recA = getRecord(a.managerKey, b.managerKey);
       const recB = getRecord(b.managerKey, a.managerKey);
@@ -547,35 +555,37 @@ export async function handleLeagueHistoryDominance(params: {
           matchupGroups.set(m.matchup_id, group);
         }
 
-        // Create matchup pairs
-        for (const [matchupId, entries] of matchupGroups) {
-          if (entries.length === 2) {
-            const [a, b] = entries;
-            const margin = Math.abs(a.points - b.points);
-            const aWon = a.points > b.points;
+        // Create matchup pairs (completed games with a winner only — ties omitted from W/L feed)
+        for (const [, entries] of matchupGroups) {
+          if (entries.length !== 2) continue;
+          const [a, b] = entries;
+          if (!isCompletedMatchupPair(a.points, b.points)) continue;
+          if (a.points === b.points) continue; // completed tie: exclude from doppelganger W–L
 
-            weeklyMatchups.push({
-              season,
-              week: weekData.week,
-              managerKey: a.managerKey,
-              opponentKey: b.managerKey,
-              points: a.points,
-              opponentPoints: b.points,
-              margin: aWon ? margin : -margin,
-              won: aWon,
-            });
+          const margin = Math.abs(a.points - b.points);
+          const aWon = a.points > b.points;
 
-            weeklyMatchups.push({
-              season,
-              week: weekData.week,
-              managerKey: b.managerKey,
-              opponentKey: a.managerKey,
-              points: b.points,
-              opponentPoints: a.points,
-              margin: aWon ? -margin : margin,
-              won: !aWon,
-            });
-          }
+          weeklyMatchups.push({
+            season,
+            week: weekData.week,
+            managerKey: a.managerKey,
+            opponentKey: b.managerKey,
+            points: a.points,
+            opponentPoints: b.points,
+            margin: aWon ? margin : -margin,
+            won: aWon,
+          });
+
+          weeklyMatchups.push({
+            season,
+            week: weekData.week,
+            managerKey: b.managerKey,
+            opponentKey: a.managerKey,
+            points: b.points,
+            opponentPoints: a.points,
+            margin: aWon ? -margin : margin,
+            won: !aWon,
+          });
         }
       }
     }

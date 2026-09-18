@@ -46,7 +46,10 @@ export function computeHeroReceipts(
     console.log("[HeroReceipts] weeklyMatchups is empty");
   }
 
-  const woodenSpoon = computeWoodenSpoonMerchant(seasonStats, managers, avatarByKey, leagueId, emojiByKey);
+  // Mid-season ranks are not season awards — only use completed regular seasons
+  const completedSeasonStats = filterCompletedSeasonStats(seasonStats, weeklyMatchups);
+
+  const woodenSpoon = computeWoodenSpoonMerchant(completedSeasonStats, managers, avatarByKey, leagueId, emojiByKey);
   if (woodenSpoon) receipts.push(woodenSpoon);
   else logHeroReceiptSkip("Wooden Spoon Merchant", "no qualifying last-place manager");
 
@@ -58,7 +61,7 @@ export function computeHeroReceipts(
   if (bridesmaid) receipts.push(bridesmaid);
   else logHeroReceiptSkip("Bridesmaid", "no 2+ runner-up finishes without a title");
 
-  const missedIt = computeMissedItByThatMuch(seasonStats, managers, avatarByKey, emojiByKey);
+  const missedIt = computeMissedItByThatMuch(completedSeasonStats, managers, avatarByKey, emojiByKey);
   if (missedIt) receipts.push(missedIt);
   else logHeroReceiptSkip("Missed It By That Much", "no non-playoff high scorer");
 
@@ -74,11 +77,11 @@ export function computeHeroReceipts(
   if (fallOff) receipts.push(fallOff);
   else logHeroReceiptSkip("Biggest Fall Off", "no multi-season rank drop found");
 
-  const allGas = computeAllGasNoPlayoffs(seasonStats, managers, avatarByKey, emojiByKey);
+  const allGas = computeAllGasNoPlayoffs(completedSeasonStats, managers, avatarByKey, emojiByKey);
   if (allGas) receipts.push(allGas);
   else logHeroReceiptSkip("All Gas, No Playoffs", "no non-playoff high scorer found");
 
-  const playoffChoker = computePlayoffChoker(seasonStats, weeklyMatchups, managers, avatarByKey, emojiByKey);
+  const playoffChoker = computePlayoffChoker(completedSeasonStats, weeklyMatchups, managers, avatarByKey, emojiByKey);
   if (playoffChoker) receipts.push(playoffChoker);
   else logHeroReceiptSkip("Playoff Choker", "no qualifying playoff choker found");
 
@@ -86,11 +89,39 @@ export function computeHeroReceipts(
   if (gameOfTheYear) receipts.push(gameOfTheYear);
   else logHeroReceiptSkip("Game of the Year", "no qualifying high-scoring game found");
 
-  const paperChampion = computePaperChampion(seasonStats, managers, avatarByKey, emojiByKey);
+  const paperChampion = computePaperChampion(completedSeasonStats, managers, avatarByKey, emojiByKey);
   if (paperChampion) receipts.push(paperChampion);
   else logHeroReceiptSkip("Paper Champion", "no qualifying paper champion found");
 
   return receipts;
+}
+
+/** A season is "complete" for awards once we have matchups through regular season end. */
+function isSeasonCompleteForAwards(
+  season: string,
+  seasonStats: SeasonStat[],
+  weeklyMatchups: WeeklyMatchupDetail[],
+): boolean {
+  const sample = seasonStats.find((s) => s.season === season);
+  const regularEnd = Math.max(1, (sample?.playoffStartWeek ?? 15) - 1);
+  const weeks = weeklyMatchups.filter((m) => m.season === season).map((m) => m.week);
+  if (weeks.length > 0) {
+    return Math.max(...weeks) >= regularEnd;
+  }
+  // No weekly rows for this season: treat as complete only if roster W–L looks like a full slate
+  const stats = seasonStats.filter((s) => s.season === season);
+  return stats.some((s) => s.wins + s.losses >= regularEnd);
+}
+
+function filterCompletedSeasonStats(
+  seasonStats: SeasonStat[],
+  weeklyMatchups: WeeklyMatchupDetail[],
+): SeasonStat[] {
+  const seasons = [...new Set(seasonStats.map((s) => s.season))];
+  const completed = new Set(
+    seasons.filter((season) => isSeasonCompleteForAwards(season, seasonStats, weeklyMatchups)),
+  );
+  return seasonStats.filter((s) => completed.has(s.season));
 }
 
 const MIN_DROUGHT_SEASONS = 2;

@@ -81,20 +81,18 @@ type Props = {
 };
 
 // Helper component to wrap blurred cards
-function BlurredCardWrapper({ 
-  children, 
-  onUnlock 
-}: { 
-  children: React.ReactNode; 
+function BlurredCardWrapper({
+  children,
+  onUnlock,
+}: {
+  children: React.ReactNode;
   onUnlock?: () => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
-  
+
   return (
     <div className="relative">
-      <div className="blur-sm opacity-60 pointer-events-none">
-        {children}
-      </div>
+      <div className="blur-sm opacity-60 pointer-events-none">{children}</div>
       <div
         className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-10 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-[1.01] rounded-2xl"
         onClick={onUnlock}
@@ -105,9 +103,7 @@ function BlurredCardWrapper({
           <Lock className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
           {isHovered && (
             <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">
-                This is just the beginning…
-              </p>
+              <p className="text-xs font-medium text-muted-foreground">This is just the beginning…</p>
               <p className="text-xs font-medium text-muted-foreground">
                 Unlock to see who really owns this league
               </p>
@@ -135,7 +131,6 @@ export function InsightsDashboard({
   viewerAvatarUrl,
   viewerEmoji,
 }: Props) {
-  // Build NFL Doppelgänger card (second card after Landlord)
   const nflDoppelgangerCard = nflDoppelganger ? (
     <BaseballCard
       badge="EDGE"
@@ -165,7 +160,6 @@ export function InsightsDashboard({
     />
   ) : null;
 
-  // Build personal hook card as BaseballCard (always visible, creates emotional hook)
   const personalHookBaseballCard = personalHookCard ? (
     <BaseballCard
       badge="EDGE"
@@ -209,168 +203,148 @@ export function InsightsDashboard({
     />
   ) : null;
 
-  const landlordCard = (
+  const landlordCard = landlord ? (
     <BaseballCard
       badge="OWNED"
       title="THE LANDLORD 👑"
-      name={landlord?.landlordName ?? "—"}
-      avatarUrl={
-        landlord ? (avatarByKey[landlord.landlordKey] ?? null) : null
-      }
-      emoji={
-        landlord ? (emojiByKey[landlord.landlordKey] ?? null) : null
-      }
+      name={landlord.landlordName}
+      avatarUrl={avatarByKey[landlord.landlordKey] ?? null}
+      emoji={emojiByKey[landlord.landlordKey] ?? null}
       primaryStat={{
-        value: landlord ? String(landlord.totalOwnedGames) : "—",
+        value: String(landlord.totalOwnedGames),
         label: "OWNED GAMES",
       }}
-      punchline={
-        landlord
-          ? `Owns ${landlord.victimCount} managers. Rent is due.`
-          : "No landlord yet"
-      }
+      punchline={`Owns ${landlord.victimCount} managers. Rent is due.`}
       lines={[
-        { label: "Tenants", value: landlord ? String(landlord.victimCount) : "—" },
+        { label: "Tenants", value: String(landlord.victimCount) },
         {
           label: "Favorite Tenant",
-          value: landlord?.bestVictim
+          value: landlord.bestVictim
             ? `${landlord.bestVictim.victimName} (${landlord.bestVictim.record})`
             : "—",
         },
       ]}
       back={{
-        lines: landlord?.victims.map((v) => ({
+        lines: landlord.victims.map((v) => ({
           label: v.victimName,
           value: v.record,
-        })) ?? [],
+        })),
       }}
       season="2024–25"
-      onClick={() =>
-        onOpenCell(landlord?.bestVictim?.cellKey ?? null)
-      }
+      onClick={() => onOpenCell(landlord.bestVictim?.cellKey ?? null)}
       enableShare={true}
       isPremium={isPremium}
       roastContext={{
-        victimName: landlord?.bestVictim?.victimName,
-        landlordName: landlord?.landlordName,
+        victimName: landlord.bestVictim?.victimName,
+        landlordName: landlord.landlordName,
       }}
     />
-  );
+  ) : null;
 
-  const mostOwnedCard = (
+  const mostOwnedCard = mostOwned ? (
     <BaseballCard
       badge="NEMESIS"
       title="BIGGEST VICTIM 😭"
-      name={mostOwned?.victimName ?? "—"}
-      avatarUrl={
-        mostOwned ? (avatarByKey[mostOwned.victimKey] ?? null) : null
-      }
-      emoji={
-        mostOwned ? (emojiByKey[mostOwned.victimKey] ?? null) : null
-      }
+      name={mostOwned.victimName}
+      avatarUrl={avatarByKey[mostOwned.victimKey] ?? null}
+      emoji={emojiByKey[mostOwned.victimKey] ?? null}
       primaryStat={{
-        value: mostOwned ? String(mostOwned.timesOwned) : "—",
+        value: String(mostOwned.timesOwned),
         label: "TIMES OWNED",
       }}
-      punchline={
-        mostOwned
-          ? `Owned by ${mostOwned.timesOwned} managers. It's rough.`
-          : "No victims yet"
-      }
+      punchline={`Owned by ${mostOwned.timesOwned} managers. It's rough.`}
       lines={[
-        { label: "Kryptonite", value: mostOwned?.worstNemesisName ?? "—" },
-        { label: "Games", value: mostOwned ? String(mostOwned.totalGames) : "—" },
+        { label: "Kryptonite", value: mostOwned.worstNemesisName ?? "—" },
+        { label: "Games", value: String(mostOwned.totalGames) },
       ]}
       season="2024–25"
-      onClick={() => onOpenCell(mostOwned?.cellKey ?? null)}
+      onClick={() => onOpenCell(mostOwned.cellKey ?? null)}
       enableShare={isPremium}
       isPremium={isPremium}
       roastContext={{
-        victimName: mostOwned?.victimName,
-        landlordName: mostOwned?.worstNemesisName,
+        victimName: mostOwned.victimName,
+        landlordName: mostOwned.worstNemesisName,
       }}
     />
-  );
+  ) : null;
 
-  const biggestRivalryCard = (
+  const biggestRivalryCard = biggestRivalry ? (
     <BaseballCard
       badge="RIVAL"
       title="BIGGEST RIVALRY ⚔️"
-      name={
-        biggestRivalry
-          ? `${biggestRivalry.aName} vs ${biggestRivalry.bName}`
-          : "—"
-      }
-      avatarUrl={
-        biggestRivalry
-          ? (avatarByKey[biggestRivalry.aKey] ?? null)
-          : null
-      }
-      emoji={
-        biggestRivalry
-          ? (emojiByKey[biggestRivalry.aKey] ?? null)
-          : null
-      }
+      name={`${biggestRivalry.aName} vs ${biggestRivalry.bName}`}
+      avatarUrl={avatarByKey[biggestRivalry.aKey] ?? null}
+      emoji={emojiByKey[biggestRivalry.aKey] ?? null}
       primaryStat={{
-        value: biggestRivalry?.record ?? "—",
+        value: biggestRivalry.record,
         label: "RECORD",
       }}
-      punchline={
-        biggestRivalry
-          ? "These two hate each other."
-          : "No rivalry yet"
-      }
+      punchline="These two hate each other."
       lines={[
-        {
-          label: "Games",
-          value: biggestRivalry ? String(biggestRivalry.games) : "—",
-        },
-        {
-          label: "Score",
-          value: biggestRivalry ? fmtScore(biggestRivalry.score) : "—",
-        },
+        { label: "Games", value: String(biggestRivalry.games) },
+        { label: "Score", value: fmtScore(biggestRivalry.score) },
       ]}
       season="2024–25"
-      onClick={() =>
-        onOpenCell(biggestRivalry?.cellKey ?? null)
-      }
+      onClick={() => onOpenCell(biggestRivalry.cellKey ?? null)}
       enableShare={isPremium}
       isPremium={isPremium}
       roastContext={{
-        opponentName: biggestRivalry?.bName,
-        record: biggestRivalry?.record,
+        opponentName: biggestRivalry.bName,
+        record: biggestRivalry.record,
       }}
     />
-  );
+  ) : null;
 
-  // Only show personal cards when a viewer has been selected
   const hasViewer = Boolean(viewerName);
+  const buildingReceiptsNote = !landlord && !mostOwned && !biggestRivalry;
+  const hasAnyCard =
+    Boolean(landlordCard) ||
+    Boolean(hasViewer && nflDoppelgangerCard) ||
+    Boolean(hasViewer && personalHookBaseballCard) ||
+    Boolean(mostOwnedCard) ||
+    Boolean(biggestRivalryCard);
 
   if (isPremium) {
     return (
-      <RoastDeckCarousel>
-        {landlordCard}
-        {hasViewer && nflDoppelgangerCard}
-        {hasViewer && personalHookBaseballCard}
-        {mostOwnedCard}
-        {biggestRivalryCard}
-      </RoastDeckCarousel>
+      <div className="space-y-3">
+        {hasAnyCard ? (
+          <RoastDeckCarousel>
+            {landlordCard}
+            {hasViewer && nflDoppelgangerCard}
+            {hasViewer && personalHookBaseballCard}
+            {mostOwnedCard}
+            {biggestRivalryCard}
+          </RoastDeckCarousel>
+        ) : null}
+        {buildingReceiptsNote && (
+          <p className="text-xs text-muted-foreground text-center px-2">
+            More receipts unlock as the season builds (landlord needs a 3–0 H2H).
+          </p>
+        )}
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <RoastDeckCarousel>
-        {landlordCard}
-        {hasViewer && nflDoppelgangerCard}
-        {hasViewer && personalHookBaseballCard}
-        <BlurredCardWrapper onUnlock={onUnlock}>
-          {mostOwnedCard}
-        </BlurredCardWrapper>
-        <BlurredCardWrapper onUnlock={onUnlock}>
-          {biggestRivalryCard}
-        </BlurredCardWrapper>
-      </RoastDeckCarousel>
+      {hasAnyCard ? (
+        <RoastDeckCarousel>
+          {landlordCard}
+          {hasViewer && nflDoppelgangerCard}
+          {hasViewer && personalHookBaseballCard}
+          {mostOwnedCard && (
+            <BlurredCardWrapper onUnlock={onUnlock}>{mostOwnedCard}</BlurredCardWrapper>
+          )}
+          {biggestRivalryCard && (
+            <BlurredCardWrapper onUnlock={onUnlock}>{biggestRivalryCard}</BlurredCardWrapper>
+          )}
+        </RoastDeckCarousel>
+      ) : null}
+      {buildingReceiptsNote && (
+        <p className="text-xs text-muted-foreground text-center px-2">
+          More receipts unlock as the season builds (landlord needs a 3–0 H2H).
+        </p>
+      )}
       <div className="rounded-lg border border-dashed bg-muted/20 p-4 space-y-3 text-center">
         <p className="text-sm font-medium text-foreground">The full roast is waiting.</p>
         <ul className="text-xs text-muted-foreground space-y-1 text-left max-w-xs mx-auto">
