@@ -6,6 +6,7 @@
 import { fetchJson } from "../league-history/sleeper";
 import type { SleeperMatchup } from "../league-history/sleeper";
 import type { Card } from "@shared/schema";
+import { findBestSitStartMiss } from "./sitStartMiss";
 
 type LeagueRef = { league_id: string; name: string; season?: string };
 
@@ -101,6 +102,7 @@ function computeBiggestBlowout(matchups: SleeperMatchup[], rosterName: (rid: num
     const b = rows[1]!;
     const aPts = safeNumber(a.points);
     const bPts = safeNumber(b.points);
+    if (!(aPts > 0 && bPts > 0)) continue;
     const winner = aPts >= bPts ? a : b;
     const loser = aPts >= bPts ? b : a;
     const margin = Math.abs(aPts - bPts);
@@ -137,7 +139,9 @@ async function computeCarryJob(matchups: SleeperMatchup[], rosterName: (rid: num
   for (const row of matchups) {
     const rosterPts = safeNumber(row.points);
     const pp = row.players_points || row.starters_points || {};
-    const entries = Object.entries(pp);
+    // Prefer starters for "carry" — bench-only blowups shouldn't dominate
+    const starterSet = new Set((row.starters || []).filter(Boolean) as string[]);
+    const entries = Object.entries(pp).filter(([pid]) => !starterSet.size || starterSet.has(pid));
 
     if (!entries.length || rosterPts <= 0) continue;
 
@@ -168,8 +172,26 @@ async function computeCarryJob(matchups: SleeperMatchup[], rosterName: (rid: num
   if (!best) return null;
 
   const manager = rosterName(best.roster_id);
-  const playerName = await getPlayerName(best.player_id);
-  const share = pct(best.ratio);
+  // Prefer bulk players map (single /player/:id often 404s / is sparse)
+  let playerName = "";
+  try {
+    const players = await getNflPlayers();
+    const p = players[best.player_id];
+    playerName =
+      p?.full_name ||
+      [p?.first_name, p?.last_name].filter(Boolean).join(" ") ||
+      "";
+    if (playerName && p?.position) {
+      playerName = `${playerName} (${p.position}${p.team ? `, ${p.team}` : ""})`;
+    }
+  } catch {
+    playerName = "";
+  }
+  if (!playerName) {
+    playerName = await getPlayerName(best.player_id);
+  }
+  // Player pts can slightly exceed reported roster pts (timing / rounding) — never claim >100%
+  const share = pct(Math.min(1, best.ratio));
 
   return {
     type: "carry_job",
@@ -183,7 +205,7 @@ async function computeCarryJob(matchups: SleeperMatchup[], rosterName: (rid: num
       player_id: best.player_id,
       player_name: playerName,
       player_points: best.player_points,
-      ratio: best.ratio,
+      ratio: Math.min(1, best.ratio),
     },
   };
 }
@@ -202,7 +224,11 @@ function computeClosestGame(
     if (rows.length < 2) continue;
     const a = rows[0]!;
     const b = rows[1]!;
-    const margin = Math.abs(safeNumber(a.points) - safeNumber(b.points));
+    const aPts = safeNumber(a.points);
+    const bPts = safeNumber(b.points);
+    // Skip unplayed / one-sided shells (0–0 or 26–0 byes)
+    if (!(aPts > 0 && bPts > 0)) continue;
+    const margin = Math.abs(aPts - bPts);
     if (!best || margin < best.margin) best = { margin, a, b };
   }
   return best;
@@ -229,6 +255,7 @@ function computeFraudWatch(
     const b = rows[1]!;
     const aPts = safeNumber(a.points);
     const bPts = safeNumber(b.points);
+    if (!(aPts > 0 && bPts > 0)) continue;
     const winner = aPts >= bPts ? a : b;
     const loser = aPts >= bPts ? b : a;
     const wPts = safeNumber(winner.points);
@@ -275,7 +302,7 @@ function computeFraudWatch(
   };
 }
 
-/** Bench points left — aligned with weeklyCommissioner worstCoach heuristic. */
+/** Bench points left — position-aware sit/start miss only. */
 async function computeWorstCoaching(
   matchups: SleeperMatchup[],
   rosterName: (rid: number) => string,
@@ -293,33 +320,17 @@ async function computeWorstCoaching(
   for (const row of matchups) {
     if (!row.players?.length) continue;
     const pts = row.players_points || row.starters_points || {};
-    const starters = new Set(row.starters || []);
+    const starters = new Set((row.starters || []).filter(Boolean) as string[]);
     const benchPoints = row.players
       .filter((pid) => !starters.has(pid))
       .reduce((sum, pid) => sum + Math.max(0, safeNumber(pts[pid])), 0);
     if (!Number.isFinite(benchPoints) || benchPoints <= 0) continue;
     if (!worst || benchPoints > worst.benchPoints) {
-      const topBench = row.players
-        .filter((pid) => !starters.has(pid))
-        .map((pid) => ({ pid, pts: safeNumber(pts[pid]) }))
-        .sort((a, b) => b.pts - a.pts)[0];
-      const lowStarter = (row.starters || [])
-        .map((pid) => ({ pid, pts: safeNumber(pts[pid]) }))
-        .sort((a, b) => a.pts - b.pts)[0];
-      const benchName = topBench
-        ? playersById[topBench.pid]?.full_name ||
-          [playersById[topBench.pid]?.first_name, playersById[topBench.pid]?.last_name].filter(Boolean).join(" ") ||
-          `Player ${topBench.pid}`
-        : "";
-      const starterName = lowStarter
-        ? playersById[lowStarter.pid]?.full_name ||
-          [playersById[lowStarter.pid]?.first_name, playersById[lowStarter.pid]?.last_name].filter(Boolean).join(" ") ||
-          `Player ${lowStarter.pid}`
-        : "";
+      const miss = findBestSitStartMiss(row, playersById);
       worst = {
         roster_id: row.roster_id,
         benchPoints,
-        ...(benchName && starterName ? { sitStartMiss: `${benchName} rode the bench over ${starterName}.` } : {}),
+        ...(miss ? { sitStartMiss: miss.sitStartMiss } : {}),
       };
     }
   }
@@ -329,7 +340,9 @@ async function computeWorstCoaching(
   return {
     type: "worst_coaching",
     title: "Worst Coaching",
-    subtitle: worst.sitStartMiss ?? `${team} left ${formatPts(worst.benchPoints)} pts on the bench.`,
+    subtitle: worst.sitStartMiss
+      ? `${team}: ${worst.sitStartMiss}`
+      : `${team} left ${formatPts(worst.benchPoints)} pts on the bench.`,
     stat: `${formatPts(worst.benchPoints)} bench pts`,
     tagline: "Starts matter.",
     meta: { roster_id: worst.roster_id, benchPoints: worst.benchPoints },

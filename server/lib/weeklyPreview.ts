@@ -241,7 +241,7 @@ export async function getWeeklyPreviewEmail(
     week > 1 && rankings.length ? buildPreviewPowerBoard(rankings, previousRankings) : { board: [], mover: undefined };
 
   const pairs: MatchupPair[] = upcomingMatchups.map((m) => ({ teamA: m.teamA, teamB: m.teamB }));
-  const narratives = await getLeagueHistoryNarratives(leagueId, pairs);
+  const narratives = await getLeagueHistoryNarratives(leagueId, pairs, "preview");
 
   const introSummary =
     week === 1

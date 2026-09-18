@@ -136,6 +136,7 @@ export function generateWeeklyEmail(data: WeeklyEmailData): string {
   const assetBase = data.appUrl ? data.appUrl.replace(/\/$/, "") : "";
   const brandIconUrl = assetBase ? `${assetBase}/brand/logo-icon-light.png` : "";
 
+  const historyLabel = isPreview ? "Matchup to watch" : "Matchup spotlight";
   const historyBlock =
     (data.matchupToWatch || data.storyOfTheWeek)
       ? `
@@ -145,7 +146,7 @@ export function generateWeeklyEmail(data: WeeklyEmailData): string {
                 <tr>
                   <td style="padding: 14px 16px;">
                     ${data.matchupToWatch
-    ? `<p style="margin: 0 0 6px 0; font-size: 11px; color: ${accent}; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Matchup to watch</p>
+    ? `<p style="margin: 0 0 6px 0; font-size: 11px; color: ${accent}; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">${historyLabel}</p>
                     <p style="margin: 0; font-size: 14px; color: #ffffff; font-weight: 600;">${escapeHtml(data.matchupToWatch.teamA)} vs ${escapeHtml(data.matchupToWatch.teamB)}</p>
                     <p style="margin: 6px 0 0 0; font-size: 13px; color: ${textMuted}; line-height: 1.5;">${escapeHtml(data.matchupToWatch.narrative)}</p>`
     : ""}

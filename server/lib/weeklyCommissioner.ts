@@ -10,6 +10,7 @@ import { generatePowerRankings } from "./powerRankings";
 import { generateWeeklyEmail, generateWeeklyEmailPlainText, type WeeklyEmailData, type WeeklyEmailRankingRow } from "./weeklyEmail";
 import { getLeagueHistoryNarratives } from "./weeklyEmailNarratives";
 import { buildWeeklyRoastNarrative } from "./weeklyRoastEngine";
+import { findBestSitStartMiss } from "./sitStartMiss";
 
 // Sleeper API returns roster settings with fpts/fpts_decimal; type is extended here for the adapter
 interface RosterWithPoints {
@@ -67,6 +68,10 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
 function safeNum(n: unknown): number {
   const x = Number(n);
   return Number.isFinite(x) ? x : 0;
+}
+
+function normNames(name: string): string {
+  return String(name ?? "").trim().toLowerCase();
 }
 
 function average(values: number[]): number {
@@ -342,36 +347,18 @@ function computeWeeklySuperlatives(
   for (const row of matchups) {
     if (!row.players?.length) continue;
     const pts = row.players_points || row.starters_points || {};
-    const starters = new Set(row.starters || []);
+    const starters = new Set((row.starters || []).filter(Boolean) as string[]);
     const benchPoints = row.players
       .filter((pid) => !starters.has(pid))
       .reduce((sum, pid) => sum + Math.max(0, safeNum(pts[pid])), 0);
     if (!Number.isFinite(benchPoints)) continue;
-    const topBench = row.players
-      .filter((pid) => !starters.has(pid))
-      .map((pid) => ({ pid, pts: safeNum(pts[pid]) }))
-      .sort((a, b) => b.pts - a.pts)[0];
-    const lowStarter = (row.starters || [])
-      .map((pid) => ({ pid, pts: safeNum(pts[pid]) }))
-      .sort((a, b) => a.pts - b.pts)[0];
-    const hasMiss = Boolean(topBench && lowStarter && topBench.pts > lowStarter.pts + 0.05);
-    const benchName = topBench
-      ? (playersById?.[topBench.pid]?.full_name ||
-          [playersById?.[topBench.pid]?.first_name, playersById?.[topBench.pid]?.last_name].filter(Boolean).join(" ") ||
-          `Player ${topBench.pid}`)
-      : "";
-    const starterName = lowStarter
-      ? (playersById?.[lowStarter.pid]?.full_name ||
-          [playersById?.[lowStarter.pid]?.first_name, playersById?.[lowStarter.pid]?.last_name].filter(Boolean).join(" ") ||
-          `Player ${lowStarter.pid}`)
-      : "";
+    // Position-aware only — never suggest WR↔QB / K / DEF illegal swaps
+    const miss = findBestSitStartMiss(row, playersById);
     coachRows.push({
       teamName: rosterNameByTeamId(String(row.roster_id)),
       benchPoints,
-      hasMiss,
-      ...(hasMiss && benchName && starterName
-        ? { sitStartMiss: `${benchName} should have started over ${starterName}.` }
-        : {}),
+      hasMiss: Boolean(miss),
+      ...(miss ? { sitStartMiss: miss.sitStartMiss } : {}),
     });
   }
 
@@ -414,7 +401,8 @@ function computeWeeklySuperlatives(
     const [a, b] = rows;
     const aPts = safeNum(a.points);
     const bPts = safeNum(b.points);
-    if (!(aPts > 0 || bPts > 0) || aPts === bPts) continue;
+    // Both sides must have scored — skip 0–0 shells and one-sided DNFs
+    if (!(aPts > 0 && bPts > 0) || aPts === bPts) continue;
     const winner = aPts > bPts ? a : b;
     const loser = aPts > bPts ? b : a;
     const wPts = safeNum(winner.points);
@@ -427,6 +415,19 @@ function computeWeeklySuperlatives(
     if (!gotRobbed || lPts > gotRobbed.points) {
       gotRobbed = { teamName: lName, points: lPts, opponentName: wName, opponentPoints: wPts };
     }
+  }
+
+  // Same H2H pair must not appear as both Stole One and Got Robbed
+  if (
+    stoleOne &&
+    gotRobbed &&
+    normNames(stoleOne.teamName) === normNames(gotRobbed.opponentName) &&
+    normNames(gotRobbed.teamName) === normNames(stoleOne.opponentName)
+  ) {
+    const margin = Math.abs(stoleOne.points - gotRobbed.points);
+    // Close game → robbed angle; blowout-ish weak win → stole angle
+    if (margin <= 8) stoleOne = undefined;
+    else gotRobbed = undefined;
   }
 
   return {
@@ -448,16 +449,28 @@ function computeWeeklySuperlatives(
 
 function buildRoastCalloutsFromNarrative(
   narrative: Awaited<ReturnType<typeof buildWeeklyRoastNarrative>>,
+  opts?: { skipFraudWatch?: boolean },
 ): WeeklyEmailData["roastCallouts"] {
   const out: NonNullable<WeeklyEmailData["roastCallouts"]> = [];
-  const preferred = ["carry_job", "biggest_embarrassment", "fraud_watch"] as const;
+  // Skip fraud_watch when Stole One / Got Robbed already cover lucky-win / robbed narratives.
+  // Never include worst_coaching here — Weekly Superlatives already covers bench / sit-start.
+  const preferred = opts?.skipFraudWatch
+    ? (["carry_job", "biggest_embarrassment"] as const)
+    : (["carry_job", "biggest_embarrassment", "fraud_watch"] as const);
   for (const type of preferred) {
     const card = narrative.cards.find((c) => c.type === type);
     if (!card) continue;
-    const line = [card.subtitle, card.tagline, card.stat].filter(Boolean).join(" — ");
+    // Prefer subtitle; append stat when it adds info (avoid tagline + subtitle double-ups)
+    const parts = [card.subtitle, card.stat].filter(Boolean) as string[];
+    const line = parts.join(" — ");
     if (!line.trim()) continue;
     out.push({
-      label: type === "carry_job" ? "Carry job" : type === "biggest_embarrassment" ? "Blowout" : "Fraud watch",
+      label:
+        type === "carry_job"
+          ? "Carry job"
+          : type === "biggest_embarrassment"
+            ? "Blowout"
+            : "Fraud watch",
       title: card.title || type,
       line: line.slice(0, 220),
     });
@@ -637,17 +650,16 @@ export async function getWeeklyCommissionerEmail(
   ]);
 
   let introSummary = buildIntroSummary(week, rankings);
-  let roastCallouts: WeeklyEmailData["roastCallouts"];
+  let roastNarrative: Awaited<ReturnType<typeof buildWeeklyRoastNarrative>> | null = null;
   if (weekMatchupsRaw.length > 0 && includeV2) {
     try {
-      const narrative = await buildWeeklyRoastNarrative({
+      roastNarrative = await buildWeeklyRoastNarrative({
         league: { league_id: leagueId, name: leagueName, season: undefined },
         week,
         matchups: weekMatchupsRaw,
         rosterName: (rid: number) => rosterNameByTeamId(String(rid)),
       });
-      introSummary = `${narrative.headline} ${narrative.groupChatSummary}`;
-      roastCallouts = buildRoastCalloutsFromNarrative(narrative);
+      introSummary = `${roastNarrative.headline} ${roastNarrative.groupChatSummary}`;
     } catch (e) {
       console.log(
         JSON.stringify({
@@ -669,6 +681,11 @@ export async function getWeeklyCommissionerEmail(
     playersById = null;
   }
   const weeklySuperlatives = includeV2 ? computeWeeklySuperlatives(weekMatchupsRaw, rosterNameByTeamId, playersById) : undefined;
+  const skipFraudWatch = Boolean(weeklySuperlatives?.stoleOne || weeklySuperlatives?.gotRobbed);
+  let roastCallouts =
+    roastNarrative && includeV2
+      ? buildRoastCalloutsFromNarrative(roastNarrative, { skipFraudWatch })
+      : undefined;
   const leagueAverages = includeV2 ? computeLeagueAverages(teams, weekMatchupsRaw) : undefined;
   const seasonRaces = includeV2 ? computeSeasonRaces(teams, rosters) : undefined;
   let positionLeaders: WeeklyEmailData["positionLeaders"] | undefined;
@@ -682,13 +699,13 @@ export async function getWeeklyCommissionerEmail(
   }
 
   const matchupPairs = weekMatchups.map((m) => ({ teamA: m.teamA, teamB: m.teamB }));
-  const narratives = await getLeagueHistoryNarratives(leagueId, matchupPairs);
+  const narratives = await getLeagueHistoryNarratives(leagueId, matchupPairs, "recap");
 
-  // If matchup-to-watch was a nemesis (victim "has never beaten" dominator) and victim won this week, add story of the week
+  // If matchup-to-watch was a nemesis (victim "has never beaten" / "entered the week never having beaten") and victim won this week, add story of the week
   let storyOfTheWeek = narratives.storyOfTheWeek;
   if (narratives.matchupToWatch && weekMatchups.length > 0) {
     const nar = narratives.matchupToWatch.narrative;
-    if (nar.includes("has never beaten")) {
+    if (nar.includes("never") && nar.toLowerCase().includes("beaten")) {
       const victim = narratives.matchupToWatch.teamA;
       const dominator = narratives.matchupToWatch.teamB;
       const row = weekMatchups.find(
@@ -700,6 +717,64 @@ export async function getWeeklyCommissionerEmail(
           (row.teamA === victim && row.scoreA > row.scoreB) || (row.teamB === victim && row.scoreB > row.scoreA);
         if (victimWon) storyOfTheWeek = { narrative: `Finally: ${victim} gets the W over ${dominator}.` };
       }
+    }
+  }
+
+  // Recap dynasty story: rewrite with the actual result when scores are in
+  if (storyOfTheWeek?.narrative.includes("drew the dynasty") && weekMatchups.length > 0) {
+    const m = storyOfTheWeek.narrative.match(/^(.+?) drew the dynasty this week — (.+?) still leads/);
+    if (m) {
+      const underdog = m[1]!.trim();
+      const dynasty = m[2]!.trim();
+      const row = weekMatchups.find(
+        (x) =>
+          (x.teamA === underdog && x.teamB === dynasty) ||
+          (x.teamA === dynasty && x.teamB === underdog) ||
+          (normNames(x.teamA) === normNames(underdog) && normNames(x.teamB) === normNames(dynasty)) ||
+          (normNames(x.teamA) === normNames(dynasty) && normNames(x.teamB) === normNames(underdog)),
+      );
+      if (row && (row.scoreA > 0 || row.scoreB > 0) && row.scoreA !== row.scoreB) {
+        const underdogWon =
+          (row.teamA === underdog && row.scoreA > row.scoreB) ||
+          (row.teamB === underdog && row.scoreB > row.scoreA) ||
+          (normNames(row.teamA) === normNames(underdog) && row.scoreA > row.scoreB) ||
+          (normNames(row.teamB) === normNames(underdog) && row.scoreB > row.scoreA);
+        storyOfTheWeek = {
+          narrative: underdogWon
+            ? `${underdog} took down the dynasty — ${dynasty} still leads the league in wins, but not this week.`
+            : `The dynasty held: ${dynasty} beat ${underdog}. ${dynasty} still leads the league in wins.`,
+        };
+      }
+    }
+  }
+
+  // Drop stole/robbed if the story of the week already covers that same matchup
+  if (storyOfTheWeek && weeklySuperlatives) {
+    const story = storyOfTheWeek.narrative.toLowerCase();
+    const covers = (a?: string, b?: string) =>
+      Boolean(a && b && story.includes(a.toLowerCase()) && story.includes(b.toLowerCase()));
+    if (weeklySuperlatives.stoleOne && covers(weeklySuperlatives.stoleOne.teamName, weeklySuperlatives.stoleOne.opponentName)) {
+      delete weeklySuperlatives.stoleOne;
+    }
+    if (weeklySuperlatives.gotRobbed && covers(weeklySuperlatives.gotRobbed.teamName, weeklySuperlatives.gotRobbed.opponentName)) {
+      delete weeklySuperlatives.gotRobbed;
+    }
+  }
+
+  // Drop closest/blowout roast lines that restate the story-of-the-week matchup
+  if (storyOfTheWeek && roastCallouts?.length) {
+    const story = storyOfTheWeek.narrative.toLowerCase();
+    const teamsInStory = weekMatchups
+      .flatMap((m) => [m.teamA, m.teamB])
+      .filter((t) => story.includes(t.toLowerCase()));
+    const uniqueTeams = Array.from(new Set(teamsInStory.map((t) => t.toLowerCase())));
+    if (uniqueTeams.length >= 2) {
+      roastCallouts = roastCallouts.filter((c) => {
+        if (c.label !== "Closest game" && c.label !== "Blowout") return true;
+        const line = c.line.toLowerCase();
+        return !uniqueTeams.every((t) => line.includes(t));
+      });
+      if (!roastCallouts.length) roastCallouts = undefined;
     }
   }
 
@@ -715,6 +790,7 @@ export async function getWeeklyCommissionerEmail(
   const emailPayload: WeeklyEmailData = {
     leagueName,
     week,
+    mode: "recap",
     rankings: emailRankings,
     villainOfTheWeek,
     fraudAlert,

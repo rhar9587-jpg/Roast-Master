@@ -1099,6 +1099,8 @@ export interface DemoWeeklyEmailPayload {
   biggestMovers?: { riser?: { teamName: string; change: number }; faller?: { teamName: string; change: number } };
   weekMatchups?: Array<{ teamA: string; scoreA: number; teamB: string; scoreB: number }>;
   commissionerSignoff?: string;
+  matchupToWatch?: { teamA: string; teamB: string; narrative: string };
+  storyOfTheWeek?: { narrative: string };
   weeklySuperlatives?: {
     highScore: { teamName: string; points: number; keyPerformers?: string[] };
     lowScore: { teamName: string; points: number };
@@ -1170,7 +1172,7 @@ export function getDemoWeeklyEmailPayload(week: number): DemoWeeklyEmailPayload 
       worstCoach: {
         teamName: "Sleeper Genius",
         benchPoints: 69.5,
-        sitStartMiss: "Baker Mayfield should have started over Kyler Murray.",
+        sitStartMiss: "Baker Mayfield (QB) should have started over Kyler Murray (QB).",
       },
       bestCoach: {
         teamName: "The Landlord",
@@ -1194,7 +1196,7 @@ export function getDemoWeeklyEmailPayload(week: number): DemoWeeklyEmailPayload 
       {
         label: "Carry job",
         title: "Carry Job",
-        line: "Josh Allen dragged The Landlord to 142.1 — everyone else was along for the ride.",
+        line: "Josh Allen (QB, BUF) dragged The Landlord to 142.1 — everyone else was along for the ride.",
       },
       {
         label: "Blowout",
@@ -1202,11 +1204,19 @@ export function getDemoWeeklyEmailPayload(week: number): DemoWeeklyEmailPayload 
         line: "The Landlord smoked Waiver Wizard by 43.8. Not close.",
       },
       {
-        label: "Fraud watch",
-        title: "Fraud Watch",
-        line: "Trade Bandit won with a below-median score. Lucky schedule vibes.",
+        label: "Closest game",
+        title: "Nail-biter",
+        line: "Trade Bandit 115.0 – 114.2 Sleeper Genius (margin 0.8).",
       },
     ],
+    matchupToWatch: {
+      teamA: "Trade Bandit",
+      teamB: "Sleeper Genius",
+      narrative: "Rivalry: Trade Bandit vs Sleeper Genius (6-6 H2H).",
+    },
+    storyOfTheWeek: {
+      narrative: "The dynasty held: The Landlord beat Waiver Wizard. The Landlord still leads the league in wins.",
+    },
     leagueAverages: {
       weekAverage: 102.64,
       seasonAverage: 101.49,
