@@ -1103,7 +1103,11 @@ export interface DemoWeeklyEmailPayload {
     highScore: { teamName: string; points: number; keyPerformers?: string[] };
     lowScore: { teamName: string; points: number };
     worstCoach?: { teamName: string; benchPoints: number; sitStartMiss?: string };
+    bestCoach?: { teamName: string; benchPoints: number; note?: string };
+    stoleOne?: { teamName: string; points: number; opponentName: string; opponentPoints: number };
+    gotRobbed?: { teamName: string; points: number; opponentName: string; opponentPoints: number };
   };
+  roastCallouts?: Array<{ label: string; title: string; line: string }>;
   leagueAverages?: { weekAverage: number; seasonAverage: number };
   seasonRaces?: {
     topScoringPace?: { teamName: string; totalPoints: number; pointsPerGame: number };
@@ -1168,7 +1172,41 @@ export function getDemoWeeklyEmailPayload(week: number): DemoWeeklyEmailPayload 
         benchPoints: 69.5,
         sitStartMiss: "Baker Mayfield should have started over Kyler Murray.",
       },
+      bestCoach: {
+        teamName: "The Landlord",
+        benchPoints: 4.2,
+        note: "Accidental competence — barely anything left on the pine.",
+      },
+      stoleOne: {
+        teamName: "Trade Bandit",
+        points: 115.0,
+        opponentName: "Sleeper Genius",
+        opponentPoints: 114.2,
+      },
+      gotRobbed: {
+        teamName: "Sleeper Genius",
+        points: 114.2,
+        opponentName: "Trade Bandit",
+        opponentPoints: 115.0,
+      },
     },
+    roastCallouts: [
+      {
+        label: "Carry job",
+        title: "Carry Job",
+        line: "Josh Allen dragged The Landlord to 142.1 — everyone else was along for the ride.",
+      },
+      {
+        label: "Blowout",
+        title: "Biggest Embarrassment",
+        line: "The Landlord smoked Waiver Wizard by 43.8. Not close.",
+      },
+      {
+        label: "Fraud watch",
+        title: "Fraud Watch",
+        line: "Trade Bandit won with a below-median score. Lucky schedule vibes.",
+      },
+    ],
     leagueAverages: {
       weekAverage: 102.64,
       seasonAverage: 101.49,
@@ -1206,14 +1244,24 @@ export function getDemoWeeklyEmailPayload(week: number): DemoWeeklyEmailPayload 
   };
 }
 
-/** Demo payload for weekly preview email (matchup preview, blowout/upset, no rankings). */
+/** Demo payload for weekly preview email (matchup preview, blowout/upset, no full rankings table). */
 export function getDemoWeeklyPreviewPayload(week: number): {
   leagueName: string;
   week: number;
   introSummary: string;
   mode: "preview";
   previewDisclaimer?: string;
+  previewPowerBoard?: Array<{
+    rank: number;
+    teamName: string;
+    record: string;
+    powerScore: number;
+    trend: "up" | "down" | "flat";
+  }>;
+  previewBiggestMover?: { teamName: string; change: number; direction: "up" | "down" };
   upcomingMatchups: Array<{ teamA: string; teamB: string; winPctA?: number; winPctB?: number }>;
+  tightestMatchup?: { teamA: string; teamB: string; winPctA: number; winPctB: number; narrative: string };
+  formMatchup?: { teamA: string; teamB: string; narrative: string };
   likelyBlowout: { teamA: string; teamB: string; narrative: string };
   upsetOfTheWeek: { underdog: string; favorite: string; narrative: string };
   matchupToWatch?: { teamA: string; teamB: string; narrative: string };
@@ -1222,9 +1270,26 @@ export function getDemoWeeklyPreviewPayload(week: number): {
   return {
     leagueName: "Group Chat Dynasty",
     week,
-    introSummary: `Week ${week} is here. Here's what to watch.`,
+    introSummary:
+      week === 1
+        ? "Week 1 is here. No power rankings yet—check back after the first week."
+        : `Week ${week} is here. Power-rank odds below — not player projections. Here's what to watch.`,
     mode: "preview",
-    ...(week === 1 ? { previewDisclaimer: "Win % and blowout/upset picks will appear after Week 1." } : {}),
+    ...(week === 1
+      ? { previewDisclaimer: "Power-rank odds and blowout/upset picks will appear after Week 1." }
+      : { previewDisclaimer: "Win % is based on power rankings through last week — not player projections." }),
+    ...(week > 1
+      ? {
+          previewPowerBoard: [
+            { rank: 1, teamName: "The Landlord", record: "8-2", powerScore: 94, trend: "up" as const },
+            { rank: 2, teamName: "Waiver Wizard", record: "7-3", powerScore: 88, trend: "flat" as const },
+            { rank: 3, teamName: "Trade Bandit", record: "7-3", powerScore: 85, trend: "down" as const },
+            { rank: 4, teamName: "Sleeper Genius", record: "6-4", powerScore: 82, trend: "up" as const },
+            { rank: 5, teamName: "Commissioner Chaos", record: "6-4", powerScore: 78, trend: "flat" as const },
+          ],
+          previewBiggestMover: { teamName: "Waiver Wizard", change: 2, direction: "up" as const },
+        }
+      : {}),
     upcomingMatchups: [
       { teamA: "The Landlord", teamB: "Waiver Wizard", winPctA: 72, winPctB: 28 },
       { teamA: "Trade Bandit", teamB: "Sleeper Genius", winPctA: 52, winPctB: 48 },
@@ -1233,6 +1298,18 @@ export function getDemoWeeklyPreviewPayload(week: number): {
       { teamA: "Bye Week Victim", teamB: "Heartbreak Hotel", winPctA: 54, winPctB: 46 },
       { teamA: "Auto-Draft Guy", teamB: "Rebuild Forever", winPctA: 62, winPctB: 38 },
     ],
+    tightestMatchup: {
+      teamA: "Trade Bandit",
+      teamB: "Sleeper Genius",
+      winPctA: 52,
+      winPctB: 48,
+      narrative: "Power ranks call this a coin flip (52% / 48%). Don’t sleep on either side.",
+    },
+    formMatchup: {
+      teamA: "The Landlord",
+      teamB: "Waiver Wizard",
+      narrative: "The Landlord is cooking lately (128.4 avg last few weeks) while Waiver Wizard is ice cold (94.1). Form vs form.",
+    },
     likelyBlowout: {
       teamA: "The Landlord",
       teamB: "Rebuild Forever",

@@ -110,6 +110,93 @@ function pickUpsetOfTheWeek(
   };
 }
 
+/** Closest power-rank odds to a coin flip. */
+function pickTightestMatchup(
+  upcoming: Array<{ teamA: string; teamB: string; winPctA?: number; winPctB?: number }>,
+): WeeklyEmailData["tightestMatchup"] {
+  let best: NonNullable<WeeklyEmailData["tightestMatchup"]> | null = null;
+  let bestDist = Infinity;
+  for (const mu of upcoming) {
+    if (mu.winPctA == null || mu.winPctB == null) continue;
+    const dist = Math.abs(mu.winPctA - 50);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = {
+        teamA: mu.teamA,
+        teamB: mu.teamB,
+        winPctA: mu.winPctA,
+        winPctB: mu.winPctB,
+        narrative: `Power ranks call this a coin flip (${mu.winPctA}% / ${mu.winPctB}%). Don’t sleep on either side.`,
+      };
+    }
+  }
+  return best ?? undefined;
+}
+
+/** Hot recent form vs cold — largest recentFormAverage gap among upcoming pairs. */
+function pickFormMatchup(
+  upcoming: Array<{ teamA: string; teamB: string }>,
+  rankings: PowerRankingRow[],
+): WeeklyEmailData["formMatchup"] {
+  if (rankings.length < 2 || !upcoming.length) return undefined;
+  const byName = new Map(rankings.map((r) => [r.teamName, r]));
+  let best: { teamA: string; teamB: string; gap: number; hot: string; cold: string; hotAvg: number; coldAvg: number } | null =
+    null;
+  for (const mu of upcoming) {
+    const ra = byName.get(mu.teamA);
+    const rb = byName.get(mu.teamB);
+    if (!ra || !rb) continue;
+    const gap = Math.abs(ra.recentFormAverage - rb.recentFormAverage);
+    if (gap < 8) continue;
+    const [hot, cold, hotAvg, coldAvg] =
+      ra.recentFormAverage >= rb.recentFormAverage
+        ? [mu.teamA, mu.teamB, ra.recentFormAverage, rb.recentFormAverage]
+        : [mu.teamB, mu.teamA, rb.recentFormAverage, ra.recentFormAverage];
+    if (!best || gap > best.gap) best = { teamA: mu.teamA, teamB: mu.teamB, gap, hot, cold, hotAvg, coldAvg };
+  }
+  if (!best) return undefined;
+  return {
+    teamA: best.teamA,
+    teamB: best.teamB,
+    narrative: `${best.hot} is cooking lately (${best.hotAvg.toFixed(1)} avg last few weeks) while ${best.cold} is ice cold (${best.coldAvg.toFixed(1)}). Form vs form.`,
+  };
+}
+
+function buildPreviewPowerBoard(
+  rankings: PowerRankingRow[],
+  previousRankings: { teamId: string; rank: number }[],
+): {
+  board: NonNullable<WeeklyEmailData["previewPowerBoard"]>;
+  mover?: WeeklyEmailData["previewBiggestMover"];
+} {
+  const board = rankings.slice(0, 5).map((r) => ({
+    rank: r.rank,
+    teamName: r.teamName,
+    record: r.record,
+    powerScore: r.powerScore,
+    trend: r.trend,
+  }));
+  let mover: WeeklyEmailData["previewBiggestMover"];
+  if (previousRankings.length) {
+    const prevByTeam = new Map(previousRankings.map((p) => [p.teamId, p.rank]));
+    let bestAbs = 0;
+    for (const r of rankings) {
+      const prev = prevByTeam.get(r.teamId);
+      if (prev == null) continue;
+      const change = prev - r.rank;
+      if (Math.abs(change) > bestAbs && change !== 0) {
+        bestAbs = Math.abs(change);
+        mover = {
+          teamName: r.teamName,
+          change: Math.abs(change),
+          direction: change > 0 ? "up" : "down",
+        };
+      }
+    }
+  }
+  return { board, mover };
+}
+
 export interface WeeklyPreviewResult {
   leagueName: string;
   week: number;
@@ -119,7 +206,7 @@ export interface WeeklyPreviewResult {
 
 /**
  * Build preview email for upcoming week: rankings through week-1, matchups for week (pairings),
- * likely blowout, upset watch, win projections, and league-history narratives.
+ * likely blowout, upset watch, power-rank odds, and league-history narratives.
  */
 export async function getWeeklyPreviewEmail(
   leagueId: string,
@@ -148,6 +235,10 @@ export async function getWeeklyPreviewEmail(
   const upcomingMatchups = buildUpcomingMatchups(matchupsRaw, rosterNameByTeamId, scoreByTeamId);
   const likelyBlowout = pickLikelyBlowout(upcomingMatchups, rankings);
   const upsetOfTheWeek = pickUpsetOfTheWeek(upcomingMatchups, rankings);
+  const tightestMatchup = pickTightestMatchup(upcomingMatchups);
+  const formMatchup = pickFormMatchup(upcomingMatchups, rankings);
+  const { board: previewPowerBoard, mover: previewBiggestMover } =
+    week > 1 && rankings.length ? buildPreviewPowerBoard(rankings, previousRankings) : { board: [], mover: undefined };
 
   const pairs: MatchupPair[] = upcomingMatchups.map((m) => ({ teamA: m.teamA, teamB: m.teamB }));
   const narratives = await getLeagueHistoryNarratives(leagueId, pairs);
@@ -155,7 +246,7 @@ export async function getWeeklyPreviewEmail(
   const introSummary =
     week === 1
       ? "Week 1 is here. No power rankings yet—check back after the first week."
-      : `Week ${week} is here. Here's what to watch.`;
+      : `Week ${week} is here. Power-rank odds below — not player projections. Here's what to watch.`;
 
   const emailPayload: WeeklyEmailData = {
     leagueName,
@@ -164,8 +255,14 @@ export async function getWeeklyPreviewEmail(
     mode: "preview",
     ...(commissionerNote?.trim() ? { commissionerNote: commissionerNote.trim() } : {}),
     ...(commissionerSignoff?.trim() ? { commissionerSignoff: commissionerSignoff.trim().slice(0, 180) } : {}),
-    ...(week === 1 ? { previewDisclaimer: "Win % and blowout/upset picks will appear after Week 1." } : {}),
+    ...(week === 1
+      ? { previewDisclaimer: "Power-rank odds and blowout/upset picks will appear after Week 1." }
+      : { previewDisclaimer: "Win % is based on power rankings through last week — not player projections." }),
+    ...(previewPowerBoard.length > 0 ? { previewPowerBoard } : {}),
+    ...(previewBiggestMover ? { previewBiggestMover } : {}),
     ...(upcomingMatchups.length > 0 ? { upcomingMatchups } : {}),
+    ...(tightestMatchup ? { tightestMatchup } : {}),
+    ...(formMatchup ? { formMatchup } : {}),
     ...(likelyBlowout ? { likelyBlowout } : {}),
     ...(upsetOfTheWeek ? { upsetOfTheWeek } : {}),
     ...(narratives.matchupToWatch ? { matchupToWatch: narratives.matchupToWatch } : {}),

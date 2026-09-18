@@ -49,12 +49,31 @@ export interface WeeklyEmailData {
   mode?: "recap" | "preview";
   /** Preview only: short disclaimer (e.g. Week 1). */
   previewDisclaimer?: string;
-  /** Recap V2: high/low score and coaching miss callouts. */
+  /** Recap V2: high/low score and coaching / luck callouts. */
   weeklySuperlatives?: {
     highScore: { teamName: string; points: number; keyPerformers?: string[] };
     lowScore: { teamName: string; points: number };
     worstCoach?: { teamName: string; benchPoints: number; sitStartMiss?: string };
+    bestCoach?: { teamName: string; benchPoints: number; note?: string };
+    stoleOne?: { teamName: string; points: number; opponentName: string; opponentPoints: number };
+    gotRobbed?: { teamName: string; points: number; opponentName: string; opponentPoints: number };
   };
+  /** Recap: short roast-engine callouts (carry job, blowout, fraud, closest). */
+  roastCallouts?: Array<{ label: string; title: string; line: string }>;
+  /** Preview: compact power board (top teams through prior week). */
+  previewPowerBoard?: Array<{
+    rank: number;
+    teamName: string;
+    record: string;
+    powerScore: number;
+    trend: "up" | "down" | "flat";
+  }>;
+  /** Preview: biggest mover from prior rankings. */
+  previewBiggestMover?: { teamName: string; change: number; direction: "up" | "down" };
+  /** Preview: closest power-rank odds matchup. */
+  tightestMatchup?: { teamA: string; teamB: string; winPctA: number; winPctB: number; narrative: string };
+  /** Preview: optional hot-vs-cold form line. */
+  formMatchup?: { teamA: string; teamB: string; narrative: string };
   /** Recap V2: scoring context. */
   leagueAverages?: { weekAverage: number; seasonAverage: number };
   /** Recap V2: season races. */
@@ -151,10 +170,32 @@ export function generateWeeklyEmail(data: WeeklyEmailData): string {
             </td>
           </tr>
           ` : ""}
+          ${data.previewPowerBoard && data.previewPowerBoard.length > 0 ? `
+          <tr>
+            <td style="padding: 0 24px 16px 24px;">
+              <p style="margin: 0 0 8px 0; font-size: 11px; color: ${textMuted}; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">Power board (through last week)</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; font-size: 13px;">
+                ${data.previewPowerBoard
+                  .map(
+                    (r) => `
+                <tr style="border-bottom: 1px solid ${border};">
+                  <td style="padding: 6px 0; color: ${accent}; width: 28px; font-weight: 600;">${r.rank}</td>
+                  <td style="padding: 6px 0; color: #ffffff; font-weight: 600;">${escapeHtml(r.teamName)}</td>
+                  <td style="padding: 6px 8px; color: ${textMuted};">${escapeHtml(r.record)}</td>
+                  <td style="padding: 6px 0; color: ${accent};">${r.powerScore}</td>
+                </tr>`,
+                  )
+                  .join("")}
+              </table>
+              ${data.previewBiggestMover ? `<p style="margin: 10px 0 0 0; font-size: 12px; color: ${textMuted};">Biggest mover: ${escapeHtml(data.previewBiggestMover.teamName)} (${data.previewBiggestMover.direction === "up" ? "+" : "-"}${Math.abs(data.previewBiggestMover.change)}).</p>` : ""}
+            </td>
+          </tr>
+          ` : ""}
           ${data.upcomingMatchups && data.upcomingMatchups.length > 0 ? `
           <tr>
             <td style="padding: 0 24px 20px 24px;">
-              <p style="margin: 0 0 10px 0; font-size: 11px; color: ${textMuted}; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">This week&apos;s matchups</p>
+              <p style="margin: 0 0 6px 0; font-size: 11px; color: ${textMuted}; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">This week&apos;s matchups</p>
+              <p style="margin: 0 0 10px 0; font-size: 11px; color: ${textMuted};">Odds are power-rank estimates — not player projections.</p>
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; font-size: 13px;">
                 ${data.upcomingMatchups
     .map(
@@ -168,6 +209,36 @@ export function generateWeeklyEmail(data: WeeklyEmailData): string {
                 </tr>`,
     )
     .join("")}
+              </table>
+            </td>
+          </tr>
+          ` : ""}
+          ${data.tightestMatchup ? `
+          <tr>
+            <td style="padding: 0 24px 16px 24px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #1f2430; border-left: 4px solid #64b5f6; border-radius: 4px;">
+                <tr>
+                  <td style="padding: 14px 16px;">
+                    <p style="margin: 0 0 6px 0; font-size: 11px; color: #90caf9; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Coin-flip of the week</p>
+                    <p style="margin: 0; font-size: 14px; color: #ffffff; font-weight: 600;">${escapeHtml(data.tightestMatchup.teamA)} vs ${escapeHtml(data.tightestMatchup.teamB)}</p>
+                    <p style="margin: 6px 0 0 0; font-size: 13px; color: ${textMuted}; line-height: 1.5;">${escapeHtml(data.tightestMatchup.narrative)}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          ` : ""}
+          ${data.formMatchup ? `
+          <tr>
+            <td style="padding: 0 24px 16px 24px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #22201a; border-left: 4px solid ${accent}; border-radius: 4px;">
+                <tr>
+                  <td style="padding: 14px 16px;">
+                    <p style="margin: 0 0 6px 0; font-size: 11px; color: ${accent}; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Hot vs cold</p>
+                    <p style="margin: 0; font-size: 14px; color: #ffffff; font-weight: 600;">${escapeHtml(data.formMatchup.teamA)} vs ${escapeHtml(data.formMatchup.teamB)}</p>
+                    <p style="margin: 6px 0 0 0; font-size: 13px; color: ${textMuted}; line-height: 1.5;">${escapeHtml(data.formMatchup.narrative)}</p>
+                  </td>
+                </tr>
               </table>
             </td>
           </tr>
@@ -353,7 +424,27 @@ ${rankingsRows}
                   <p style="margin: 0 0 8px 0; font-size: 11px; color: #90caf9; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">Weekly Superlatives</p>
                   <p style="margin: 0; font-size: 13px; color: #ffffff;"><strong>High score:</strong> ${escapeHtml(data.weeklySuperlatives.highScore.teamName)} — ${data.weeklySuperlatives.highScore.points.toFixed(1)} pts${data.weeklySuperlatives.highScore.keyPerformers?.length ? `. Key performers: ${escapeHtml(data.weeklySuperlatives.highScore.keyPerformers.join(", "))}.` : "."}</p>
                   <p style="margin: 8px 0 0 0; font-size: 13px; color: #e0e0e0;"><strong>Low score:</strong> ${escapeHtml(data.weeklySuperlatives.lowScore.teamName)} — ${data.weeklySuperlatives.lowScore.points.toFixed(1)} pts.</p>
+                  ${data.weeklySuperlatives.stoleOne ? `<p style="margin: 8px 0 0 0; font-size: 13px; color: #e0e0e0;"><strong>Stole one:</strong> ${escapeHtml(data.weeklySuperlatives.stoleOne.teamName)} won with ${data.weeklySuperlatives.stoleOne.points.toFixed(1)} — participation trophy energy (beat ${escapeHtml(data.weeklySuperlatives.stoleOne.opponentName)} ${data.weeklySuperlatives.stoleOne.opponentPoints.toFixed(1)}).</p>` : ""}
+                  ${data.weeklySuperlatives.gotRobbed ? `<p style="margin: 8px 0 0 0; font-size: 13px; color: #e0e0e0;"><strong>Got robbed:</strong> ${escapeHtml(data.weeklySuperlatives.gotRobbed.teamName)} dropped ${data.weeklySuperlatives.gotRobbed.points.toFixed(1)} and still lost to ${escapeHtml(data.weeklySuperlatives.gotRobbed.opponentName)} (${data.weeklySuperlatives.gotRobbed.opponentPoints.toFixed(1)}). The algorithm owes them money.</p>` : ""}
                   ${data.weeklySuperlatives.worstCoach ? `<p style="margin: 8px 0 0 0; font-size: 13px; color: #e0e0e0;"><strong>Worst coach:</strong> ${escapeHtml(data.weeklySuperlatives.worstCoach.teamName)} left ${data.weeklySuperlatives.worstCoach.benchPoints.toFixed(1)} on the bench.${data.weeklySuperlatives.worstCoach.sitStartMiss ? ` ${escapeHtml(data.weeklySuperlatives.worstCoach.sitStartMiss)}` : ""}</p>` : ""}
+                  ${data.weeklySuperlatives.bestCoach ? `<p style="margin: 8px 0 0 0; font-size: 13px; color: #e0e0e0;"><strong>Best coach:</strong> ${escapeHtml(data.weeklySuperlatives.bestCoach.teamName)} left only ${data.weeklySuperlatives.bestCoach.benchPoints.toFixed(1)} on the bench.${data.weeklySuperlatives.bestCoach.note ? ` ${escapeHtml(data.weeklySuperlatives.bestCoach.note)}` : ""}</p>` : ""}
+                </td></tr>
+              </table>
+            </td>
+          </tr>
+          ` : ""}
+          ${!isPreview && data.roastCallouts && data.roastCallouts.length > 0 ? `
+          <tr>
+            <td style="padding: 0 24px 16px 24px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #2a2218; border-left: 4px solid ${accent}; border-radius: 4px;">
+                <tr><td style="padding: 14px 16px;">
+                  <p style="margin: 0 0 8px 0; font-size: 11px; color: ${accent}; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">This week&apos;s roast</p>
+                  ${data.roastCallouts
+                    .map(
+                      (c) =>
+                        `<p style="margin: 0 0 8px 0; font-size: 13px; color: #e0e0e0;"><strong>${escapeHtml(c.label)}:</strong> ${escapeHtml(c.line)}</p>`,
+                    )
+                    .join("")}
                 </td></tr>
               </table>
             </td>
@@ -456,6 +547,21 @@ export function generateWeeklyEmailPlainText(data: WeeklyEmailData): string {
       if (data.weeklySuperlatives.worstCoach) {
         lines.push(`Worst coach: ${data.weeklySuperlatives.worstCoach.teamName} left ${data.weeklySuperlatives.worstCoach.benchPoints.toFixed(1)} points on the bench.${data.weeklySuperlatives.worstCoach.sitStartMiss ? ` ${data.weeklySuperlatives.worstCoach.sitStartMiss}` : ""}`);
       }
+      if (data.weeklySuperlatives.bestCoach) {
+        lines.push(`Best coach: ${data.weeklySuperlatives.bestCoach.teamName} left only ${data.weeklySuperlatives.bestCoach.benchPoints.toFixed(1)} on the bench.${data.weeklySuperlatives.bestCoach.note ? ` ${data.weeklySuperlatives.bestCoach.note}` : ""}`);
+      }
+      if (data.weeklySuperlatives.stoleOne) {
+        lines.push(`Stole one: ${data.weeklySuperlatives.stoleOne.teamName} won with ${data.weeklySuperlatives.stoleOne.points.toFixed(1)} (beat ${data.weeklySuperlatives.stoleOne.opponentName} ${data.weeklySuperlatives.stoleOne.opponentPoints.toFixed(1)}).`);
+      }
+      if (data.weeklySuperlatives.gotRobbed) {
+        lines.push(`Got robbed: ${data.weeklySuperlatives.gotRobbed.teamName} scored ${data.weeklySuperlatives.gotRobbed.points.toFixed(1)} and still lost to ${data.weeklySuperlatives.gotRobbed.opponentName} (${data.weeklySuperlatives.gotRobbed.opponentPoints.toFixed(1)}).`);
+      }
+    }
+    if (data.roastCallouts?.length) {
+      lines.push("", "THIS WEEK'S ROAST", "---");
+      for (const c of data.roastCallouts) {
+        lines.push(`${c.label}: ${c.line}`);
+      }
     }
     if (data.leagueAverages) {
       lines.push("", "LEAGUE AVERAGES", "---", `Week average: ${data.leagueAverages.weekAverage.toFixed(2)}`, `Season average: ${data.leagueAverages.seasonAverage.toFixed(2)}`);
@@ -477,12 +583,35 @@ export function generateWeeklyEmailPlainText(data: WeeklyEmailData): string {
 
   if (isPreview) {
     if (data.previewDisclaimer?.trim()) lines.push(data.previewDisclaimer.trim(), "");
+    if (data.previewPowerBoard?.length) {
+      lines.push("POWER BOARD (THROUGH LAST WEEK)", "---");
+      for (const r of data.previewPowerBoard) {
+        lines.push(`${r.rank}. ${r.teamName} (${r.record}) — Power: ${r.powerScore}`);
+      }
+      if (data.previewBiggestMover) {
+        lines.push(
+          `Biggest mover: ${data.previewBiggestMover.teamName} (${data.previewBiggestMover.direction === "up" ? "+" : "-"}${Math.abs(data.previewBiggestMover.change)}).`,
+        );
+      }
+      lines.push("");
+    }
     if (data.upcomingMatchups && data.upcomingMatchups.length > 0) {
-      lines.push("THIS WEEK'S MATCHUPS", "---");
+      lines.push("THIS WEEK'S MATCHUPS (power-rank odds, not player projections)", "---");
       for (const mu of data.upcomingMatchups) {
         const pct = mu.winPctA != null && mu.winPctB != null ? ` (${Math.round(mu.winPctA)}% / ${Math.round(mu.winPctB)}%)` : "";
         lines.push(`${mu.teamA} vs ${mu.teamB}${pct}`);
       }
+    }
+    if (data.tightestMatchup) {
+      lines.push(
+        "",
+        "COIN-FLIP OF THE WEEK",
+        "---",
+        `${data.tightestMatchup.teamA} vs ${data.tightestMatchup.teamB}: ${data.tightestMatchup.narrative}`,
+      );
+    }
+    if (data.formMatchup) {
+      lines.push("", "HOT VS COLD", "---", `${data.formMatchup.teamA} vs ${data.formMatchup.teamB}: ${data.formMatchup.narrative}`);
     }
     if (data.likelyBlowout) lines.push("", "LIKELY BLOWOUT", "---", `${data.likelyBlowout.teamA} vs ${data.likelyBlowout.teamB}: ${data.likelyBlowout.narrative}`);
     if (data.upsetOfTheWeek) lines.push("", "UPSET WATCH", "---", `${data.upsetOfTheWeek.underdog} vs ${data.upsetOfTheWeek.favorite}: ${data.upsetOfTheWeek.narrative}`);

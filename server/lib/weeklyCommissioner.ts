@@ -326,13 +326,19 @@ function computeWeeklySuperlatives(
   playersById: Record<string, SleeperPlayerLite> | null,
 ): WeeklyEmailData["weeklySuperlatives"] {
   if (!matchups.length) return undefined;
-  const sorted = [...matchups].sort((a, b) => safeNum(b.points) - safeNum(a.points));
+  const scored = matchups.filter((m) => safeNum(m.points) > 0 || (m.starters?.length ?? 0) > 0);
+  const sorted = [...(scored.length ? scored : matchups)].sort((a, b) => safeNum(b.points) - safeNum(a.points));
   const high = sorted[0];
   const low = sorted[sorted.length - 1];
   if (!high || !low) return undefined;
 
-  type WorstCoach = NonNullable<NonNullable<WeeklyEmailData["weeklySuperlatives"]>["worstCoach"]>;
-  let worstCoach: WorstCoach | undefined;
+  type CoachRow = {
+    teamName: string;
+    benchPoints: number;
+    sitStartMiss?: string;
+    hasMiss: boolean;
+  };
+  const coachRows: CoachRow[] = [];
   for (const row of matchups) {
     if (!row.players?.length) continue;
     const pts = row.players_points || row.starters_points || {};
@@ -340,26 +346,86 @@ function computeWeeklySuperlatives(
     const benchPoints = row.players
       .filter((pid) => !starters.has(pid))
       .reduce((sum, pid) => sum + Math.max(0, safeNum(pts[pid])), 0);
-    if (!Number.isFinite(benchPoints) || benchPoints <= 0) continue;
-    if (!worstCoach || benchPoints > worstCoach.benchPoints) {
-      const topBench = row.players
-        .filter((pid) => !starters.has(pid))
-        .map((pid) => ({ pid, pts: safeNum(pts[pid]) }))
-        .sort((a, b) => b.pts - a.pts)[0];
-      const lowStarter = (row.starters || [])
-        .map((pid) => ({ pid, pts: safeNum(pts[pid]) }))
-        .sort((a, b) => a.pts - b.pts)[0];
-      const benchName = topBench
-        ? (playersById?.[topBench.pid]?.full_name || [playersById?.[topBench.pid]?.first_name, playersById?.[topBench.pid]?.last_name].filter(Boolean).join(" ") || `Player ${topBench.pid}`)
-        : "";
-      const starterName = lowStarter
-        ? (playersById?.[lowStarter.pid]?.full_name || [playersById?.[lowStarter.pid]?.first_name, playersById?.[lowStarter.pid]?.last_name].filter(Boolean).join(" ") || `Player ${lowStarter.pid}`)
-        : "";
-      worstCoach = {
-        teamName: rosterNameByTeamId(String(row.roster_id)),
-        benchPoints,
-        ...(benchName && starterName ? { sitStartMiss: `${benchName} should have started over ${starterName}.` } : {}),
+    if (!Number.isFinite(benchPoints)) continue;
+    const topBench = row.players
+      .filter((pid) => !starters.has(pid))
+      .map((pid) => ({ pid, pts: safeNum(pts[pid]) }))
+      .sort((a, b) => b.pts - a.pts)[0];
+    const lowStarter = (row.starters || [])
+      .map((pid) => ({ pid, pts: safeNum(pts[pid]) }))
+      .sort((a, b) => a.pts - b.pts)[0];
+    const hasMiss = Boolean(topBench && lowStarter && topBench.pts > lowStarter.pts + 0.05);
+    const benchName = topBench
+      ? (playersById?.[topBench.pid]?.full_name ||
+          [playersById?.[topBench.pid]?.first_name, playersById?.[topBench.pid]?.last_name].filter(Boolean).join(" ") ||
+          `Player ${topBench.pid}`)
+      : "";
+    const starterName = lowStarter
+      ? (playersById?.[lowStarter.pid]?.full_name ||
+          [playersById?.[lowStarter.pid]?.first_name, playersById?.[lowStarter.pid]?.last_name].filter(Boolean).join(" ") ||
+          `Player ${lowStarter.pid}`)
+      : "";
+    coachRows.push({
+      teamName: rosterNameByTeamId(String(row.roster_id)),
+      benchPoints,
+      hasMiss,
+      ...(hasMiss && benchName && starterName
+        ? { sitStartMiss: `${benchName} should have started over ${starterName}.` }
+        : {}),
+    });
+  }
+
+  let worstCoach: NonNullable<NonNullable<WeeklyEmailData["weeklySuperlatives"]>["worstCoach"]> | undefined;
+  let bestCoach: NonNullable<NonNullable<WeeklyEmailData["weeklySuperlatives"]>["bestCoach"]> | undefined;
+  const withBench = coachRows.filter((r) => r.benchPoints > 0);
+  if (withBench.length) {
+    const worst = [...withBench].sort((a, b) => b.benchPoints - a.benchPoints)[0]!;
+    worstCoach = {
+      teamName: worst.teamName,
+      benchPoints: worst.benchPoints,
+      ...(worst.sitStartMiss ? { sitStartMiss: worst.sitStartMiss } : {}),
+    };
+    // Best coach: least left on the bench (foil to worst); prefer a clean sit/start when available
+    const clean = withBench.filter((r) => !r.hasMiss && r.teamName !== worst.teamName);
+    const bestPool = clean.length ? clean : withBench.filter((r) => r.teamName !== worst.teamName);
+    if (bestPool.length) {
+      const best = [...bestPool].sort((a, b) => a.benchPoints - b.benchPoints)[0]!;
+      bestCoach = {
+        teamName: best.teamName,
+        benchPoints: best.benchPoints,
+        note:
+          best.benchPoints < 8
+            ? "Accidental competence — barely anything left on the pine."
+            : "Left the least on the bench this week.",
       };
+    }
+  }
+
+  // Stole one / got robbed from completed H2H pairs
+  const byMatchup = new Map<number, SleeperMatchup[]>();
+  for (const m of matchups) {
+    if (!byMatchup.has(m.matchup_id)) byMatchup.set(m.matchup_id, []);
+    byMatchup.get(m.matchup_id)!.push(m);
+  }
+  let stoleOne: NonNullable<NonNullable<WeeklyEmailData["weeklySuperlatives"]>["stoleOne"]> | undefined;
+  let gotRobbed: NonNullable<NonNullable<WeeklyEmailData["weeklySuperlatives"]>["gotRobbed"]> | undefined;
+  for (const rows of byMatchup.values()) {
+    if (rows.length !== 2) continue;
+    const [a, b] = rows;
+    const aPts = safeNum(a.points);
+    const bPts = safeNum(b.points);
+    if (!(aPts > 0 || bPts > 0) || aPts === bPts) continue;
+    const winner = aPts > bPts ? a : b;
+    const loser = aPts > bPts ? b : a;
+    const wPts = safeNum(winner.points);
+    const lPts = safeNum(loser.points);
+    const wName = rosterNameByTeamId(String(winner.roster_id));
+    const lName = rosterNameByTeamId(String(loser.roster_id));
+    if (!stoleOne || wPts < stoleOne.points) {
+      stoleOne = { teamName: wName, points: wPts, opponentName: lName, opponentPoints: lPts };
+    }
+    if (!gotRobbed || lPts > gotRobbed.points) {
+      gotRobbed = { teamName: lName, points: lPts, opponentName: wName, opponentPoints: wPts };
     }
   }
 
@@ -374,7 +440,38 @@ function computeWeeklySuperlatives(
       points: safeNum(low.points),
     },
     ...(worstCoach ? { worstCoach } : {}),
+    ...(bestCoach ? { bestCoach } : {}),
+    ...(stoleOne ? { stoleOne } : {}),
+    ...(gotRobbed ? { gotRobbed } : {}),
   };
+}
+
+function buildRoastCalloutsFromNarrative(
+  narrative: Awaited<ReturnType<typeof buildWeeklyRoastNarrative>>,
+): WeeklyEmailData["roastCallouts"] {
+  const out: NonNullable<WeeklyEmailData["roastCallouts"]> = [];
+  const preferred = ["carry_job", "biggest_embarrassment", "fraud_watch"] as const;
+  for (const type of preferred) {
+    const card = narrative.cards.find((c) => c.type === type);
+    if (!card) continue;
+    const line = [card.subtitle, card.tagline, card.stat].filter(Boolean).join(" — ");
+    if (!line.trim()) continue;
+    out.push({
+      label: type === "carry_job" ? "Carry job" : type === "biggest_embarrassment" ? "Blowout" : "Fraud watch",
+      title: card.title || type,
+      line: line.slice(0, 220),
+    });
+    if (out.length >= 3) break;
+  }
+  if (out.length < 3 && narrative.signals.closestGame && narrative.signals.closestMargin != null) {
+    const g = narrative.signals.closestGame;
+    out.push({
+      label: "Closest game",
+      title: "Nail-biter",
+      line: `${g.teamA} ${g.scoreA.toFixed(1)} – ${g.scoreB.toFixed(1)} ${g.teamB} (margin ${narrative.signals.closestMargin.toFixed(1)}).`,
+    });
+  }
+  return out.length ? out.slice(0, 3) : undefined;
 }
 
 function computeLeagueAverages(teams: PowerRankingsTeamInput[], weekMatchups: SleeperMatchup[]): WeeklyEmailData["leagueAverages"] {
@@ -540,6 +637,7 @@ export async function getWeeklyCommissionerEmail(
   ]);
 
   let introSummary = buildIntroSummary(week, rankings);
+  let roastCallouts: WeeklyEmailData["roastCallouts"];
   if (weekMatchupsRaw.length > 0 && includeV2) {
     try {
       const narrative = await buildWeeklyRoastNarrative({
@@ -549,6 +647,7 @@ export async function getWeeklyCommissionerEmail(
         rosterName: (rid: number) => rosterNameByTeamId(String(rid)),
       });
       introSummary = `${narrative.headline} ${narrative.groupChatSummary}`;
+      roastCallouts = buildRoastCalloutsFromNarrative(narrative);
     } catch (e) {
       console.log(
         JSON.stringify({
@@ -625,6 +724,7 @@ export async function getWeeklyCommissionerEmail(
     ...(Object.keys(biggestMovers).length > 0 ? { biggestMovers } : {}),
     ...(weekMatchups.length > 0 ? { weekMatchups } : {}),
     ...(weeklySuperlatives ? { weeklySuperlatives } : {}),
+    ...(roastCallouts?.length ? { roastCallouts } : {}),
     ...(leagueAverages ? { leagueAverages } : {}),
     ...(seasonRaces ? { seasonRaces } : {}),
     ...(positionLeaders && positionLeaders.length > 0 ? { positionLeaders } : {}),

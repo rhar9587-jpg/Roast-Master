@@ -86,7 +86,7 @@ const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2026-02-25.clover" })
   : null;
 const serverStartedAt = Date.now();
-const WEEKLY_EMAIL_V2_ENABLED = String(process.env.WEEKLY_EMAIL_V2_ENABLED || "false").toLowerCase() === "true";
+const WEEKLY_EMAIL_V2_ENABLED = String(process.env.WEEKLY_EMAIL_V2_ENABLED || "true").toLowerCase() !== "false";
 const unlockedLeagueIds = new Set<string>();
 
 function parseFreeLeagueIds(raw: string | undefined): Set<string> {
