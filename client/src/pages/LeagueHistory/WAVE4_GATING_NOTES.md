@@ -8,34 +8,42 @@
 | Grid exports | ❌ | ✅ |
 | Your Roast mini cards | ✅ | ✅ |
 | Your Roast export | ✅ | ✅ |
-| Headlines (baseball cards) | ❌ | ✅ |
+| Headlines (baseball cards beyond landlord + personal hook) | ❌ | ✅ |
 | League Storylines | ❌ | ✅ |
 | Storylines export | ❌ | ✅ |
-| Share links/images | ❌ | ✅ |
+| Share links/images (premium cards) | ❌ | ✅ |
 
 ## Copy Guidelines
 
-- Use "Unlock the receipts" (not "unlimited leagues" or "full grid")
+- Use "Unlock the receipts" via `@/lib/brand` `unlockCtaLabel()` (not "unlimited leagues" or "full grid")
 - Emphasize "See the truth" (free) vs "Share the truth" (premium)
 - Use "reveal" for headlines
 - Use "export and share" for premium features
 - Keep roast/receipts vibe consistent
+- Weekly / Season / Recap tabs are secondary ("Included") — Receipts is primary
 
 ## Testing Checklist
 
-- [ ] Free user: full grid visible and clickable
-- [ ] Free user: viewer row highlight works
-- [ ] Free user: grid exports disabled with tooltip
-- [ ] Free user: headlines blurred with overlay
-- [ ] Free user: League Storylines locked with overlay
-- [ ] Free user: Your Roast visible and exportable
-- [ ] Premium user: all sections unlocked
-- [ ] Premium user: all exports enabled
-- [ ] Premium user: sharing tools enabled
-- [ ] Unlock modal opens from locked elements
-- [ ] Unlock modal sets premium state correctly
-- [ ] Dev toggle works
-- [ ] PostAnalysisToast shows correct copy based on premium
+- [x] Free user: full grid visible and clickable
+- [x] Free user: viewer row highlight works
+- [x] Free user: grid exports disabled with tooltip (opens unlock)
+- [x] Free user: headlines blurred with overlay (HeroReceipts + Insights mostOwned/rivalry)
+- [x] Free user: League Storylines locked with overlay
+- [x] Free user: Your Roast visible and exportable
+- [ ] Premium user: all sections unlocked *(manual QA)*
+- [ ] Premium user: all exports enabled *(manual QA)*
+- [ ] Premium user: sharing tools enabled *(manual QA)*
+- [x] Unlock modal opens from locked elements
+- [x] Unlock modal sets premium state correctly (Stripe + localStorage)
+- [x] Dev toggle works
+- [x] PostAnalysisToast shows correct copy based on premium
+
+## Phase 1 notes (Sep 2026)
+
+- Removed free-tier grid row truncation (`FREE_ROW_COUNT`) — WAVE4 matrix requires full grid view free.
+- Your Roast no longer blurred for free users; league storylines remain gated.
+- Auto viewer suggest (`suggestViewerKey`) + scroll to `#personal-aha` / personal receipts on load.
+- Mode chrome: Receipts primary; Weekly/Season/Recap labeled "Included".
 
 ## Technical Notes
 

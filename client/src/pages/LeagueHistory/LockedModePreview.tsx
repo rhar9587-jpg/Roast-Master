@@ -1,8 +1,6 @@
 import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-// Personal Unlock Pricing
-const PRICE = 2.99;
+import { unlockCtaLabel } from "@/lib/brand";
 
 type LockedModePreviewProps = {
   title: string;
@@ -30,7 +28,7 @@ export function LockedModePreview({
       </div>
       {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
         <p className="text-xs text-muted-foreground text-center">
-          Your league has {lockedTotalCount} roasts waiting.
+          Your league has {lockedTotalCount} receipts waiting.
         </p>
       )}
       <ul className="text-xs text-muted-foreground space-y-1">
@@ -42,7 +40,7 @@ export function LockedModePreview({
         ))}
       </ul>
       <Button onClick={onUnlock} size="sm" className="interact-cta">
-        Unlock for you — ${PRICE}
+        {unlockCtaLabel()}
       </Button>
     </div>
   );

@@ -7,11 +7,12 @@
 
 ## Changes Implemented
 
-### 1. Fixed Pricing Inconsistency
-**File:** `client/src/pages/LeagueHistory/InsightsDashboard.tsx`
-- Added `PRICE_FULL = 29` and `PRICE_PROMO = 19` constants
-- Updated button to show strikethrough $29 with bold $19
-- Now consistent with all other unlock CTAs
+### 1. Pricing (updated Sep 2026)
+**Source of truth:** `client/src/lib/brand.ts`
+- One-time unlock: **$2.99** (`PRICE` / `PRICE_LABEL`)
+- Primary CTA: **Unlock the receipts** via `unlockCtaLabel()`
+- Canonical domain: **fantasyroast.net** (`SITE_HOST`) — do not use `.app` in UI
+- Older $19 promo / $29 anchor notes below are historical only
 
 ### 2. Added Checkout Analytics Tracking
 **File:** `server/routes.ts`
@@ -33,12 +34,13 @@
 ## Launch Readiness Checklist
 
 ### ✅ Payments & Unlock Flow
-- ✅ All unlock CTAs show consistent $19 promo pricing with $29 anchor
+- ✅ All unlock CTAs use `client/src/lib/brand.ts` (`PRICE` = $2.99 one-time; primary CTA: “Unlock the receipts”)
 - ✅ Clicking unlock CTA creates Stripe session and redirects
 - ✅ Success URL unlocks only that league (via `isLeagueUnlocked(leagueId)`)
 - ✅ Cancel URL shows toast without unlocking
 - ✅ URL params cleaned after handling (via `window.history.replaceState`)
 - ✅ No global premium flags in runtime (uses league-specific `unlockedLeagues` array)
+- ⚠️ Older $19/$29 promo copy in this doc is **stale** — shipped UI is $2.99 everywhere via `brand.ts`
 
 ### ✅ Demo League Coverage
 - ✅ Demo league works in League History/Dominance
@@ -48,10 +50,11 @@
 - ✅ Demo league works in league teams endpoint
 
 ### ✅ Conversion Surface
-- ✅ All CTAs show $19 promo with $29 anchor
+- ✅ All CTAs use receipts-first copy + $2.99 from `brand.ts`
 - ✅ No CTAs close modals before Stripe redirect
 - ✅ Example league path leads to working state
 - ✅ Pricing in UI matches Stripe checkout price (STRIPE_PRICE_ID in env)
+- ✅ Card footers / watermarks use `fantasyroast.net` (not `.app`)
 
 ### ✅ Error Handling
 - ✅ Invalid username shows clear message

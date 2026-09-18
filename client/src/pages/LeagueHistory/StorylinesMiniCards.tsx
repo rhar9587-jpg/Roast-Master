@@ -179,7 +179,7 @@ function BlurredMiniCardWrapper({
                   This is just the beginning…
                 </p>
                 <p className="text-xs font-medium text-muted-foreground">
-                  Unlock to see who really owns this league
+                  Unlock the receipts to share who owns who
                 </p>
               </div>
             )}
@@ -210,13 +210,45 @@ export function StorylinesMiniCards({
     <div className="space-y-8">
       {!isPremium && typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
         <p className="text-xs text-muted-foreground text-center">
-          Your league has {lockedTotalCount} roasts waiting.
+          Your league has {lockedTotalCount} receipts waiting.
         </p>
       )}
+      {viewerChosen && (
+        <section id="personal-aha">
+          <h2 className="text-sm font-medium text-muted-foreground mb-3">
+            Your personal receipts
+          </h2>
+          {yourRoastCards.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {yourRoastCards.map((c) => (
+                <MiniCardItem
+                  key={c.id}
+                  card={c}
+                  onOpenCell={onOpenCell}
+                  onOpenMiniCard={onOpenMiniCard}
+                  onHighlightManager={onHighlightManager}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed bg-muted/20 px-4 py-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                {YOUR_ROAST_EMPTY_MESSAGE}
+              </p>
+            </div>
+          )}
+          {!isPremium && yourRoastCards.length > 0 && (
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Free to view &amp; save. Unlock the receipts to share the whole league.
+            </p>
+          )}
+        </section>
+      )}
+
       {leagueCards.length > 0 && (
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-3">
-            The roasts everyone is talking about
+            League storylines
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {leagueCards.map((c) => {
@@ -234,7 +266,6 @@ export function StorylinesMiniCards({
                 return card;
               }
 
-              // Free users: ALL storyline cards are locked
               return (
                 <BlurredMiniCardWrapper
                   key={c.id}
@@ -247,51 +278,6 @@ export function StorylinesMiniCards({
               );
             })}
           </div>
-        </section>
-      )}
-
-      {viewerChosen && (
-        <section>
-          <h2 className="text-sm font-medium text-muted-foreground mb-3">
-            Your personal roasts
-          </h2>
-          {yourRoastCards.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {yourRoastCards.map((c) => {
-                const card = (
-                  <MiniCardItem
-                    key={c.id}
-                    card={c}
-                    onOpenCell={onOpenCell}
-                    onOpenMiniCard={onOpenMiniCard}
-                    onHighlightManager={onHighlightManager}
-                  />
-                );
-
-                if (isPremium) {
-                  return card;
-                }
-
-                // Free users: ALL personal roast cards are locked
-                return (
-                  <BlurredMiniCardWrapper
-                    key={c.id}
-                    onUnlock={onUnlock}
-                    title={c.title}
-                    remainingCount={yourRoastCards.length}
-                  >
-                    {card}
-                  </BlurredMiniCardWrapper>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed bg-muted/20 px-4 py-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                {YOUR_ROAST_EMPTY_MESSAGE}
-              </p>
-            </div>
-          )}
         </section>
       )}
 

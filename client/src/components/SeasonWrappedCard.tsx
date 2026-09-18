@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { WrappedCard } from "@/components/WrappedCard";
+import { SHARE_FOOTER } from "@/lib/brand";
 
 type Accent = "green" | "pink" | "blue" | "orange";
 
@@ -102,7 +103,7 @@ export function SeasonWrappedCard({ data, isPremium = false }: SeasonWrappedCard
           tagline={
             current.type === "season_summary" ? current.meta?.tagline : undefined
           }
-          footer="fantasyroast.net"
+          footer={SHARE_FOOTER}
           accent={accentFor(current.type)}
           isPremium={isPremium}
         />

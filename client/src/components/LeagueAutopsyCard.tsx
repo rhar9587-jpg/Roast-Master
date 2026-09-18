@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { WrappedCard } from "@/components/WrappedCard";
 import type { LeagueAutopsyResponse } from "@shared/schema";
 import { Skull, TrendingUp, TrendingDown, Zap, Scale } from "lucide-react";
+import { SHARE_FOOTER } from "@/lib/brand";
 
 type Accent = "green" | "pink" | "blue" | "orange";
 
@@ -89,7 +90,7 @@ export function LeagueAutopsyCard({ data, isPremium = false }: LeagueAutopsyCard
           subtitle={current.subtitle}
           tagline={current.tagline}
           bigValue={current.stat || "—"}
-          footer={data?.league?.name || "fantasyroast.net"}
+          footer={data?.league?.name || SHARE_FOOTER}
           accent={accentFor(current.type)}
           isPremium={isPremium}
         />

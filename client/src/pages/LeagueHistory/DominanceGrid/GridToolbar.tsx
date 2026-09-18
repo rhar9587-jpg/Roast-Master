@@ -8,6 +8,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { Badge } from "../types";
+import { unlockCtaLabel } from "@/lib/brand";
 
 type Props = {
   onDownloadPng: () => void;
@@ -116,7 +117,7 @@ export function GridToolbar({
             </TooltipTrigger>
             {!isPremium && (
               <TooltipContent>
-                <p>Unlock for you — $2.99</p>
+                <p>{unlockCtaLabel()}</p>
               </TooltipContent>
             )}
           </Tooltip>
@@ -137,7 +138,7 @@ export function GridToolbar({
             </TooltipTrigger>
             {!isPremium && (
               <TooltipContent>
-                <p>Unlock for you — $2.99</p>
+                <p>{unlockCtaLabel()}</p>
               </TooltipContent>
             )}
           </Tooltip>

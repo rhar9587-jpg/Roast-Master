@@ -53,8 +53,8 @@ function CardWithHeading({
               <Lock className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
               {isHovered && (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Unlock to reveal the roast
+                <p className="text-xs font-medium text-muted-foreground">
+                    Unlock the receipts
                   </p>
                 </div>
               )}
@@ -106,7 +106,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock, lockedTotalCou
     return (
       <div>
         <div className="mb-3">
-          <h2 className="text-sm font-medium text-muted-foreground">League Roasts</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">League Receipts</h2>
           <p className="text-xs text-muted-foreground mt-1">
             The moments your league will never forget.
           </p>
@@ -120,7 +120,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock, lockedTotalCou
   return (
     <div>
       <div className="mb-3">
-        <h2 className="text-sm font-medium text-muted-foreground">League Roasts</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">League Receipts</h2>
         <p className="text-xs text-muted-foreground mt-1">
           The moments your league will never forget.
         </p>
@@ -150,7 +150,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock, lockedTotalCou
             <CardWithHeading
               key={receipt.id}
               title={receipt.title}
-              subtitle={`🔒 ${heroReceipts.length} more roasts your league will argue about.`}
+              subtitle={`🔒 Unlock the receipts — ${heroReceipts.length} more your league will argue about.`}
               onUnlock={onUnlock}
               showOverlay={true}
             >

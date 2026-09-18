@@ -6,6 +6,7 @@ import type { FplRoastResponse } from "@shared/schema";
 import { ChevronDown, ChevronRight, HelpCircle } from "lucide-react";
 import { getRecentLeagues, setStoredUsername } from "./LeagueHistory/utils";
 import { trackFunnel } from "@/lib/track";
+import { OFFER, PRICE_LABEL, unlockCtaLabel } from "@/lib/brand";
 
 type Sport = "nfl" | "fpl";
 type LeagueOption = { league_id: string; name: string; season: string };
@@ -182,17 +183,16 @@ export default function Home() {
               Who owns your league?
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-              See who owns who. Roast accordingly.
+              See who owns who. Share the receipts.
             </p>
             <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-              One unlock gives you <strong className="text-foreground font-semibold">league receipts</strong>,{" "}
-              <strong className="text-foreground font-semibold">weekly roast</strong>, and{" "}
-              <strong className="text-foreground font-semibold">season recap</strong>.
+              Free: explore the dominance grid. {OFFER.unlockOnce}: export, share, and drop proof in the group chat.
+              Weekly and season packs included.
             </p>
             <p className="text-base text-foreground/90 max-w-lg mx-auto font-medium leading-snug italic border-l-4 border-primary/40 pl-4 py-1 text-left">
               &ldquo;The Landlord owns half the league. Rent is due.&rdquo;
               <span className="block text-xs font-normal not-italic text-muted-foreground mt-1">
-                Example roast — see the real grid and cards in 1 click.
+                Example receipt — see the real grid and cards in 1 click.
               </span>
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-stretch sm:items-center">
@@ -204,60 +204,60 @@ export default function Home() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              No login for demo. Unlock your league later for a one-time $2.99.
+              No login for demo. Unlock your league later for a one-time {PRICE_LABEL}.
             </p>
           </section>
 
-          {/* Three jobs — IA core */}
-          <section className="space-y-4" aria-labelledby="three-jobs-heading">
-            <h2 id="three-jobs-heading" className="sr-only">
+          {/* Receipts-first product story */}
+          <section className="space-y-4" aria-labelledby="product-story-heading">
+            <h2 id="product-story-heading" className="sr-only">
               What you get
             </h2>
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card className="border-2 border-muted/60 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-bold tracking-tight">League Receipts</CardTitle>
-                  <p className="text-sm text-muted-foreground leading-snug">
-                    Who actually runs your league — all-time dominance, grids, records, and archetypes.
+            <Card className="border-2 border-primary/30 shadow-sm ring-1 ring-primary/10">
+              <CardHeader className="pb-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-primary mb-1">
+                  The core product
+                </p>
+                <CardTitle className="text-lg font-bold tracking-tight">League Receipts</CardTitle>
+                <p className="text-sm text-muted-foreground leading-snug">
+                  Who actually runs your league — all-time dominance, OWNED / NEMESIS badges, archetypes, and storylines you can prove.
+                </p>
+              </CardHeader>
+              <CardContent className="pt-0 text-xs text-muted-foreground">
+                Built for arguments that end when someone posts the grid.
+              </CardContent>
+            </Card>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Card className="border border-muted/60 shadow-sm bg-muted/10">
+                <CardHeader className="pb-2 pt-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                    Also included
                   </p>
-                </CardHeader>
-                <CardContent className="pt-0 text-xs text-muted-foreground">
-                  Explore mode: receipts-first, built for arguments you can prove.
-                </CardContent>
-              </Card>
-              <Card className="border-2 border-primary/25 shadow-sm ring-1 ring-primary/10">
-                <CardHeader className="pb-2">
                   <CardTitle className="text-base font-bold tracking-tight">Weekly Roast</CardTitle>
                   <p className="text-sm text-muted-foreground leading-snug">
-                    What just happened this week — league narrative, roast cards, shareables, and commissioner email.
+                    This week&apos;s chaos cards and commissioner email — same voice as the receipts.
                   </p>
                 </CardHeader>
-                <CardContent className="pt-0 text-xs text-muted-foreground space-y-1">
-                  <p>Roast and share mode: made for league group chats.</p>
-                  <p className="text-foreground/90 font-medium">
-                    5–6 league cards each week plus a commissioner email in the same voice.
-                  </p>
-                </CardContent>
               </Card>
-              <Card className="border-2 border-muted/60 shadow-sm">
-                <CardHeader className="pb-2">
+              <Card className="border border-muted/60 shadow-sm bg-muted/10">
+                <CardHeader className="pb-2 pt-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                    Also included
+                  </p>
                   <CardTitle className="text-base font-bold tracking-tight">Season Recap</CardTitle>
                   <p className="text-sm text-muted-foreground leading-snug">
-                    How your season really went — personal story, identity, and defining moments (plus the league finale).
+                    Your season story and the league finale when the books close.
                   </p>
                 </CardHeader>
-                <CardContent className="pt-0 text-xs text-muted-foreground">
-                  Story mode: yours vs the league&apos;s last word.
-                </CardContent>
               </Card>
             </div>
           </section>
 
           {/* Example Cards */}
           <section className="pt-2 pb-6 space-y-4">
-            <p className="text-center text-sm font-medium text-foreground">See it in action</p>
+            <p className="text-center text-sm font-medium text-foreground">See the receipts</p>
             <p className="text-center text-xs text-muted-foreground">
-              Demo tiles tagged by outcome — same unlock covers all three.
+              Demo tiles — same unlock covers weekly and season too.
             </p>
 
             <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory md:grid md:grid-cols-4 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0">
@@ -328,7 +328,7 @@ export default function Home() {
                 <div className="rounded-xl border-2 border-red-400/60 bg-gradient-to-br from-red-50 via-white to-red-100/50 p-4 shadow-lg h-full min-h-[280px] flex flex-col">
                   <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                      Weekly roast
+                      Weekly (included)
                     </span>
                     <span className="text-xs font-bold uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
                       BLOWOUT
@@ -354,11 +354,11 @@ export default function Home() {
                 <div className="rounded-xl border bg-gradient-to-br from-blue-50 to-blue-100/50 p-4 shadow-lg h-full min-h-[280px] flex flex-col">
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground bg-white/80 px-2 py-0.5 rounded border">
-                      Weekly roast
+                      Share moment
                     </span>
                   </div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-3">
-                    💬 Group Chat Ready
+                    Group Chat Ready
                   </p>
                   <div className="bg-white rounded-2xl rounded-bl-sm p-3 shadow-sm border flex-1">
                     <p className="text-sm font-medium">
@@ -385,25 +385,25 @@ export default function Home() {
             </div>
           </section>
 
-          {/* What's Inside — grouped by the three jobs */}
+          {/* What's Inside — receipts lead */}
           <section className="rounded-xl border-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 p-6 md:p-8 space-y-6">
             <h2 className="text-xl md:text-2xl font-bold text-center">
-              Everything in one unlock
+              Unlock the receipts
             </h2>
             <p className="text-center text-sm text-muted-foreground max-w-2xl mx-auto">
-              Same $2.99 — explore receipts, run weekly roasts, and close the season with your story.
+              One-time {PRICE_LABEL}. Share who owns who. Weekly and season come with it.
             </p>
             <div className="grid gap-6 md:grid-cols-3 md:gap-4 text-left max-w-5xl mx-auto">
-              <div className="space-y-2 rounded-lg border border-muted/60 bg-background/80 p-4">
+              <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-4 ring-1 ring-primary/10 md:col-span-1">
                 <h3 className="text-sm font-bold text-foreground">League Receipts</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground">
                   <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>All-time dominance grid &amp; head-to-head records</span></li>
                   <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Hero archetypes: Landlord, Victim, Choker, Heartbreaker…</span></li>
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Storylines &amp; receipts across seasons</span></li>
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Storylines &amp; share/export without watermarks</span></li>
                 </ul>
               </div>
-              <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-4 ring-1 ring-primary/10">
-                <h3 className="text-sm font-bold text-foreground">Weekly Roast</h3>
+              <div className="space-y-2 rounded-lg border border-muted/60 bg-background/80 p-4">
+                <h3 className="text-sm font-bold text-foreground">Weekly (included)</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground">
                   <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Week-by-week chaos &amp; matchup narratives</span></li>
                   <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Screenshot-ready cards for the group chat</span></li>
@@ -411,7 +411,7 @@ export default function Home() {
                 </ul>
               </div>
               <div className="space-y-2 rounded-lg border border-muted/60 bg-background/80 p-4">
-                <h3 className="text-sm font-bold text-foreground">Season Recap</h3>
+                <h3 className="text-sm font-bold text-foreground">Season (included)</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground">
                   <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Your season — highlights &amp; choke jobs</span></li>
                   <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>League autopsy &amp; final verdict</span></li>
@@ -420,18 +420,18 @@ export default function Home() {
               </div>
             </div>
             <div className="text-center pt-4 border-t border-primary/10">
-              <p className="text-lg font-bold">
-                Unlock the full league for you — <span className="text-primary">$2.99</span>
+              <p className="text-lg font-bold text-primary">
+                {unlockCtaLabel()}
               </p>
               <Button 
                 size="lg" 
                 onClick={handleViewLeagueHistory} 
                 className="mt-4 font-semibold interact-cta"
               >
-                Unlock for you — $2.99
+                {unlockCtaLabel()}
               </Button>
               <p className="text-xs text-muted-foreground mt-3">
-                Designed for fantasy leagues that talk trash.
+                {OFFER.unlockOnce} • {OFFER.noSubscription} • Designed for leagues that talk trash.
               </p>
             </div>
           </section>
@@ -441,7 +441,7 @@ export default function Home() {
             <div className="mb-4">
               <h2 className="text-lg font-semibold">Get Started</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Enter your Sleeper league — then explore receipts, weekly roast, and your season story.
+                Enter your Sleeper league — start with who owns who, then use weekly and season when you want them.
               </p>
             </div>
             <div className="space-y-4">

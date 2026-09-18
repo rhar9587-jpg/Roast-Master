@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { track } from "@/lib/track";
+import { getYoursLine } from "@/lib/brand";
 import type { LandlordSummary } from "./types";
 
 type MostOwnedSnap = {
@@ -45,7 +46,7 @@ export function buildLeagueRoastClipboardText(p: LeagueReceiptsSnapshotProps): s
     lines.push(`🔥 Rivalry: ${p.biggestRivalry.aName} vs ${p.biggestRivalry.bName} — dead even`);
   }
 
-  lines.push("", "Get yours: https://fantasyroast.net");
+  lines.push("", getYoursLine());
   return lines.join("\n");
 }
 

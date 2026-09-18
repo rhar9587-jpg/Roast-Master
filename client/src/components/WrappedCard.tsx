@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Download, Share2 } from "lucide-react";
 import { exportCardPng, dataUrlToFile, downloadDataUrl } from "@/lib/exportCardImage";
 import { WatermarkOverlay } from "@/components/ui/WatermarkOverlay";
+import { PRICE_LABEL, SHARE_FOOTER } from "@/lib/brand";
 
 export type WrappedCardProps = {
   kicker?: string;
@@ -188,7 +189,7 @@ export function WrappedCard({
               >
                 {footer}
               </div>
-              <div className="rounded-full bg-white/10 px-3 py-1 text-[10px] whitespace-nowrap shrink-0">fantasyroast.net</div>
+              <div className="rounded-full bg-white/10 px-3 py-1 text-[10px] whitespace-nowrap shrink-0">{SHARE_FOOTER}</div>
             </div>
           </div>
         </div>
@@ -232,7 +233,7 @@ export function WrappedCard({
           </div>
           {!isPremium && (
             <p className="text-xs text-gray-500 text-right">
-              Watermark removed when you unlock ($2.99)
+              Watermark removed when you unlock ({PRICE_LABEL})
             </p>
           )}
         </div>

@@ -10,9 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-// Personal Unlock Pricing
-const PRICE = 2.99;
+import { OFFER, unlockCtaLabel } from "@/lib/brand";
 
 type Props = {
   open: boolean;
@@ -76,63 +74,56 @@ export function UnlockReceiptsModal({
     }
   };
 
-  // Contextual copy logic
-  const contextualCopy = ownedCount && ownedCount > 0
-    ? `You own ${ownedCount} manager${ownedCount === 1 ? '' : 's'}. Want the roast to prove it?`
-    : rivalryExists
-      ? "Your league has a real rivalry. See the full story."
-      : "Your league has stories worth sharing. Unlock the full league for you.";
-
   const showMissingCounts =
     typeof lockedReceiptsCount === "number" &&
     typeof lockedStorylinesCount === "number" &&
     lockedReceiptsCount > 0 &&
     lockedStorylinesCount > 0;
 
+  const subtitle =
+    ownedCount && ownedCount > 0
+      ? `You own ${ownedCount} manager${ownedCount === 1 ? "" : "s"}. Unlock the receipts to share the proof.`
+      : rivalryExists
+        ? "Your league has a real rivalry. Unlock the receipts to share the full story."
+        : "See who owns who for free. Unlock once to export, share, and drop it in the group chat.";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">
-            Unlock the full league for you
+            Unlock the receipts
           </DialogTitle>
           <DialogDescription className="pt-2">
-            Unlock once to get league receipts, weekly roast content (cards + commissioner email), and your season recap. No subscription.
+            {subtitle} {OFFER.unlockOnce}. {OFFER.noSubscription}.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Features — three jobs */}
           <div className="space-y-2">
             <div className="flex items-start gap-2 text-sm">
               <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span><strong>League Receipts</strong> — dominance, grids, archetypes, storylines</span>
+              <span>
+                <strong>League Receipts</strong> — dominance grid, headlines, archetypes, storylines (share &amp; export)
+              </span>
             </div>
-            <div className="flex items-start gap-2 text-sm">
-              <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span><strong>Weekly Roast</strong> — narratives, shareable cards, commissioner email</span>
-            </div>
-            <div className="flex items-start gap-2 text-sm">
-              <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <span><strong>Season Recap</strong> — your season + league finale</span>
+            <div className="flex items-start gap-2 text-sm text-muted-foreground">
+              <Check className="h-5 w-5 text-primary/70 shrink-0 mt-0.5" />
+              <span>
+                <strong className="text-foreground">Also included:</strong> weekly cards + commissioner email, and your season recap
+              </span>
             </div>
           </div>
           <p className="text-xs text-muted-foreground text-center">
-            Built for league chats, weekly rivalries, and commissioner chaos.
+            Built for group chats — the permanent record of who owns who.
           </p>
         </div>
 
-        {/* Trust Signals */}
         <div className="space-y-1 pt-2 border-t text-center">
           <p className="text-xs text-muted-foreground">
-            One-time purchase • No subscription
+            {OFFER.unlockOnce} • {OFFER.noSubscription}
           </p>
-          <p className="text-xs text-muted-foreground">
-            30-day money-back guarantee
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Built for group chats and league banter.
-          </p>
+          <p className="text-xs text-muted-foreground">{OFFER.moneyBack}</p>
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -146,18 +137,18 @@ export function UnlockReceiptsModal({
           <div className="w-full sm:w-auto text-center">
             {showMissingCounts && (
               <div className="text-xs font-semibold text-muted-foreground mb-2">
-                Unlock {lockedReceiptsCount} more roasts + {lockedStorylinesCount} storylines in this league.
+                Unlock {lockedReceiptsCount} more receipts + {lockedStorylinesCount} storylines in this league.
               </div>
             )}
             <Button
               onClick={handleUnlock}
               className="w-full sm:w-auto font-semibold interact-cta"
             >
-              {`Unlock for you — $${PRICE}`}
+              {unlockCtaLabel()}
             </Button>
             {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
               <p className="text-xs text-muted-foreground text-center mt-1">
-                Your league has {lockedTotalCount} roasts waiting.
+                Your league has {lockedTotalCount} receipts waiting.
               </p>
             )}
             <p className="text-xs text-muted-foreground text-center mt-2">
@@ -166,9 +157,8 @@ export function UnlockReceiptsModal({
           </div>
         </DialogFooter>
 
-        {/* CTA Subtext */}
         <p className="text-sm font-semibold text-center mt-2">
-          Try it with a 30-day money-back guarantee.
+          Try it with a {OFFER.moneyBack.toLowerCase()}.
         </p>
 
         {/* Comp Code Section */}

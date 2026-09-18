@@ -18,8 +18,6 @@ type Props = {
   activeBadge: Badge | null;
   onSelectCell: (cell: DominanceCellDTO) => void;
   highlightedManagerKey?: string | null;
-  isPremium?: boolean;
-  freeRowCount?: number;
 };
 
 const SCORE_TOOLTIP = "Ownership score: +1 = you own them, -1 = they own you.";
@@ -37,17 +35,10 @@ export function GridTable({
   activeBadge,
   onSelectCell,
   highlightedManagerKey,
-  isPremium = true,
-  freeRowCount = 3,
 }: Props) {
   const applyFilter = !forExport && activeBadge != null;
   const suffix = forExport ? "x" : "v";
-  
-  // For non-premium users, only show the first N rows of data
-  const visibleManagers = (!isPremium && !forExport) 
-    ? managers.slice(0, freeRowCount) 
-    : managers;
-  const hiddenRowCount = managers.length - visibleManagers.length;
+  const visibleManagers = managers;
 
   useEffect(() => {
     if (!forExport && highlightedManagerKey) {
@@ -185,9 +176,8 @@ export function GridTable({
         );
       })}
 
-      {/* Footer row - only show for premium users or during export */}
-      {(isPremium || forExport) && (
-        <>
+      {/* Footer row — full grid for free + premium (exports gated separately) */}
+      <>
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="sticky left-0 z-20 bg-background border-t border-r border-muted/30 p-2 cursor-help shadow-sm" style={{ transform: 'translateZ(0)' }}>
@@ -249,7 +239,6 @@ export function GridTable({
             <TooltipContent className="!bg-background">{GRAND_TOOLTIP}</TooltipContent>
           </Tooltip>
         </>
-      )}
     </div>
   );
 }

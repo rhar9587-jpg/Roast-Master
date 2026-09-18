@@ -1,4 +1,5 @@
 import * as React from "react";
+import { WATERMARK_DIAGONAL, WATERMARK_FOOTER } from "@/lib/brand";
 
 interface WatermarkOverlayProps {
   /** Text to display in the watermark */
@@ -16,7 +17,7 @@ interface WatermarkOverlayProps {
  * - Creates friction for free users without being ugly
  */
 export function WatermarkOverlay({
-  text = "UNLOCK FOR $2.99 • fantasyroast.app",
+  text = WATERMARK_DIAGONAL,
   show,
   theme = "light",
 }: WatermarkOverlayProps) {
@@ -44,7 +45,7 @@ export function WatermarkOverlay({
         ))}
       </div>
       <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-[0.2em] font-semibold text-muted-foreground/70">
-        Unlock for $2.99 • fantasyroast.app
+        {WATERMARK_FOOTER}
       </div>
     </div>
   );

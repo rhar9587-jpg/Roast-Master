@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { Card, RoastResponse } from "@shared/schema";
 import { track } from "@/lib/track";
+import { getYoursLine, SHARE_FOOTER } from "@/lib/brand";
 import type { WrappedCardProps } from "@/components/WrappedCard";
 import { WrappedCard } from "@/components/WrappedCard";
 import { Button } from "@/components/ui/button";
@@ -165,7 +166,7 @@ function buildWeeklyRoastClipboardText(data: RoastResponse): string {
     lines.push(`🔥 Rivalry: ${data.matchup.you.username} vs ${data.matchup.opponent.username}`);
   }
 
-  lines.push("", "Get yours: https://fantasyroast.net");
+  lines.push("", getYoursLine());
   return lines.join("\n");
 }
 
@@ -266,7 +267,7 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
         title={(c.subtitle ?? c.title).slice(0, 280)}
         {...(c.stat ? { bigValue: c.stat, statLabel: "Stat" as const } : {})}
         tagline={c.tagline}
-        footer="fantasyroast.net"
+        footer={SHARE_FOOTER}
         accent={accentForEngineCard(c.type)}
         isPremium={isPremium}
       />
@@ -448,7 +449,7 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
                         subtitle={`Result: ${data.matchup.result}`}
                         bigValue={`${safeNum(data.matchup.you.score).toFixed(2)}–${safeNum(data.matchup.opponent.score).toFixed(2)}`}
                         tagline="Receipts attached."
-                        footer="fantasyroast.net"
+                        footer={SHARE_FOOTER}
                         accent="green"
                         isPremium={isPremium}
                       />
@@ -523,7 +524,7 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
         subtitle: `${leagueTitle} • ${weekTitle}`,
         bigValue: undefined,
         tagline: "Made with Fantasy Roast",
-        footer: "fantasyroast.net",
+        footer: SHARE_FOOTER,
         accent: "green",
       },
       {
@@ -532,7 +533,7 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
         subtitle: "Carried the league on their back.",
         bigValue: `${safeNum(data.stats.highestScorer.score).toFixed(2)} pts`,
         tagline: "Unreal scenes.",
-        footer: "fantasyroast.net",
+        footer: SHARE_FOOTER,
         accent: "green",
       },
       {
@@ -541,7 +542,7 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
         subtitle: "This wasn’t a bad week. This was a crime scene.",
         bigValue: `${safeNum(data.stats.lowestScorer.score).toFixed(2)} pts`,
         tagline: "Call it a rebuild.",
-        footer: "fantasyroast.net",
+        footer: SHARE_FOOTER,
         accent: "pink",
       },
     ];
@@ -575,7 +576,7 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
         subtitle: `Result: ${result} • ${punchline}`,
         bigValue: `${aScore.toFixed(2)}–${bScore.toFixed(2)}`,
         tagline: "Receipts attached.",
-        footer: "fantasyroast.net",
+        footer: SHARE_FOOTER,
         accent: "green",
         isMatchup: true,
         matchupData: {
@@ -592,7 +593,7 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
         subtitle: "Once week matchups exist, this card becomes 🔥",
         bigValue: "—",
         tagline: "Wire it to matchups endpoint.",
-        footer: "fantasyroast.net",
+        footer: SHARE_FOOTER,
         accent: "green",
       });
     }

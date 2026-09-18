@@ -6,9 +6,7 @@ import type { LandlordSummary } from "./types";
 import { Lock } from "lucide-react";
 import { useState } from "react";
 import * as React from "react";
-
-// Personal Unlock Pricing
-const PRICE = 2.99;
+import { unlockCtaLabel } from "@/lib/brand";
 
 type MostOwned = {
   victimName: string;
@@ -105,7 +103,7 @@ function BlurredCardWrapper({
             <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground">This is just the beginning…</p>
               <p className="text-xs font-medium text-muted-foreground">
-                Unlock to see who really owns this league
+                Unlock the receipts to share who owns who
               </p>
             </div>
           )}
@@ -309,9 +307,9 @@ export function InsightsDashboard({
       <div className="space-y-3">
         {hasAnyCard ? (
           <RoastDeckCarousel>
-            {landlordCard}
-            {hasViewer && nflDoppelgangerCard}
             {hasViewer && personalHookBaseballCard}
+            {hasViewer && nflDoppelgangerCard}
+            {landlordCard}
             {mostOwnedCard}
             {biggestRivalryCard}
           </RoastDeckCarousel>
@@ -329,9 +327,9 @@ export function InsightsDashboard({
     <div className="space-y-4">
       {hasAnyCard ? (
         <RoastDeckCarousel>
-          {landlordCard}
-          {hasViewer && nflDoppelgangerCard}
           {hasViewer && personalHookBaseballCard}
+          {hasViewer && nflDoppelgangerCard}
+          {landlordCard}
           {mostOwnedCard && (
             <BlurredCardWrapper onUnlock={onUnlock}>{mostOwnedCard}</BlurredCardWrapper>
           )}
@@ -346,16 +344,15 @@ export function InsightsDashboard({
         </p>
       )}
       <div className="rounded-lg border border-dashed bg-muted/20 p-4 space-y-3 text-center">
-        <p className="text-sm font-medium text-foreground">The full roast is waiting.</p>
+        <p className="text-sm font-medium text-foreground">The full receipts are waiting.</p>
         <ul className="text-xs text-muted-foreground space-y-1 text-left max-w-xs mx-auto">
           <li>• All hero cards (Biggest Victim, Playoff Choker, and more)</li>
-          <li>• League storylines and personal roasts</li>
-          <li>• Weekly roasts for every matchup</li>
-          <li>• Season Wrapped for each manager</li>
-          <li>• End-of-season recap</li>
+          <li>• League storylines (share &amp; export)</li>
+          <li>• Weekly cards + commissioner email (included)</li>
+          <li>• Season Wrapped + end-of-season recap (included)</li>
         </ul>
         <Button size="sm" onClick={onUnlock}>
-          Unlock for you — ${PRICE}
+          {unlockCtaLabel()}
         </Button>
       </div>
     </div>

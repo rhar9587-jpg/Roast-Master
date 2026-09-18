@@ -3,9 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-// Personal Unlock Pricing
-const PRICE = 2.99;
+import { OFFER, PRICE_LABEL, unlockCtaLabel } from "@/lib/brand";
 
 type Props = {
   onUpgrade?: () => void;
@@ -87,33 +85,29 @@ export function ConversionBanner({
       >
         <CardHeader className="text-center pb-4">
           <CardTitle className="text-2xl font-bold tracking-tight">
-            {`Want this for YOUR league? Unlock for you — $${PRICE}.`}
+            {`Want the receipts for YOUR league? ${unlockCtaLabel()}.`}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Benefits - framed for demo */}
           <div className="max-w-2xl mx-auto">
             <ul className="space-y-3 text-sm">
               <li className="flex items-start gap-2">
                 <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <span><strong>League Receipts</strong> — who runs YOUR league: dominance, grids, archetypes.</span>
+                <span><strong>League Receipts</strong> — who owns who in YOUR league: dominance, grids, archetypes.</span>
               </li>
               <li className="flex items-start gap-2">
-                <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <span><strong>Weekly Roast</strong> — week narrative, cards, group chat, commissioner email.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <span><strong>Season Recap</strong> — your season story and the league finale.</span>
+                <Check className="h-4 w-4 text-primary/70 shrink-0 mt-0.5" />
+                <span className="text-muted-foreground">
+                  <strong className="text-foreground">Also included:</strong> weekly cards + commissioner email, and your season recap.
+                </span>
               </li>
             </ul>
           </div>
 
           <p className="text-sm text-muted-foreground mt-2 text-center">
-            This is demo data. The real roasts are in YOUR league.
+            This is demo data. The real receipts are in YOUR league.
           </p>
 
-          {/* CTA - demo focused */}
           <div className="text-center">
             <p className="text-xs font-semibold text-muted-foreground mb-2">
               Enter your Sleeper username above to get started.
@@ -123,11 +117,11 @@ export function ConversionBanner({
               size="lg"
               className="font-semibold px-8 interact-cta"
             >
-              {`Unlock for you — $${PRICE}`}
+              {`Get my league — ${PRICE_LABEL}`}
             </Button>
           </div>
           <p className="text-sm font-semibold text-center">
-            Try it with a 30-day money-back guarantee.
+            Try it with a {OFFER.moneyBack.toLowerCase()}.
           </p>
 
           {/* Trust & Social Proof */}
@@ -136,7 +130,7 @@ export function ConversionBanner({
               Built for group chats and league banter.
             </p>
             <p className="text-xs text-muted-foreground">
-              30-day money-back guarantee • Secure checkout
+              {OFFER.moneyBack} • Secure checkout
             </p>
           </div>
         </CardContent>
@@ -144,7 +138,6 @@ export function ConversionBanner({
     );
   }
 
-  // Non-demo content (original)
   return (
     <Card
       className="border-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 shadow-lg animate-in fade-in duration-500"
@@ -152,43 +145,40 @@ export function ConversionBanner({
     >
       <CardHeader className="text-center pb-4">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          {`${leagueName?.trim() ? leagueName : "This league"} has receipts waiting. Unlock for you — $${PRICE}.`}
+          {`${leagueName?.trim() ? leagueName : "This league"} has receipts waiting. ${unlockCtaLabel()}.`}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Benefits - sell the full package */}
         <div className="max-w-2xl mx-auto">
           <ul className="space-y-3 text-sm">
             <li className="flex items-start gap-2">
               <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span><strong>League Receipts</strong> — dominance grid, hero roasts, storylines, all-time records</span>
+              <span>
+                <strong>League Receipts</strong> — dominance grid, headlines, storylines, all-time records (share &amp; export)
+              </span>
             </li>
             <li className="flex items-start gap-2">
-              <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span><strong>Weekly Roast</strong> — week-by-week chaos, shareable cards, commissioner email (preview + recap)</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span><strong>Season Recap</strong> — season wrapped, personal story, league autopsy &amp; finale</span>
+              <Check className="h-4 w-4 text-primary/70 shrink-0 mt-0.5" />
+              <span className="text-muted-foreground">
+                <strong className="text-foreground">Also included:</strong> weekly cards + commissioner email, and your season recap.
+              </span>
             </li>
           </ul>
         </div>
 
-        {/* CTA */}
         <div className="text-center">
           <Button
             onClick={handleUpgrade}
             size="lg"
             className="font-semibold px-8 interact-cta"
           >
-            {`Unlock for you — $${PRICE}`}
+            {unlockCtaLabel()}
           </Button>
         </div>
         <p className="text-sm font-semibold text-center">
-          Try it with a 30-day money-back guarantee.
+          Try it with a {OFFER.moneyBack.toLowerCase()}.
         </p>
 
-        {/* Comp Code Section */}
         <div className="text-center">
           {!showCodeInput ? (
             <button
@@ -220,13 +210,12 @@ export function ConversionBanner({
           )}
         </div>
 
-        {/* Trust & Social Proof */}
         <div className="text-center space-y-2 pt-2 border-t">
           <p className="text-xs text-muted-foreground">
-            Built for group chats and league banter.
+            Built for group chats — the permanent record of who owns who.
           </p>
           <p className="text-xs text-muted-foreground">
-            30-day money-back guarantee • Secure checkout
+            {OFFER.moneyBack} • Secure checkout
           </p>
         </div>
       </CardContent>

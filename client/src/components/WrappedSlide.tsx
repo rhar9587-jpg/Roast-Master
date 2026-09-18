@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { SHARE_FOOTER } from "@/lib/brand";
 
 export type Accent = "green" | "pink" | "blue" | "orange";
 
@@ -10,7 +11,7 @@ type WrappedSlideProps = {
   bigValue?: string;
   footer?: string;
   accent?: Accent;
-  badgeRight?: string; // e.g. "fantasyroast.app"
+  badgeRight?: string;
   children?: React.ReactNode;
   className?: string;
 };
@@ -29,7 +30,7 @@ export function WrappedSlide({
   bigValue,
   footer = "Made with Fantasy Roast",
   accent = "green",
-  badgeRight = "fantasyroast.net",
+  badgeRight = SHARE_FOOTER,
   children,
   className,
 }: WrappedSlideProps) {

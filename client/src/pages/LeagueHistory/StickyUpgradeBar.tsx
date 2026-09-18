@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
+import { OFFER, PRICE_LABEL, unlockCtaLabel } from "@/lib/brand";
 
 const STORAGE_KEY = "fantasy-roast-upgradeDismissedUntil";
-// Personal Unlock Pricing
-const PRICE = 2.99;
 
 type Props = {
   onUpgrade?: () => void;
@@ -108,14 +107,6 @@ export function StickyUpgradeBar({
     }
   };
 
-  const handleScrollToTop = () => {
-    if (onScrollToTop) {
-      onScrollToTop();
-    } else {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
-
   if (!isVisible || isDismissedState) return null;
 
   const showMissingCounts =
@@ -125,7 +116,6 @@ export function StickyUpgradeBar({
     lockedReceiptsCount > 0 &&
     lockedStorylinesCount > 0;
 
-  // Demo-specific sticky bar
   if (isDemo) {
     return (
       <div
@@ -136,10 +126,10 @@ export function StickyUpgradeBar({
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">
-                {`This is demo data. Get the real roasts for YOUR league • $${PRICE}`}
+                {`This is demo data. Get the real receipts for YOUR league • ${PRICE_LABEL}`}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                Get league receipts, weekly roast content, and your season recap.
+                Unlock once for receipts — weekly and season included.
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -170,7 +160,6 @@ export function StickyUpgradeBar({
     );
   }
 
-  // Non-demo sticky bar (original)
   return (
     <div
       className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-t shadow-lg animate-in slide-in-from-bottom-2 fade-in duration-300"
@@ -179,16 +168,16 @@ export function StickyUpgradeBar({
       <div className="mx-auto max-w-6xl px-4 py-3">
         {showMissingCounts && (
           <div className="text-xs font-semibold text-muted-foreground mb-1">
-            Unlock {lockedReceiptsCount} more roasts + {lockedStorylinesCount} storylines in this league.
+            Unlock {lockedReceiptsCount} more receipts + {lockedStorylinesCount} storylines in this league.
           </div>
         )}
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">
-              {`Unlock the full league for you — $${PRICE}`}
+              {unlockCtaLabel()}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-              Get league receipts, weekly roast content, and your season recap.
+              Share who owns who. Weekly and season included.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -198,11 +187,11 @@ export function StickyUpgradeBar({
                 size="sm"
                 className="font-semibold whitespace-nowrap interact-cta"
               >
-                {`Unlock for you — $${PRICE}`}
+                {unlockCtaLabel()}
               </Button>
               {typeof lockedTotalCount === "number" && lockedTotalCount > 0 && (
                 <p className="text-xs text-muted-foreground text-center mt-1">
-                  Your league has {lockedTotalCount} roasts waiting.
+                  Your league has {lockedTotalCount} receipts waiting.
                 </p>
               )}
             </div>
@@ -218,7 +207,7 @@ export function StickyUpgradeBar({
           </div>
         </div>
         <div className="text-xs font-semibold text-muted-foreground mt-1">
-          Try it with a 30-day money-back guarantee.
+          Try it with a {OFFER.moneyBack.toLowerCase()}.
         </div>
       </div>
     </div>

@@ -52,7 +52,9 @@ import { createCheckoutSession } from "@/lib/checkout";
 import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername, getCommissionerEmail, setCommissionerEmail } from "./utils";
 import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards, type MiniCard } from "./storylines";
 import { computeHeroReceipts } from "./computeHeroReceipts";
+import { suggestViewerKey } from "./suggestViewer";
 import { track, trackFunnel } from "@/lib/track";
+import { unlockCtaLabel } from "@/lib/brand";
 import type {
   Badge,
   DominanceApiResponse,
@@ -70,7 +72,7 @@ type Mode = "history" | "weekly" | "season" | "end";
 type TeamOption = { roster_id: number; name: string };
 
 const PAGE_TITLE_BY_MODE: Record<Mode, string> = {
-  history: "League History",
+  history: "League Receipts",
   weekly: "Weekly Roast",
   season: "Your Season",
   end: "League Recap",
@@ -604,8 +606,11 @@ export default function LeagueHistoryPage() {
   const storylinesExportRef = useRef<HTMLDivElement | null>(null);
   const yourRoastExportRef = useRef<HTMLDivElement | null>(null);
   const selectorRef = useRef<HTMLDivElement | null>(null);
+  const personalAhaRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedFromUrl = useRef(false);
   const shouldAutoTrigger = useRef(false);
+  const personalAhaDoneRef = useRef<string | null>(null);
+  const viewerUserClearedRef = useRef(false);
 
   const queryClient = useQueryClient();
   const { data, isFetching, error, refetch } = useQuery({
@@ -1317,14 +1322,9 @@ export default function LeagueHistoryPage() {
     return Math.max(totalStorylines - 1, 0);
   }, [leagueStorylines.length, additionalMiniCards.length]);
 
-  const lockedYourRoastCount = useMemo(() => {
-    if (!viewerKey) return 0;
-    return Math.max(yourRoastCards.length - 1, 0);
-  }, [viewerKey, yourRoastCards.length]);
-
   const lockedTotalCount = useMemo(() => {
-    return lockedReceiptsCount + lockedStorylinesCount + lockedYourRoastCount;
-  }, [lockedReceiptsCount, lockedStorylinesCount, lockedYourRoastCount]);
+    return lockedReceiptsCount + lockedStorylinesCount;
+  }, [lockedReceiptsCount, lockedStorylinesCount]);
 
   // Compute ownedCount for contextual copy
   const ownedCount = useMemo(() => {
@@ -1509,6 +1509,8 @@ export default function LeagueHistoryPage() {
 
   useEffect(() => {
     setViewerKey("");
+    viewerUserClearedRef.current = false;
+    personalAhaDoneRef.current = null;
   }, [leagueId]);
 
   useEffect(() => {
@@ -1526,10 +1528,11 @@ export default function LeagueHistoryPage() {
     const urlViewer = params.get("view");
     const keys = new Set(managers.map((m) => m.key));
     
-    // Priority: URL param > persisted > username match > empty
+    // Priority: URL param > persisted > username match > rivalry suggest > empty
     if (urlViewer && urlViewer.trim() && keys.has(urlViewer.trim())) {
       setViewerKey(urlViewer.trim());
       setViewerByLeague(leagueId.trim(), urlViewer.trim());
+      viewerUserClearedRef.current = false;
       return;
     }
     
@@ -1537,27 +1540,32 @@ export default function LeagueHistoryPage() {
     
     if (saved && keys.has(saved)) {
       setViewerKey(saved);
-    } else if (saved) {
+      viewerUserClearedRef.current = false;
+      return;
+    }
+
+    if (saved) {
       setViewerByLeague(leagueId.trim(), "");
-      // After clearing invalid persisted, try username match
-      if (username.trim()) {
-        const matchedKey = findManagerKeyByUsername(username, managers);
-        if (matchedKey) {
-          setViewerKey(matchedKey);
-          setViewerByLeague(leagueId.trim(), matchedKey);
-        }
-      }
-    } else {
-      // No persisted selection, try username match
-      if (username.trim()) {
-        const matchedKey = findManagerKeyByUsername(username, managers);
-        if (matchedKey) {
-          setViewerKey(matchedKey);
-          setViewerByLeague(leagueId.trim(), matchedKey);
-        }
+    }
+
+    if (username.trim()) {
+      const matchedKey = findManagerKeyByUsername(username, managers);
+      if (matchedKey) {
+        setViewerKey(matchedKey);
+        setViewerByLeague(leagueId.trim(), matchedKey);
+        viewerUserClearedRef.current = false;
+        return;
       }
     }
-  }, [hasData, managers, leagueId, data?.league, username]);
+
+    if (viewerUserClearedRef.current) return;
+
+    const suggested = suggestViewerKey(managers, landlord, mostOwned, biggestRivalry);
+    if (suggested) {
+      setViewerKey(suggested);
+      setViewerByLeague(leagueId.trim(), suggested);
+    }
+  }, [hasData, managers, leagueId, data?.league, username, landlord, mostOwned, biggestRivalry]);
 
   function openCell(cellKey: string | null) {
     if (!cellKey) return;
@@ -1719,6 +1727,25 @@ export default function LeagueHistoryPage() {
     const totalGames = allCells.reduce((sum, c) => sum + (c?.games ?? 0), 0);
     return totalGames > 0;
   }, [data, allCells]);
+
+  // Cold-user aha: scroll to personal receipts + highlight viewer row once per league/viewer
+  useEffect(() => {
+    if (!viewerKey || !hasData || !hasEnoughData || activeMode !== "history") return;
+    const ahaKey = `${leagueId.trim()}:${viewerKey}`;
+    if (personalAhaDoneRef.current === ahaKey) return;
+    personalAhaDoneRef.current = ahaKey;
+
+    const timer = window.setTimeout(() => {
+      personalAhaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedManagerKey(viewerKey);
+      window.setTimeout(() => setHighlightedManagerKey(null), 3000);
+      track("personal_aha_shown", {
+        league_id: leagueId.trim(),
+        viewer_key: viewerKey,
+      });
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [viewerKey, hasData, hasEnoughData, activeMode, leagueId]);
 
   // Show post-analysis toast when analysis completes
   useEffect(() => {
@@ -2039,30 +2066,44 @@ export default function LeagueHistoryPage() {
           <div className="flex flex-wrap gap-2 rounded-xl border bg-muted/20 p-1">
             {(
               [
-                { id: "history" as const, label: "History", job: "League receipts" },
-                ...(WEEKLY_ENABLED ? [{ id: "weekly" as const, label: "Weekly", job: "Weekly roast" }] : []),
-                { id: "season" as const, label: "Your Season", job: "Your season story" },
-                { id: "end" as const, label: "Recap", job: "League finale" },
+                { id: "history" as const, label: "Receipts", job: "Who owns who", primary: true },
+                ...(WEEKLY_ENABLED
+                  ? [{ id: "weekly" as const, label: "Weekly", job: "Included", primary: false }]
+                  : []),
+                { id: "season" as const, label: "Season", job: "Included", primary: false },
+                { id: "end" as const, label: "Recap", job: "Included", primary: false },
               ] as const
             ).map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveMode(tab.id as Mode)}
-                className={`flex flex-col items-stretch gap-0.5 px-3 py-2 rounded-lg text-left transition min-w-[7.5rem] ${
+                className={`flex flex-col items-stretch gap-0.5 rounded-lg text-left transition ${
+                  tab.primary ? "px-3 py-2 min-w-[8.5rem]" : "px-2.5 py-1.5 min-w-[5.5rem]"
+                } ${
                   activeMode === tab.id
                     ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    : tab.primary
+                      ? "text-muted-foreground hover:text-foreground"
+                      : "text-muted-foreground/80 hover:text-foreground"
                 }`}
               >
-                <span className="text-sm font-medium leading-tight">{tab.label}</span>
-                <span className="text-[10px] font-normal text-muted-foreground leading-tight">{tab.job}</span>
+                <span
+                  className={`leading-tight ${
+                    tab.primary ? "text-sm font-semibold" : "text-xs font-medium"
+                  }`}
+                >
+                  {tab.label}
+                </span>
+                <span className="text-[10px] font-normal text-muted-foreground leading-tight">
+                  {tab.job}
+                </span>
               </button>
             ))}
           </div>
           {!WEEKLY_ENABLED && (
             <p className="text-xs text-muted-foreground px-1">
-              <strong className="text-foreground font-medium">Weekly Roast</strong> tab is coming soon — weekly cards and commissioner email are already included in your unlock.
+              <strong className="text-foreground font-medium">Weekly</strong> is coming soon — cards and commissioner email are already included in your unlock.
             </p>
           )}
         </div>
@@ -2070,7 +2111,7 @@ export default function LeagueHistoryPage() {
 
       {hasData && (
         <p className="text-sm text-muted-foreground">
-          {activeMode === "history" && "Every argument your league has ever had — with receipts."}
+          {activeMode === "history" && "See who owns who. Share the receipts."}
           {WEEKLY_ENABLED && activeMode === "weekly" && "Pick a week. Get the chaos from that matchup slate."}
           {activeMode === "season" && "Your season. Your wins. Your choke jobs. No hiding."}
           {activeMode === "end" && "The final verdict on this season. Someone's getting exposed."}
@@ -2079,7 +2120,7 @@ export default function LeagueHistoryPage() {
 
       {activeMode === "history" && !showPremiumContent && hasData && (
         <p className="text-xs text-muted-foreground">
-          Unlock once for this league to share everything—including the weekly commissioner email (preview + recap).
+          Free: see the truth. {unlockCtaLabel()} to share it — weekly and season included.
         </p>
       )}
 
@@ -2133,8 +2174,8 @@ export default function LeagueHistoryPage() {
 
       {WEEKLY_ENABLED && hasData && activeMode === "weekly" && !showPremiumContent && (
         <LockedModePreview
-          title="Weekly Roast"
-          description="Pick Recap or Preview above, then generate the chaos from that slate."
+          title="Weekly is included"
+          description={`${unlockCtaLabel()} — then generate this week's cards and commissioner email.`}
           previewItems={[
             "Top Dog, Biggest Embarrassment, Fraud Watch, Worst Coaching, Carry Job, Group Chat Drop",
             "One scroll of league cards + copy-paste group chat summary",
@@ -2238,12 +2279,12 @@ export default function LeagueHistoryPage() {
 
       {hasData && activeMode === "season" && !showPremiumContent && (
         <LockedModePreview
-          title="Your Season"
-          description="Pick a manager and reveal their season wrapped."
+          title="Season is included"
+          description={`${unlockCtaLabel()} — then generate your season wrapped.`}
           previewItems={[
             "Personal highlights and lowlights",
             "Your season story in shareable cards",
-            "A roast-worthy recap for the group chat",
+            "A receipt-worthy recap for the group chat",
           ]}
           onUnlock={handleCheckout}
           lockedTotalCount={lockedTotalCount}
@@ -2312,8 +2353,8 @@ export default function LeagueHistoryPage() {
 
       {hasData && activeMode === "end" && !showPremiumContent && (
         <LockedModePreview
-          title="Recap"
-          description="End-of-season moments that your league won't forget."
+          title="Recap is included"
+          description={`${unlockCtaLabel()} — then generate the end-of-season league finale.`}
           previewItems={[
             "Biggest blowouts and upsets",
             "Season highs and lows",
@@ -2364,9 +2405,11 @@ export default function LeagueHistoryPage() {
               onValueChange={(v) => {
                 if (v === "__none__") {
                   setViewerKey("");
+                  viewerUserClearedRef.current = true;
                   if (leagueId.trim()) setViewerByLeague(leagueId.trim(), "");
                 } else {
                   setViewerKey(v);
+                  viewerUserClearedRef.current = false;
                   if (leagueId.trim()) setViewerByLeague(leagueId.trim(), v);
                 }
               }}
@@ -2387,7 +2430,12 @@ export default function LeagueHistoryPage() {
             </Select>
             {!viewerKey && (
               <p className="text-xs text-muted-foreground">
-                Select yourself to see your personal roast
+                Select yourself to see your personal receipts
+              </p>
+            )}
+            {viewerKey && (
+              <p className="text-xs text-muted-foreground">
+                Your personal receipts are below — then the full dominance grid.
               </p>
             )}
           </div>
@@ -2444,11 +2492,76 @@ export default function LeagueHistoryPage() {
           />
           {hasData && hasEnoughData && (
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Found your nemesis? Send this roast.
+              Found your nemesis? Send this receipt.
             </p>
           )}
         </section>
       )}
+
+      {/* Personal receipts early — cold-user aha before the full grid */}
+      {activeMode === "history" &&
+        hasData &&
+        hasEnoughData &&
+        (leagueStorylines.length > 0 || !!viewerKey) && (
+          <div ref={personalAhaRef}>
+            <StorylinesMiniCards
+              leagueCards={[...leagueStorylines, ...additionalMiniCards]}
+              yourRoastCards={yourRoastCards}
+              viewerChosen={!!viewerKey}
+              onOpenCell={(key) => openCell(key)}
+              onOpenMiniCard={(card) => setSelectedMiniCard(card)}
+              onHighlightManager={onHighlightManager}
+              storylinesExportRef={storylinesExportRef}
+              yourRoastExportRef={yourRoastExportRef}
+              exportTimestamp={
+                lastAnalyzedAt?.toLocaleString() ??
+                new Date().toLocaleString()
+              }
+              isPremium={showPremiumContent}
+              onUnlock={handleCheckout}
+              lockedTotalCount={lockedTotalCount}
+            />
+            <div className="flex flex-wrap gap-2 mt-3">
+              {leagueStorylines.length > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (showPremiumContent) {
+                            saveStorylinesPng();
+                          } else {
+                            handleUpgrade();
+                          }
+                        }}
+                        disabled={isExportingStorylines}
+                      >
+                        {isExportingStorylines ? "Saving…" : "Save Storylines"}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {!showPremiumContent && (
+                    <TooltipContent>
+                      <p>{unlockCtaLabel()}</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              )}
+              {!!viewerKey && yourRoastCards.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={saveYourRoastPng}
+                  disabled={isExportingYourRoast}
+                >
+                  {isExportingYourRoast ? "Saving…" : "Save Your Roast"}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
       {activeMode === "history" && (
         <section>
@@ -2552,70 +2665,6 @@ export default function LeagueHistoryPage() {
         </div>
       )}
 
-      {activeMode === "history" &&
-        hasData &&
-        hasEnoughData &&
-        (leagueStorylines.length > 0 || !!viewerKey) && (
-          <section>
-            <div className="flex flex-wrap gap-2 mb-3">
-              {leagueStorylines.length > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (showPremiumContent) {
-                            saveStorylinesPng();
-                          } else {
-                            handleUpgrade();
-                          }
-                        }}
-                        disabled={isExportingStorylines}
-                      >
-                        {isExportingStorylines ? "Saving…" : "Save Storylines"}
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  {!showPremiumContent && (
-                    <TooltipContent>
-                      <p>Unlock to export League Storylines</p>
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              )}
-              {!!viewerKey && yourRoastCards.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={saveYourRoastPng}
-                  disabled={isExportingYourRoast}
-                >
-                  {isExportingYourRoast ? "Saving…" : "Save Your Roast"}
-                </Button>
-              )}
-            </div>
-            <StorylinesMiniCards
-              leagueCards={[...leagueStorylines, ...additionalMiniCards]}
-              yourRoastCards={yourRoastCards}
-              viewerChosen={!!viewerKey}
-              onOpenCell={(key) => openCell(key)}
-              onOpenMiniCard={(card) => setSelectedMiniCard(card)}
-              onHighlightManager={onHighlightManager}
-              storylinesExportRef={storylinesExportRef}
-              yourRoastExportRef={yourRoastExportRef}
-              exportTimestamp={
-                lastAnalyzedAt?.toLocaleString() ??
-                new Date().toLocaleString()
-              }
-              isPremium={showPremiumContent}
-              onUnlock={handleCheckout}
-              lockedTotalCount={lockedTotalCount}
-            />
-          </section>
-        )}
-
       {selectedDoppelganger && (
         <Dialog open={doppelgangerOpen} onOpenChange={setDoppelgangerOpen}>
           <DialogContent className="sm:max-w-md">
@@ -2661,7 +2710,7 @@ export default function LeagueHistoryPage() {
                     }}
                     className="w-full font-semibold interact-cta"
                   >
-                    Unlock your doppelgänger — $2.99
+                    {unlockCtaLabel("Unlock your doppelgänger")}
                   </Button>
                 ) : (
                   <>

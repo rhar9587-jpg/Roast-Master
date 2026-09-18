@@ -52,7 +52,7 @@ export function PostAnalysisToast({
   const title = isPremium ? "Analysis complete!" : "Analysis complete";
   const body = isPremium
     ? `Found ${matchupCount} matchups across ${managerCount} managers${weeksText}.`
-    : "Analysis complete! Select your manager above to see your personal roasts.";
+    : "Analysis complete — your personal receipts are ready. Scroll to share the truth.";
 
   return (
     <Card
