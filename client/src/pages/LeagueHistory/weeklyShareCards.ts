@@ -127,12 +127,18 @@ export function mapEngineCardToVisual(
   }
 
   if (type.includes("fraud")) {
+    const kind = metaStr(meta, "kind");
+    const headline =
+      kind === "lucky_win"
+        ? "WON LIGHT"
+        : kind === "strong_loss"
+          ? "ROBBED"
+          : shortPunchline(card.title, "FRAUD WATCH", 24).toUpperCase();
     return {
       kicker: "FRAUD WATCH",
-      title: shortPunchline(card.title, "FRAUD WATCH", 40).toUpperCase(),
+      title: headline,
       subtitle: shortPunchline(card.subtitle, "Results don't match the vibes.", 100),
-      bigValue: card.stat,
-      statLabel: "Verdict",
+      bigValue: undefined,
       tagline: shortPunchline(card.tagline, "Receipts attached."),
       accent: "orange",
     };

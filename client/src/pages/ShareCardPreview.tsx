@@ -62,8 +62,6 @@ export default function ShareCardPreviewPage() {
             kicker="FRAUD WATCH"
             title="WON LIGHT"
             subtitle="Won at 78.2; league median was 112.4."
-            bigValue="Won light"
-            statLabel="Verdict"
             tagline="Receipts attached."
             accent="orange"
             isPremium
