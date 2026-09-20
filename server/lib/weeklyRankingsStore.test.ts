@@ -1,10 +1,21 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { promises as fs } from "fs";
+import os from "os";
+import path from "path";
 import {
   createMemoryRankingBackend,
+  createFileRankingBackend,
+  createNoopRankingBackend,
+  createPostgresRankingBackend,
   getStoredPreviousRankings,
   storeRankingsForWeek,
+  resolveRankingBackendKind,
+  isProductionRankingRuntime,
+  WEEKLY_RANKINGS_FILE_PATH,
   __setRankingHistoryBackendForTests,
+  __setRankingHistoryEnvForTests,
   __resetRankingHistoryModuleForTests,
+  __getActiveRankingBackendKindForTests,
   type RankingHistoryBackend,
 } from "./weeklyRankingsStore";
 import { generatePowerRankings, type PowerRankingsTeamInput } from "./powerRankings";
@@ -193,5 +204,117 @@ describe("weekly ranking history persistence", () => {
     // Week 5 should use week 4 (latest before 5), not week 2
     const prev = await getStoredPreviousRankings("lg", 5, "2024");
     expect(prev).toEqual([{ teamId: "1", rank: 1 }]);
+  });
+});
+
+describe("production vs development ranking backend selection", () => {
+  afterEach(() => {
+    __resetRankingHistoryModuleForTests();
+  });
+
+  it("production + Postgres available → postgres backend kind", () => {
+    expect(
+      resolveRankingBackendKind({ isProduction: true, postgresAvailable: true }),
+    ).toBe("postgres");
+    expect(isProductionRankingRuntime({ NODE_ENV: "production" })).toBe(true);
+    // createPostgresRankingBackend marks kind correctly (pool unused in this assertion)
+    const fakePool = {} as import("pg").Pool;
+    expect(createPostgresRankingBackend(fakePool).kind).toBe("postgres");
+  });
+
+  it("production + Postgres unavailable → previous rankings empty / conservative", async () => {
+    __setRankingHistoryBackendForTests(null);
+    __setRankingHistoryEnvForTests({ NODE_ENV: "production" }); // no DATABASE_URL
+    const kind = await __getActiveRankingBackendKindForTests();
+    expect(kind).toBe("noop");
+    const prev = await getStoredPreviousRankings("lg-prod", 5, "2024");
+    expect(prev).toEqual([]);
+    const rows = generatePowerRankings(
+      [team("1", "A", 4, 0, 400), team("2", "B", 0, 4, 100)],
+      prev,
+    );
+    expect(rows.every((r) => r.trend === "flat")).toBe(true);
+  });
+
+  it("production + Postgres unavailable → ranking write does not fail the request", async () => {
+    __setRankingHistoryBackendForTests(createNoopRankingBackend());
+    await expect(
+      storeRankingsForWeek("lg-prod", 4, [{ teamId: "1", rank: 1, powerScore: 88 }], "2024"),
+    ).resolves.toBeUndefined();
+    const prev = await getStoredPreviousRankings("lg-prod", 5, "2024");
+    expect(prev).toEqual([]);
+  });
+
+  it("production does not write .data/weekly-rankings.json", async () => {
+    const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rank-prod-"));
+    const probePath = path.join(tmpRoot, "weekly-rankings.json");
+    __setRankingHistoryBackendForTests(createNoopRankingBackend());
+    __setRankingHistoryEnvForTests({ NODE_ENV: "production" });
+    await storeRankingsForWeek("lg-prod", 3, [{ teamId: "9", rank: 1 }], "2024");
+    await expect(fs.access(probePath)).rejects.toThrow();
+    await expect(fs.access(WEEKLY_RANKINGS_FILE_PATH)).rejects.toThrow();
+    expect(createNoopRankingBackend().kind).toBe("noop");
+  });
+
+  it("local development may use the file backend", () => {
+    expect(
+      resolveRankingBackendKind({ isProduction: false, postgresAvailable: false }),
+    ).toBe("file");
+    expect(isProductionRankingRuntime({ NODE_ENV: "development" })).toBe(false);
+    expect(createFileRankingBackend().kind).toBe("file");
+  });
+
+  it("development init without DATABASE_URL selects file backend", async () => {
+    __setRankingHistoryBackendForTests(null);
+    __setRankingHistoryEnvForTests({ NODE_ENV: "development" });
+    const kind = await __getActiveRankingBackendKindForTests();
+    expect(kind).toBe("file");
+  });
+});
+
+describe("local file backend concurrency", () => {
+  let tmpFile: string;
+
+  beforeEach(async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "rank-file-"));
+    tmpFile = path.join(dir, "weekly-rankings.json");
+  });
+
+  afterEach(async () => {
+    __resetRankingHistoryModuleForTests();
+    try {
+      await fs.rm(path.dirname(tmpFile), { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  it("concurrent local writes do not erase unrelated snapshots", async () => {
+    const fileBackend = createFileRankingBackend(tmpFile);
+    __setRankingHistoryBackendForTests(fileBackend);
+
+    await Promise.all([
+      storeRankingsForWeek("lg-a", 1, [{ teamId: "1", rank: 1 }], "2024"),
+      storeRankingsForWeek("lg-b", 1, [{ teamId: "2", rank: 1 }], "2024"),
+      storeRankingsForWeek("lg-a", 2, [{ teamId: "1", rank: 2 }], "2024"),
+      storeRankingsForWeek("lg-c", 3, [{ teamId: "3", rank: 1 }], "2023"),
+    ]);
+
+    const a = await getStoredPreviousRankings("lg-a", 3, "2024");
+    const b = await getStoredPreviousRankings("lg-b", 2, "2024");
+    const c = await getStoredPreviousRankings("lg-c", 4, "2023");
+    expect(a).toEqual([{ teamId: "1", rank: 2 }]);
+    expect(b).toEqual([{ teamId: "2", rank: 1 }]);
+    expect(c).toEqual([{ teamId: "3", rank: 1 }]);
+
+    const raw = JSON.parse(await fs.readFile(tmpFile, "utf8")) as {
+      snapshots: Record<string, unknown>;
+    };
+    expect(Object.keys(raw.snapshots).sort()).toEqual([
+      "lg-a|2024|1",
+      "lg-a|2024|2",
+      "lg-b|2024|1",
+      "lg-c|2023|3",
+    ]);
   });
 });
