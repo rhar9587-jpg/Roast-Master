@@ -114,6 +114,8 @@ function computeBiggestBlowout(
     meta: {
       winner_roster_id: best.winnerRosterId,
       loser_roster_id: best.loserRosterId,
+      winner_name: winnerName,
+      loser_name: loserName,
       winner_score: best.winnerPoints,
       loser_score: best.loserPoints,
       margin: best.margin,

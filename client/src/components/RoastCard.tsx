@@ -326,10 +326,28 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
                   : data.matchup ? (
                       <WrappedCard
                         kicker="YOUR MATCHUP"
-                        kickerIcon={<Swords className="w-3.5 h-3.5" />}
-                        title={`${data.matchup.you.username} vs ${data.matchup.opponent.username}`}
-                        subtitle={`Result: ${data.matchup.result}`}
-                        bigValue={`${safeNum(data.matchup.you.score).toFixed(1)}–${safeNum(data.matchup.opponent.score).toFixed(1)}`}
+                        title={
+                          data.matchup.result === "WIN"
+                            ? "HANDLED BUSINESS"
+                            : data.matchup.result === "LOSS"
+                              ? "TOOK THE L"
+                              : data.matchup.result === "TIE"
+                                ? "DEAD EVEN"
+                                : "PENDING"
+                        }
+                        isMatchup
+                        matchupData={{
+                          teamA: data.matchup.you.username,
+                          scoreA: safeNum(data.matchup.you.score),
+                          teamB: data.matchup.opponent.username,
+                          scoreB: safeNum(data.matchup.opponent.score),
+                          margin: Math.abs(
+                            safeNum(data.matchup.you.score) - safeNum(data.matchup.opponent.score),
+                          ),
+                        }}
+                        bigValue={`+${Math.abs(
+                          safeNum(data.matchup.you.score) - safeNum(data.matchup.opponent.score),
+                        ).toFixed(1)}`}
                         tagline="Receipts attached."
                         footer={SHARE_FOOTER}
                         accent="green"
@@ -493,6 +511,7 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
         scoreA: number;
         teamB: string;
         scoreB: number;
+        margin?: number;
       };
     }> = [
       {
@@ -551,9 +570,16 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
               : "Still playing — don't count the W yet.";
       deck.push({
         kicker: "YOUR MATCHUP",
-        title: `${a.username.toUpperCase()} vs ${b.username.toUpperCase()}`,
-        subtitle: `Result: ${result} • ${punchline}`,
-        bigValue: `${aScore.toFixed(2)}–${bScore.toFixed(2)}`,
+        title:
+          result === "WIN"
+            ? "HANDLED BUSINESS"
+            : result === "LOSS"
+              ? "TOOK THE L"
+              : result === "TIE"
+                ? "DEAD EVEN"
+                : "PENDING",
+        subtitle: punchline,
+        bigValue: `+${margin.toFixed(1)}`,
         tagline: "Receipts attached.",
         footer: SHARE_FOOTER,
         accent: "green",
@@ -563,6 +589,7 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
           scoreA: aScore,
           teamB: b.username,
           scoreB: bScore,
+          margin,
         },
       });
     } else {
@@ -630,6 +657,8 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
         tagline={current.tagline}
         footer={current.footer}
         accent={current.accent}
+        isMatchup={current.isMatchup}
+        matchupData={current.matchupData}
         isPremium={isPremium}
       />
     </div>

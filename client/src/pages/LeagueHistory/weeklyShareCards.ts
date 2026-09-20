@@ -14,6 +14,7 @@ export type VisualShareCard = {
     scoreA: number;
     teamB: string;
     scoreB: number;
+    margin?: number;
   };
 };
 
@@ -87,15 +88,16 @@ export function mapEngineCardToVisual(
     const winnerScore = metaNum(meta, "winner_score");
     const loserScore = metaNum(meta, "loser_score");
     const margin = metaNum(meta, "margin");
-    const subtitle = card.subtitle ?? "";
-    let teamA = "Winner";
-    let teamB = "Loser";
-    const dropped = subtitle.match(/^(.+?)\s+dropped\s+(.+?)\s+by\s+/i);
-    if (dropped) {
-      teamA = dropped[1].trim();
-      teamB = dropped[2].trim();
-    }
+    const teamA =
+      metaStr(meta, "winner_name") ||
+      metaStr(meta, "teamA") ||
+      "Winner";
+    const teamB =
+      metaStr(meta, "loser_name") ||
+      metaStr(meta, "teamB") ||
+      "Loser";
     if (winnerScore != null && loserScore != null) {
+      const resolvedMargin = margin ?? winnerScore - loserScore;
       return {
         kicker: weekKicker,
         title: "MURDER SCENE",
@@ -105,8 +107,9 @@ export function mapEngineCardToVisual(
           scoreA: winnerScore,
           teamB,
           scoreB: loserScore,
+          margin: resolvedMargin,
         },
-        bigValue: `+${safeNum(margin ?? winnerScore - loserScore).toFixed(1)}`,
+        bigValue: `+${safeNum(resolvedMargin).toFixed(1)}`,
         statLabel: "Margin",
         tagline: shortPunchline(card.tagline, "Not competitive."),
         accent: "pink",

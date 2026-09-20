@@ -9,12 +9,14 @@ import { BrandLogo } from "@/components/BrandLogo";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/not-found";
 import LeagueHistoryPage from "@/pages/LeagueHistory";
+import ShareCardPreviewPage from "@/pages/ShareCardPreview";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/league-history/dominance" component={LeagueHistoryPage} />
+      <Route path="/dev/share-cards" component={ShareCardPreviewPage} />
       <Route component={NotFound} />
     </Switch>
   );
