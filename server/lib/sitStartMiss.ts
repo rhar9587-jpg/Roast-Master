@@ -3,18 +3,14 @@
  * Never suggest illegal swaps (e.g. WR for QB).
  */
 
+import { displayNameFromSleeperPlayer } from "./playerDisplayName";
+
 export type PlayerPosLite = {
   full_name?: string;
   first_name?: string;
   last_name?: string;
   position?: string;
 };
-
-function playerDisplayName(pid: string, playersById: Record<string, PlayerPosLite> | null | undefined): string {
-  const p = playersById?.[pid];
-  if (!p) return "";
-  return p.full_name || [p.first_name, p.last_name].filter(Boolean).join(" ") || "";
-}
 
 /** Same position, or flex-eligible (RB/WR/TE) swaps only. */
 export function canFantasyReplace(benchPos?: string | null, starterPos?: string | null): boolean {
@@ -75,8 +71,10 @@ export function findBestSitStartMiss(
       const edge = b.pts - s.pts;
       if (edge <= 0.05) continue;
       if (!best || edge > best.benchPts - best.starterPts) {
-        const benchName = playerDisplayName(b.pid, playersById) || `Player ${b.pid}`;
-        const starterName = playerDisplayName(s.pid, playersById) || `Player ${s.pid}`;
+        const benchName = displayNameFromSleeperPlayer(playersById?.[b.pid]);
+        const starterName = displayNameFromSleeperPlayer(playersById?.[s.pid]);
+        // Prefer omission over raw IDs when names are unresolved.
+        if (!benchName || !starterName) continue;
         const bPos = b.pos ? ` (${String(b.pos).toUpperCase()})` : "";
         const sPos = s.pos ? ` (${String(s.pos).toUpperCase()})` : "";
         best = {

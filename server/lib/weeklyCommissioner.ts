@@ -22,6 +22,7 @@ import { pickSmallestMarginWinner, pickStoleOneAndGotRobbed, matchupFinalityTrut
 import { getNflWeekContext, resolveFinalThroughWeek, resolveLeagueWeekFinality } from "../league-history/nflState";
 import { getStoredPreviousRankings, storeRankingsForWeek } from "./weeklyRankingsStore";
 import { findBestSitStartMiss } from "./sitStartMiss";
+import { resolvePlayerDisplayNameFromMap } from "./playerDisplayName";
 
 function normNames(name: string): string {
   return String(name ?? "").trim().toLowerCase();
@@ -369,11 +370,8 @@ function topPerformersForRow(
     .filter((x) => x.pts > 0)
     .sort((a, b) => b.pts - a.pts)
     .slice(0, limit)
-    .map(({ pid }) => {
-      if (!playersById) return `Player ${pid}`;
-      const p = playersById[pid];
-      return p?.full_name || [p?.first_name, p?.last_name].filter(Boolean).join(" ") || `Player ${pid}`;
-    });
+    .map(({ pid }) => resolvePlayerDisplayNameFromMap(pid, playersById))
+    .filter((name): name is string => Boolean(name));
 }
 
 export function computeWeeklySuperlatives(
@@ -516,7 +514,12 @@ export function computeWeeklySuperlatives(
     highScore: {
       teamName: rosterNameByTeamId(String(highTeamId)),
       points: highPts,
-      keyPerformers: highRow ? topPerformersForRow(highRow, playersById) : undefined,
+      ...(highRow
+        ? (() => {
+            const keyPerformers = topPerformersForRow(highRow, playersById);
+            return keyPerformers.length ? { keyPerformers } : {};
+          })()
+        : {}),
     },
     lowScore: {
       teamName: rosterNameByTeamId(String(lowTeamId)),
@@ -691,15 +694,23 @@ async function computePositionLeaders(
     .filter((pos) => bestByPos.has(pos))
     .map((pos) => {
       const best = bestByPos.get(pos)!;
-      const p = playersById[best.playerId];
-      const playerName = p?.full_name || [p?.first_name, p?.last_name].filter(Boolean).join(" ") || `Player ${best.playerId}`;
+      const playerName = resolvePlayerDisplayNameFromMap(best.playerId, playersById);
+      if (!playerName) return null;
       return {
         position: pos,
         playerName,
         avgPoints: best.avg,
         teamName: rosterNameByTeamId(String(best.rosterId)),
       };
+    })
+    .filter((row): row is NonNullable<typeof row> => row != null);
+  if (!out.length) {
+    positionLeadersCache.set(cacheKey, {
+      expiresAt: Date.now() + POSITION_LEADERS_CACHE_TTL_MS,
+      value: undefined,
     });
+    return undefined;
+  }
   positionLeadersCache.set(cacheKey, { expiresAt: Date.now() + POSITION_LEADERS_CACHE_TTL_MS, value: out });
   return out;
 }

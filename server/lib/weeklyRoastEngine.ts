@@ -14,6 +14,20 @@ import {
   pickLargestMarginWinner,
 } from "./domain/matchupOutcomes";
 import { findBestSitStartMiss } from "./sitStartMiss";
+import {
+  UNKNOWN_PLAYER_DISPLAY,
+  displayNameFromSleeperPlayer,
+  looksLikeRawPlayerIdFallback,
+  resolvePlayerDisplayName,
+} from "./playerDisplayName";
+
+// Re-export shared helpers so existing tests/imports keep working.
+export {
+  UNKNOWN_PLAYER_DISPLAY,
+  displayNameFromSleeperPlayer,
+  looksLikeRawPlayerIdFallback,
+  resolvePlayerDisplayName,
+};
 
 type LeagueRef = { league_id: string; name: string; season?: string };
 
@@ -58,48 +72,6 @@ type SleeperPlayer = {
   team?: string;
 };
 
-export const UNKNOWN_PLAYER_DISPLAY = "Unknown Player";
-
-/** True if a string is the banned raw-ID fallback form. */
-export function looksLikeRawPlayerIdFallback(name: string): boolean {
-  return /^Player\s+\S+$/i.test(String(name || "").trim());
-}
-
-/**
- * Build a user-facing player label from a Sleeper player record.
- * Returns null when no real name is available (never invents `Player <id>`).
- */
-export function displayNameFromSleeperPlayer(
-  p: SleeperPlayer | null | undefined,
-): string | null {
-  if (!p) return null;
-  const base =
-    (typeof p.full_name === "string" && p.full_name.trim()) ||
-    [p.first_name, p.last_name]
-      .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
-      .join(" ")
-      .trim();
-  if (!base) return null;
-  if (p.position && p.team) return `${base} (${p.position}, ${p.team})`;
-  return base;
-}
-
-/**
- * Pure resolution order for tests: full map entry → individual record → neutral fallback.
- * Never returns `Player <id>`.
- */
-export function resolvePlayerDisplayName(options: {
-  playerId: string;
-  fromMap?: SleeperPlayer | null;
-  fromIndividual?: SleeperPlayer | null;
-}): string {
-  const fromMap = displayNameFromSleeperPlayer(options.fromMap ?? null);
-  if (fromMap) return fromMap;
-  const fromIndividual = displayNameFromSleeperPlayer(options.fromIndividual ?? null);
-  if (fromIndividual) return fromIndividual;
-  return UNKNOWN_PLAYER_DISPLAY;
-}
-
 const playerNameCache = new Map<string, string>();
 
 /** Test helper — clears the in-memory player display cache. */
@@ -120,7 +92,9 @@ async function getPlayerName(player_id: string): Promise<string> {
   // 1) Prefer the cached full NFL players map (same source used by sit/start).
   try {
     const map = await getNflPlayers();
-    const fromMap = displayNameFromSleeperPlayer(map[player_id]);
+    const fromMap = displayNameFromSleeperPlayer(map[player_id], {
+      decoratePositionTeam: true,
+    });
     if (fromMap) {
       playerNameCache.set(player_id, fromMap);
       return fromMap;
@@ -132,7 +106,9 @@ async function getPlayerName(player_id: string): Promise<string> {
   // 2) Individual Sleeper player endpoint as secondary fallback.
   try {
     const p = await fetchJson<SleeperPlayer>(`https://api.sleeper.app/v1/player/${player_id}`);
-    const fromIndividual = displayNameFromSleeperPlayer(p);
+    const fromIndividual = displayNameFromSleeperPlayer(p, {
+      decoratePositionTeam: true,
+    });
     if (fromIndividual) {
       playerNameCache.set(player_id, fromIndividual);
       return fromIndividual;

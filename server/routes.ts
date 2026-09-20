@@ -36,6 +36,10 @@ import { recordSent, getSentRecord } from "./lib/weeklyReportStore";
 import { generateWeeklyEmailPlainText } from "./lib/weeklyEmail";
 import { selectCardCopy, interpolateTagline } from "./lib/cardCopy";
 import { buildWeeklyRoastNarrative } from "./lib/weeklyRoastEngine";
+import {
+  UNKNOWN_PLAYER_DISPLAY,
+  displayNameFromSleeperPlayer,
+} from "./lib/playerDisplayName";
 import { classifyWeekMatchupPairs } from "./lib/domain/classifyWeekMatchups";
 import {
   matchupFinalityTruth,
@@ -254,23 +258,15 @@ async function getNflPlayers(): Promise<Record<string, SleeperPlayer>> {
 }
 
 async function playerLabel(playerId: string | number | null | undefined) {
-  if (!playerId) return "Unknown player";
+  if (!playerId) return UNKNOWN_PLAYER_DISPLAY;
   const id = String(playerId);
 
   try {
     const players = await getNflPlayers();
-    const p = players[id];
-    if (!p) return `Player ${id}`;
-
-    const name =
-      p.full_name || [p.first_name, p.last_name].filter(Boolean).join(" ") || `Player ${id}`;
-
-    // Optional extra flavor:
-    const meta = [p.position, p.team].filter(Boolean).join(" • ");
-    return meta ? `${name} (${meta})` : name;
+    const name = displayNameFromSleeperPlayer(players[id], { decoratePositionTeam: true });
+    return name ?? UNKNOWN_PLAYER_DISPLAY;
   } catch {
-    // if players endpoint fails, fall back gracefully
-    return `Player ${id}`;
+    return UNKNOWN_PLAYER_DISPLAY;
   }
 }
 

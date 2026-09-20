@@ -7,7 +7,7 @@ import {
   resolvePlayerDisplayName,
 } from "./weeklyRoastEngine";
 
-describe("Carry Job player-name resolution", () => {
+describe("Carry Job player-name resolution (weeklyRoastEngine re-exports)", () => {
   it("resolves a real name from the full NFL map (e.g. ID 6804)", () => {
     const name = resolvePlayerDisplayName({
       playerId: "6804",
@@ -17,6 +17,7 @@ describe("Carry Job player-name resolution", () => {
         position: "QB",
         team: "BUF",
       },
+      decoratePositionTeam: true,
     });
     expect(name).toBe("Josh Allen (QB, BUF)");
     expect(looksLikeRawPlayerIdFallback(name)).toBe(false);
@@ -32,6 +33,7 @@ describe("Carry Job player-name resolution", () => {
         position: "QB",
         team: "BUF",
       },
+      decoratePositionTeam: true,
     });
     expect(name).toBe("Josh Allen (QB, BUF)");
   });
@@ -45,6 +47,7 @@ describe("Carry Job player-name resolution", () => {
         position: "QB",
         team: "BUF",
       },
+      decoratePositionTeam: true,
     });
     expect(name).toBe("Josh Allen (QB, BUF)");
     expect(name).not.toMatch(/Player\s+6804/i);
@@ -64,7 +67,7 @@ describe("Carry Job player-name resolution", () => {
   it("displayNameFromSleeperPlayer returns null rather than Player <id>", () => {
     expect(displayNameFromSleeperPlayer(null)).toBeNull();
     expect(displayNameFromSleeperPlayer({})).toBeNull();
-    expect(displayNameFromSleeperPlayer({ player_id: "6804" })).toBeNull();
+    expect(displayNameFromSleeperPlayer({ player_id: "6804" } as never)).toBeNull();
   });
 
   it("detects banned raw-ID fallback strings", () => {
@@ -75,7 +78,6 @@ describe("Carry Job player-name resolution", () => {
 
   it("clearPlayerNameCacheForTests is available so failed lookups need not poison cache", () => {
     clearPlayerNameCacheForTests();
-    // Cache starts empty; a failed resolve never writes Player <id>, so re-resolve stays clean.
     const first = resolvePlayerDisplayName({ playerId: "6804" });
     const second = resolvePlayerDisplayName({ playerId: "6804" });
     expect(first).toBe(UNKNOWN_PLAYER_DISPLAY);

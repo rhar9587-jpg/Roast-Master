@@ -1,5 +1,6 @@
 // server/fpl.ts - FPL (Fantasy Premier League) API module
 import type { FplCard, FplRoastRequest, FplRoastResponse } from "@shared/schema";
+import { UNKNOWN_PLAYER_DISPLAY } from "./lib/playerDisplayName";
 
 // -------------------------
 // Types for FPL API responses
@@ -387,12 +388,12 @@ async function buildCaptaincyCard(picks: FplPick[], eventId: number, bootstrap: 
     if (total > bestAltPoints) {
       bestAltPoints = total;
       const player = bootstrap.elements.find((p) => p.id === pick.element);
-      bestAltName = player?.web_name || `Player ${pick.element}`;
+      bestAltName = player?.web_name || UNKNOWN_PLAYER_DISPLAY;
     }
   }
 
   const isMasterclass = captainTotal >= bestAltPoints;
-  const captainName = captainPlayer?.web_name || `Player ${captainPick.element}`;
+  const captainName = captainPlayer?.web_name || UNKNOWN_PLAYER_DISPLAY;
 
   const delta = (bestAltPoints || 0) - captainTotal;
 
@@ -441,7 +442,7 @@ async function buildBenchCard(picks: FplPick[], eventId: number, bootstrap: FplB
     if (pts > topBenchPoints) {
       topBenchPoints = pts;
       const player = bootstrap.elements.find((p) => p.id === pick.element);
-      topBenchName = player?.web_name || `Player ${pick.element}`;
+      topBenchName = player?.web_name || UNKNOWN_PLAYER_DISPLAY;
     }
   }
 
