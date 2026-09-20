@@ -72,3 +72,21 @@ export function resolveFinalThroughWeek(
   const latestFinal = Math.max(0, Math.floor(latestFinalNflWeek));
   return Math.min(through, latestFinal);
 }
+
+/**
+ * Whether a specific league season+week is final for winner-dependent metrics.
+ * Past seasons are fully final; current season uses latestFinalWeek.
+ */
+export function isLeagueWeekFinal(
+  week: number,
+  leagueSeason: string | number | null | undefined,
+  nfl: Pick<NflWeekContext, "season" | "latestFinalWeek">,
+): boolean {
+  const w = Math.floor(week);
+  if (!Number.isFinite(w) || w < 1) return false;
+  const leagueYear = leagueSeason != null ? String(leagueSeason) : null;
+  const nflYear = nfl.season != null ? String(nfl.season) : null;
+  if (leagueYear && nflYear && leagueYear < nflYear) return true;
+  if (leagueYear && nflYear && leagueYear > nflYear) return false;
+  return w <= nfl.latestFinalWeek;
+}

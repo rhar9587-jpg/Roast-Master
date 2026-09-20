@@ -6,6 +6,13 @@
 import { fetchJson } from "../league-history/sleeper";
 import type { SleeperMatchup } from "../league-history/sleeper";
 import type { Card } from "@shared/schema";
+import { classifyWeekMatchupPairs } from "./domain/classifyWeekMatchups";
+import { scoresFromPlayedClassification } from "./domain/matchupStatus";
+import {
+  pickClosestFinalGame,
+  pickFraudWatchPair,
+  pickLargestMarginWinner,
+} from "./domain/matchupOutcomes";
 
 type LeagueRef = { league_id: string; name: string; season?: string };
 
@@ -86,32 +93,16 @@ async function getNflPlayers(): Promise<Record<string, SleeperPlayer>> {
   return players;
 }
 
-function computeBiggestBlowout(matchups: SleeperMatchup[], rosterName: (rid: number) => string) {
-  const byMatchup = new Map<number, SleeperMatchup[]>();
-  for (const m of matchups) {
-    if (!byMatchup.has(m.matchup_id)) byMatchup.set(m.matchup_id, []);
-    byMatchup.get(m.matchup_id)!.push(m);
-  }
-
-  let best: { winner: SleeperMatchup; loser: SleeperMatchup; margin: number } | null = null;
-
-  for (const [, rows] of Array.from(byMatchup.entries())) {
-    if (rows.length < 2) continue;
-    const a = rows[0]!;
-    const b = rows[1]!;
-    const aPts = safeNumber(a.points);
-    const bPts = safeNumber(b.points);
-    const winner = aPts >= bPts ? a : b;
-    const loser = aPts >= bPts ? b : a;
-    const margin = Math.abs(aPts - bPts);
-
-    if (!best || margin > best.margin) best = { winner, loser, margin };
-  }
-
+function computeBiggestBlowout(
+  matchups: SleeperMatchup[],
+  rosterName: (rid: number) => string,
+  weekIsFinal = true,
+) {
+  const best = pickLargestMarginWinner(matchups, { weekIsFinal });
   if (!best) return null;
 
-  const winnerName = rosterName(best.winner.roster_id);
-  const loserName = rosterName(best.loser.roster_id);
+  const winnerName = rosterName(best.winnerRosterId);
+  const loserName = rosterName(best.loserRosterId);
 
   return {
     type: "biggest_embarrassment",
@@ -120,10 +111,10 @@ function computeBiggestBlowout(matchups: SleeperMatchup[], rosterName: (rid: num
     stat: `+${formatPts(best.margin)} pts`,
     tagline: "Not competitive.",
     meta: {
-      winner_roster_id: best.winner.roster_id,
-      loser_roster_id: best.loser.roster_id,
-      winner_score: safeNumber(best.winner.points),
-      loser_score: safeNumber(best.loser.points),
+      winner_roster_id: best.winnerRosterId,
+      loser_roster_id: best.loserRosterId,
+      winner_score: best.winnerPoints,
+      loser_score: best.loserPoints,
       margin: best.margin,
     },
   };
@@ -190,76 +181,28 @@ async function computeCarryJob(matchups: SleeperMatchup[], rosterName: (rid: num
 
 function computeClosestGame(
   matchups: SleeperMatchup[],
-  rosterName: (rid: number) => string,
-): { margin: number; a: SleeperMatchup; b: SleeperMatchup } | null {
-  const byMatchup = new Map<number, SleeperMatchup[]>();
-  for (const m of matchups) {
-    if (!byMatchup.has(m.matchup_id)) byMatchup.set(m.matchup_id, []);
-    byMatchup.get(m.matchup_id)!.push(m);
-  }
-  let best: { margin: number; a: SleeperMatchup; b: SleeperMatchup } | null = null;
-  for (const [, rows] of Array.from(byMatchup.entries())) {
-    if (rows.length < 2) continue;
-    const a = rows[0]!;
-    const b = rows[1]!;
-    const margin = Math.abs(safeNumber(a.points) - safeNumber(b.points));
-    if (!best || margin < best.margin) best = { margin, a, b };
-  }
-  return best;
+  weekIsFinal = true,
+): { margin: number; rosterIdA: number; pointsA: number; rosterIdB: number; pointsB: number } | null {
+  return pickClosestFinalGame(matchups, { weekIsFinal });
 }
 
-/** Win with a weak score vs league, or loss with a strong score — one card. */
+/** Win with a weak score vs league, or loss with a strong score — completed games only. */
 function computeFraudWatch(
   matchups: SleeperMatchup[],
   rosterName: (rid: number) => string,
   medianScore: number,
+  weekIsFinal = true,
 ): Card | null {
-  const byMatchup = new Map<number, SleeperMatchup[]>();
-  for (const m of matchups) {
-    if (!byMatchup.has(m.matchup_id)) byMatchup.set(m.matchup_id, []);
-    byMatchup.get(m.matchup_id)!.push(m);
-  }
+  const best = pickFraudWatchPair(matchups, medianScore, { weekIsFinal });
+  if (!best) return null;
 
-  let bestLucky: { drama: number; winner: SleeperMatchup; loser: SleeperMatchup } | null = null;
-  let bestRobbed: { drama: number; winner: SleeperMatchup; loser: SleeperMatchup } | null = null;
-
-  for (const [, rows] of Array.from(byMatchup.entries())) {
-    if (rows.length < 2) continue;
-    const a = rows[0]!;
-    const b = rows[1]!;
-    const aPts = safeNumber(a.points);
-    const bPts = safeNumber(b.points);
-    const winner = aPts >= bPts ? a : b;
-    const loser = aPts >= bPts ? b : a;
-    const wPts = safeNumber(winner.points);
-    const lPts = safeNumber(loser.points);
-
-    // Won despite a below-median team score (lucky / "fraud" win)
-    if (wPts < medianScore) {
-      const drama = medianScore - wPts;
-      if (!bestLucky || drama > bestLucky.drama) bestLucky = { drama, winner, loser };
-    }
-    // Lost despite scoring above league median (robbed)
-    if (lPts > medianScore && wPts > lPts) {
-      const drama = lPts - medianScore;
-      if (!bestRobbed || drama > bestRobbed.drama) bestRobbed = { drama, winner, loser };
-    }
-  }
-
-  if (!bestLucky && !bestRobbed) return null;
-  const useLucky =
-    bestLucky && (!bestRobbed || bestLucky.drama >= bestRobbed.drama * 0.9);
-  const best = useLucky
-    ? { kind: "lucky_win" as const, ...bestLucky! }
-    : { kind: "robbed" as const, ...bestRobbed! };
-
-  const wName = rosterName(best.winner.roster_id);
-  const lName = rosterName(best.loser.roster_id);
+  const wName = rosterName(best.winnerRosterId);
+  const lName = rosterName(best.loserRosterId);
   if (best.kind === "lucky_win") {
     return {
       type: "fraud_watch",
       title: "Fraud Watch",
-      subtitle: `${wName} won at ${formatPts(safeNumber(best.winner.points))}; league median was ${formatPts(medianScore)}.`,
+      subtitle: `${wName} won at ${formatPts(best.winnerPoints)}; league median was ${formatPts(medianScore)}.`,
       stat: "Won light",
       tagline: `${lName} couldn't cash in anyway.`,
       meta: { kind: best.kind, medianScore },
@@ -268,7 +211,7 @@ function computeFraudWatch(
   return {
     type: "fraud_watch",
     title: "Fraud Watch",
-    subtitle: `${lName} put up ${formatPts(safeNumber(best.loser.points))} and still lost to ${wName}.`,
+    subtitle: `${lName} put up ${formatPts(best.loserPoints)} and still lost to ${wName}.`,
     stat: "Robbed",
     tagline: "Good week, bad result.",
     meta: { kind: best.kind, medianScore },
@@ -341,7 +284,7 @@ function buildHeadline(params: {
   highestName: string;
   lowestName: string;
   sameTeam: boolean;
-  closest: { margin: number; a: SleeperMatchup; b: SleeperMatchup } | null;
+  closest: { margin: number; rosterIdA: number; rosterIdB: number } | null;
   rosterName: (rid: number) => string;
 }): string {
   const { week, highestName, lowestName, sameTeam, closest, rosterName } = params;
@@ -358,8 +301,8 @@ function buildHeadline(params: {
   }
 
   if (closest && closest.margin <= 5 && closest.margin >= 0) {
-    const n1 = rosterName(closest.a.roster_id);
-    const n2 = rosterName(closest.b.roster_id);
+    const n1 = rosterName(closest.rosterIdA);
+    const n2 = rosterName(closest.rosterIdB);
     base += ` ${n1} vs ${n2} was a ${formatPts(closest.margin)}-pt nail-biter.`;
   }
   return base;
@@ -392,14 +335,35 @@ export async function buildWeeklyRoastNarrative(params: {
   week: number;
   matchups: SleeperMatchup[];
   rosterName: (rid: number) => string;
+  /** When false, winner-dependent cards (blowout / fraud / closest final) are skipped. */
+  weekIsFinal?: boolean;
 }): Promise<WeeklyRoastNarrative> {
   const { league, week, matchups, rosterName } = params;
+  const weekIsFinal = params.weekIsFinal !== false;
   if (!matchups?.length) {
     throw new Error(`No matchup data found for week ${week}.`);
   }
 
+  // High / low / median: final weeks use played classifications only (exclude 0–0 shells).
+  // Non-final weeks may surface live scores without inventing winners.
   const scoreByRoster = new Map<number, number>();
-  for (const m of matchups) scoreByRoster.set(m.roster_id, safeNumber(m.points));
+  if (weekIsFinal) {
+    const pairs = classifyWeekMatchupPairs(matchups, { weekIsFinal: true });
+    for (const pair of pairs) {
+      const scores = scoresFromPlayedClassification(pair.classification);
+      if (!scores.length) continue;
+      for (const row of pair.rows) {
+        scoreByRoster.set(row.roster_id, safeNumber(row.points));
+      }
+    }
+  } else {
+    for (const m of matchups) scoreByRoster.set(m.roster_id, safeNumber(m.points));
+  }
+
+  // Fallback if classification yields nothing (e.g. all scheduled): use raw scores for display.
+  if (scoreByRoster.size === 0) {
+    for (const m of matchups) scoreByRoster.set(m.roster_id, safeNumber(m.points));
+  }
 
   const entries = Array.from(scoreByRoster.entries()).map(([rid, score]) => ({
     roster_id: rid,
@@ -418,9 +382,9 @@ export async function buildWeeklyRoastNarrative(params: {
   const medianScore =
     scores.length % 2 === 1 ? scores[mid]! : (scores[mid - 1]! + scores[mid]!) / 2;
 
-  const closest = computeClosestGame(matchups, rosterName);
-  const blowout = computeBiggestBlowout(matchups, rosterName);
-  const fraud = computeFraudWatch(matchups, rosterName, medianScore);
+  const closest = computeClosestGame(matchups, weekIsFinal);
+  const blowout = computeBiggestBlowout(matchups, rosterName, weekIsFinal);
+  const fraud = computeFraudWatch(matchups, rosterName, medianScore, weekIsFinal);
   const [carry, worstCoach] = await Promise.all([
     computeCarryJob(matchups, rosterName),
     computeWorstCoaching(matchups, rosterName),
@@ -478,10 +442,10 @@ export async function buildWeeklyRoastNarrative(params: {
     closestMargin: closest ? closest.margin : null,
     closestGame: closest
       ? {
-          teamA: rosterName(closest.a.roster_id),
-          teamB: rosterName(closest.b.roster_id),
-          scoreA: safeNumber(closest.a.points),
-          scoreB: safeNumber(closest.b.points),
+          teamA: rosterName(closest.rosterIdA),
+          teamB: rosterName(closest.rosterIdB),
+          scoreA: closest.pointsA,
+          scoreB: closest.pointsB,
         }
       : undefined,
     blowoutMargin: blowout?.meta && typeof blowout.meta === "object" && "margin" in blowout.meta

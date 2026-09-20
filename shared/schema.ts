@@ -67,7 +67,7 @@ export const roastResponseSchema = z.object({
       opponent_roster_id: z.number(),
       you: z.object({ username: z.string(), score: z.number() }),
       opponent: z.object({ username: z.string(), score: z.number() }),
-      result: z.enum(["WIN", "LOSS", "TIE"]),
+      result: z.enum(["WIN", "LOSS", "TIE", "PENDING"]),
       cards: z.array(cardSchema).optional(), // for later “roast my matchup”
     })
     .optional(),

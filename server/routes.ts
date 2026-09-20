@@ -25,7 +25,7 @@ import {
 
 // ✅ NEW: League History (Dominance Grid)
 import { handleLeagueHistoryDominance } from "./league-history";
-import { getNflWeekContext } from "./league-history/nflState";
+import { getNflWeekContext, isLeagueWeekFinal } from "./league-history/nflState";
 import { selectTagline } from "./lib/seasonTagline";
 import { getWeeklyCommissionerEmail, generateWeeklyCommissionerEmail, getRecapSubject } from "./lib/weeklyCommissioner";
 import { buildTeamsFromSleeper } from "./lib/weeklyCommissioner";
@@ -36,6 +36,13 @@ import { recordSent, getSentRecord } from "./lib/weeklyReportStore";
 import { generateWeeklyEmailPlainText } from "./lib/weeklyEmail";
 import { selectCardCopy, interpolateTagline } from "./lib/cardCopy";
 import { buildWeeklyRoastNarrative } from "./lib/weeklyRoastEngine";
+import { classifyWeekMatchupPairs } from "./lib/domain/classifyWeekMatchups";
+import {
+  matchupFinalityTruth,
+  personalMatchupResult,
+  pickLargestMarginWinner,
+} from "./lib/domain/matchupOutcomes";
+import { scoresFromPlayedClassification } from "./lib/domain/matchupStatus";
 import {
   DEMO_LEAGUE_ID as STATIC_DEMO_LEAGUE_ID,
   getDemoLeagueTeams,
@@ -359,16 +366,21 @@ async function handleLeagueTeams(league_id: string) {
 async function handleRoast(params: RoastRequest): Promise<RoastResponse> {
   const { league_id, week, roster_id } = params;
 
-  const [league, rosters, users, matchups] = await Promise.all([
+  const [league, rosters, users, matchups, nfl] = await Promise.all([
     fetchJson<SleeperLeague>(`https://api.sleeper.app/v1/league/${league_id}`),
     fetchJson<SleeperRoster[]>(`https://api.sleeper.app/v1/league/${league_id}/rosters`),
     fetchJson<SleeperUser[]>(`https://api.sleeper.app/v1/league/${league_id}/users`),
     fetchJson<SleeperMatchup[]>(`https://api.sleeper.app/v1/league/${league_id}/matchups/${week}`),
+    getNflWeekContext().catch(() => null),
   ]);
 
   if (!matchups?.length) {
     throw new Error(`No matchup data found for week ${week}.`);
   }
+
+  const weekIsFinal = nfl
+    ? isLeagueWeekFinal(week, league.season, nfl)
+    : false;
 
   const userById = buildUserMap(users);
   const rosterName = (rid: number) => rosterDisplayName(rosters, userById, rid);
@@ -378,6 +390,7 @@ async function handleRoast(params: RoastRequest): Promise<RoastResponse> {
     week,
     matchups,
     rosterName,
+    weekIsFinal,
   });
 
   const payload: RoastResponse = {
@@ -406,9 +419,7 @@ async function handleRoast(params: RoastRequest): Promise<RoastResponse> {
       if (opponentRow) {
         const youScore = safeNumber(yourRow.points);
         const oppScore = safeNumber(opponentRow.points);
-
-        const result: "WIN" | "LOSS" | "TIE" =
-          youScore > oppScore ? "WIN" : youScore < oppScore ? "LOSS" : "TIE";
+        const result = personalMatchupResult(roster_id, yourRow, opponentRow, { weekIsFinal });
 
         payload.matchup = {
           roster_id,
@@ -495,10 +506,11 @@ async function handleWrapped(params: RoastRequest) {
 
   const rid = roster_id;
 
-  const [league, rosters, users] = await Promise.all([
+  const [league, rosters, users, nfl] = await Promise.all([
     fetchJson<SleeperLeague>(`https://api.sleeper.app/v1/league/${league_id}`),
     fetchJson<SleeperRoster[]>(`https://api.sleeper.app/v1/league/${league_id}/rosters`),
     fetchJson<SleeperUser[]>(`https://api.sleeper.app/v1/league/${league_id}/users`),
+    getNflWeekContext().catch(() => null),
   ]);
 
   const userById = buildUserMap(users);
@@ -523,6 +535,7 @@ async function handleWrapped(params: RoastRequest) {
   // Walk season matchups and compute:
   // - season MVP player (top total points for roster)
   // - best win margin, worst loss margin for roster
+  // Winner attribution uses canonical classification + week finality only.
   const playerTotals = new Map<string, number>();
   let bestWin: { week: number; margin: number; oppRid: number; you: number; opp: number } | null =
     null;
@@ -555,11 +568,15 @@ async function handleWrapped(params: RoastRequest) {
     }
     if (!weekMatchups?.length) continue;
 
-    // Collect all scores for this week to calculate median
+    const weekIsFinal = nfl
+      ? isLeagueWeekFinal(w, league.season, nfl)
+      : true; // historical walk without NFL state: treat as final (past seasons)
+
+    // Collect scores from final played pairs only when the week is final
+    const pairs = classifyWeekMatchupPairs(weekMatchups, { weekIsFinal });
     const allScores: number[] = [];
-    for (const m of weekMatchups) {
-      const pts = safeNumber(m.points);
-      if (pts > 0) allScores.push(pts);
+    for (const pair of pairs) {
+      allScores.push(...scoresFromPlayedClassification(pair.classification));
     }
     if (allScores.length > 0) {
       weeklyScores.set(w, allScores);
@@ -576,31 +593,31 @@ async function handleWrapped(params: RoastRequest) {
       playerTotals.set(pid, (playerTotals.get(pid) || 0) + pts);
     }
 
-    // compute win/loss margin for the roster that week
+    // compute win/loss margin for the roster that week — completed classification only
     const oppRow = weekMatchups.find(
       (m) => m.matchup_id === yourRow.matchup_id && m.roster_id !== rid,
     );
     if (!oppRow) continue;
 
+    const truth = matchupFinalityTruth(yourRow, oppRow, { weekIsFinal });
+    if (!truth.hasWinner || truth.winnerRosterId == null) continue;
+
     const you = safeNumber(yourRow.points);
     const opp = safeNumber(oppRow.points);
     const margin = you - opp;
-
-    // Track record vs each opponent
     const oppRid = oppRow.roster_id;
     const rec = recordVsOpponent.get(oppRid) || { wins: 0, losses: 0 };
 
-    if (margin > 0) {
+    if (truth.winnerRosterId === rid) {
       rec.wins++;
       if (!bestWin || margin > bestWin.margin) {
         bestWin = { week: w, margin, oppRid, you, opp };
       }
-    } else if (margin < 0) {
+    } else {
       rec.losses++;
       if (!worstLoss || margin < worstLoss.margin) {
         worstLoss = { week: w, margin, oppRid, you, opp };
       }
-      // Track loss for choke job analysis
       userLosses.push({ week: w, you, opp, oppRid });
     }
     recordVsOpponent.set(oppRid, rec);
@@ -806,10 +823,11 @@ function bestLossAbs(margin: number) {
 async function handleLeagueAutopsy(params: { league_id: string }): Promise<LeagueAutopsyResponse> {
   const { league_id } = params;
 
-  const [league, rosters, users] = await Promise.all([
+  const [league, rosters, users, nfl] = await Promise.all([
     fetchJson<SleeperLeague>(`https://api.sleeper.app/v1/league/${league_id}`),
     fetchJson<SleeperRoster[]>(`https://api.sleeper.app/v1/league/${league_id}/rosters`),
     fetchJson<SleeperUser[]>(`https://api.sleeper.app/v1/league/${league_id}/users`),
+    getNflWeekContext().catch(() => null),
   ]);
 
   const userById = buildUserMap(users);
@@ -846,54 +864,49 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
     }
     if (!weekMatchups?.length) continue;
 
-    const byMatchup = new Map<number, SleeperMatchup[]>();
-    for (const m of weekMatchups) {
-      if (!byMatchup.has(m.matchup_id)) byMatchup.set(m.matchup_id, []);
-      byMatchup.get(m.matchup_id)!.push(m);
+    const weekIsFinal = nfl
+      ? isLeagueWeekFinal(w, league.season, nfl)
+      : true;
+
+    const pairs = classifyWeekMatchupPairs(weekMatchups, { weekIsFinal });
+
+    for (const pair of pairs) {
+      const played = scoresFromPlayedClassification(pair.classification);
+      if (!played.length) continue;
+      for (const row of pair.rows) {
+        const pts = safeNumber(row.points);
+        if (!seasonHighScore || pts > seasonHighScore.points) {
+          seasonHighScore = { roster_id: row.roster_id, week: w, points: pts };
+        }
+        if (!seasonLowScore || pts < seasonLowScore.points) {
+          seasonLowScore = { roster_id: row.roster_id, week: w, points: pts };
+        }
+      }
     }
 
-    for (const m of weekMatchups) {
-      const pts = safeNumber(m.points);
-
-      if (!seasonHighScore || pts > seasonHighScore.points) {
-        seasonHighScore = { roster_id: m.roster_id, week: w, points: pts };
-      }
-
-      if (!seasonLowScore || pts < seasonLowScore.points) {
-        seasonLowScore = { roster_id: m.roster_id, week: w, points: pts };
-      }
+    // Winner-dependent autopsy metrics: completed classifications only
+    const blowout = pickLargestMarginWinner(weekMatchups, { weekIsFinal });
+    if (blowout && (!biggestBlowout || blowout.margin > biggestBlowout.margin)) {
+      biggestBlowout = {
+        winner_rid: blowout.winnerRosterId,
+        loser_rid: blowout.loserRosterId,
+        week: w,
+        winner_score: blowout.winnerPoints,
+        loser_score: blowout.loserPoints,
+        margin: blowout.margin,
+      };
     }
 
-    for (const [, rows] of Array.from(byMatchup.entries())) {
-      if (rows.length < 2) continue;
-      const a = rows[0]!;
-      const b = rows[1]!;
-      const aPts = safeNumber(a.points);
-      const bPts = safeNumber(b.points);
-      const winner = aPts >= bPts ? a : b;
-      const loser = aPts >= bPts ? b : a;
-      const winnerPts = Math.max(aPts, bPts);
-      const loserPts = Math.min(aPts, bPts);
-      const margin = winnerPts - loserPts;
-
-      if (!biggestBlowout || margin > biggestBlowout.margin) {
-        biggestBlowout = {
-          winner_rid: winner.roster_id,
-          loser_rid: loser.roster_id,
-          week: w,
-          winner_score: winnerPts,
-          loser_score: loserPts,
-          margin,
-        };
-      }
-
-      if (loserPts > 0 && (!highestScoreInLoss || loserPts > highestScoreInLoss.points)) {
+    for (const pair of pairs) {
+      if (pair.classification.status !== "completed") continue;
+      const { winner, loser } = pair.classification;
+      if (loser.points > 0 && (!highestScoreInLoss || loser.points > highestScoreInLoss.points)) {
         highestScoreInLoss = {
-          roster_id: loser.roster_id,
+          roster_id: loser.rosterId,
           week: w,
-          points: loserPts,
-          opp_rid: winner.roster_id,
-          opp_points: winnerPts,
+          points: loser.points,
+          opp_rid: winner.rosterId,
+          opp_points: winner.points,
         };
       }
     }

@@ -17,7 +17,9 @@ import {
   type RawWeekMatchup,
 } from "./domain/teamStateThroughWeek";
 import { classifyMatchupGroup, scoresFromPlayedClassification } from "./domain/matchupStatus";
-import { getNflWeekContext, resolveFinalThroughWeek } from "../league-history/nflState";
+import { classifyWeekMatchupPairs } from "./domain/classifyWeekMatchups";
+import { pickSmallestMarginWinner, pickStoleOneAndGotRobbed, matchupFinalityTruth } from "./domain/matchupOutcomes";
+import { getNflWeekContext, resolveFinalThroughWeek, isLeagueWeekFinal } from "../league-history/nflState";
 
 // Sleeper API returns roster settings with fpts/fpts_decimal; type is extended here for the adapter
 interface RosterWithPoints {
@@ -209,39 +211,21 @@ export async function buildTeamsFromSleeper(
 }
 
 /**
- * Pick villain of the week from matchup data: winner of the smallest-margin game.
- * Returns null if no valid matchups. Caller can fall back to luck-based pick.
+ * Pick villain of the week from matchup data: winner of the smallest-margin completed game.
+ * Ignores ties, live/in-progress, 0–0 shells, and malformed pairs.
  */
-function pickVillainFromMatchups(
+export function pickVillainFromMatchups(
   matchups: SleeperMatchup[],
   rosterNameByTeamId: (teamId: string) => string,
+  weekIsFinal = true,
 ): { teamName: string; reason: string } | null {
-  if (!matchups?.length) return null;
-  const byMatchup = new Map<number, { roster_id: number; points: number }[]>();
-  for (const m of matchups) {
-    if (!byMatchup.has(m.matchup_id)) byMatchup.set(m.matchup_id, []);
-    byMatchup.get(m.matchup_id)!.push({ roster_id: m.roster_id, points: safeNum(m.points) });
-  }
-  let smallestMargin = Infinity;
-  let villainRosterId: number | null = null;
-  let smallestMarginVal = 0;
-  for (const rows of Array.from(byMatchup.values())) {
-    if (rows.length < 2) continue;
-    const [a, b] = rows;
-    const margin = Math.abs(a.points - b.points);
-    const winner = a.points >= b.points ? a : b;
-    if (margin < smallestMargin && margin >= 0) {
-      smallestMargin = margin;
-      villainRosterId = winner.roster_id;
-      smallestMarginVal = margin;
-    }
-  }
-  if (villainRosterId == null) return null;
-  const teamName = rosterNameByTeamId(String(villainRosterId));
+  const pick = pickSmallestMarginWinner(matchups, { weekIsFinal });
+  if (!pick) return null;
+  const teamName = rosterNameByTeamId(String(pick.winnerRosterId));
   const reason =
-    smallestMarginVal < 1
-      ? `Won by ${smallestMarginVal.toFixed(1)} points. That's not a win, that's a stat correction.`
-      : `Won by ${smallestMarginVal.toFixed(1)} points. Someone's schedule is doing the heavy lifting.`;
+    pick.margin < 1
+      ? `Won by ${pick.margin.toFixed(1)} points. That's not a win, that's a stat correction.`
+      : `Won by ${pick.margin.toFixed(1)} points. Someone's schedule is doing the heavy lifting.`;
   return { teamName, reason };
 }
 
@@ -255,11 +239,12 @@ function pickVillain(
   rankings: PowerRankingRow[],
   rosterNameByTeamId: (teamId: string) => string,
   matchups?: SleeperMatchup[] | null,
+  weekIsFinal = true,
 ): Promise<{ teamName: string; reason: string }> {
-  const fromMatchups = matchups ? pickVillainFromMatchups(matchups, rosterNameByTeamId) : null;
+  const fromMatchups = matchups ? pickVillainFromMatchups(matchups, rosterNameByTeamId, weekIsFinal) : null;
   if (fromMatchups) return Promise.resolve(fromMatchups);
   return getMatchups(leagueId, week)
-    .then((m) => pickVillainFromMatchups(m, rosterNameByTeamId))
+    .then((m) => pickVillainFromMatchups(m, rosterNameByTeamId, weekIsFinal))
     .then((v) => {
       if (v) return v;
       const lucky = rankings.filter((r) => r.luckDelta > 0.3).sort((a, b) => b.luckDelta - a.luckDelta)[0];
@@ -308,27 +293,29 @@ function pickFraud(rankings: PowerRankingRow[]): { teamName: string; reason: str
 
 /**
  * Build week matchups for email: one row per pair (teamA/scoreA vs teamB/scoreB).
- * Only includes pairs (matchup_id with exactly 2 rosters). Higher score first.
+ * Includes pairs that classify (even scheduled/in-progress) for display.
+ * Higher score first is presentation only — not a completed-winner claim.
  */
-function buildWeekMatchups(
+export function buildWeekMatchups(
   matchups: SleeperMatchup[],
   rosterNameByTeamId: (teamId: string) => string,
 ): { teamA: string; scoreA: number; teamB: string; scoreB: number }[] {
-  const byMatchup = new Map<number, { roster_id: number; points: number }[]>();
-  for (const m of matchups) {
-    if (!byMatchup.has(m.matchup_id)) byMatchup.set(m.matchup_id, []);
-    byMatchup.get(m.matchup_id)!.push({ roster_id: m.roster_id, points: safeNum(m.points) });
-  }
+  const pairs = classifyWeekMatchupPairs(matchups, { weekIsFinal: true });
   const out: { teamA: string; scoreA: number; teamB: string; scoreB: number }[] = [];
-  for (const rows of Array.from(byMatchup.values())) {
-    if (rows.length !== 2) continue;
-    const [a, b] = rows;
-    const nameA = rosterNameByTeamId(String(a.roster_id));
-    const nameB = rosterNameByTeamId(String(b.roster_id));
-    if (a.points >= b.points) {
-      out.push({ teamA: nameA, scoreA: a.points, teamB: nameB, scoreB: b.points });
+  for (const pair of pairs) {
+    if (pair.rows.length !== 2) continue;
+    // Skip only malformed incomplete groups; show scheduled/live/final for readability.
+    if (pair.classification.status === "malformed") continue;
+    const [a, b] = pair.rows;
+    const ptsA = safeNum(a!.points);
+    const ptsB = safeNum(b!.points);
+    const nameA = rosterNameByTeamId(String(a!.roster_id));
+    const nameB = rosterNameByTeamId(String(b!.roster_id));
+    // Presentation ordering only (higher score first) — not winner semantics.
+    if (ptsA > ptsB || (ptsA === ptsB && a!.roster_id <= b!.roster_id)) {
+      out.push({ teamA: nameA, scoreA: ptsA, teamB: nameB, scoreB: ptsB });
     } else {
-      out.push({ teamA: nameB, scoreA: b.points, teamB: nameA, scoreB: a.points });
+      out.push({ teamA: nameB, scoreA: ptsB, teamB: nameA, scoreB: ptsA });
     }
   }
   return out;
@@ -379,17 +366,58 @@ function topPerformersForRow(
     });
 }
 
-function computeWeeklySuperlatives(
+export function computeWeeklySuperlatives(
   matchups: SleeperMatchup[],
   rosterNameByTeamId: (teamId: string) => string,
   playersById: Record<string, SleeperPlayerLite> | null,
+  weekIsFinal = true,
 ): WeeklyEmailData["weeklySuperlatives"] {
   if (!matchups.length) return undefined;
-  const scored = matchups.filter((m) => safeNum(m.points) > 0 || (m.starters?.length ?? 0) > 0);
-  const sorted = [...(scored.length ? scored : matchups)].sort((a, b) => safeNum(b.points) - safeNum(a.points));
-  const high = sorted[0];
-  const low = sorted[sorted.length - 1];
-  if (!high || !low) return undefined;
+
+  // High / low: for a final week use scores from final played pairs (zeros kept).
+  // For a non-final week, surface raw live scores without implying winners.
+  let highTeamId: number | null = null;
+  let lowTeamId: number | null = null;
+  let highPts = -Infinity;
+  let lowPts = Infinity;
+  let highRow: SleeperMatchup | null = null;
+
+  if (weekIsFinal) {
+    const pairs = classifyWeekMatchupPairs(matchups, { weekIsFinal: true });
+    for (const pair of pairs) {
+      const scores = scoresFromPlayedClassification(pair.classification);
+      if (!scores.length) continue;
+      for (const row of pair.rows) {
+        const pts = safeNum(row.points);
+        if (pts > highPts) {
+          highPts = pts;
+          highTeamId = row.roster_id;
+          highRow = row;
+        }
+        if (pts < lowPts) {
+          lowPts = pts;
+          lowTeamId = row.roster_id;
+        }
+      }
+    }
+  } else {
+    for (const m of matchups) {
+      const pts = safeNum(m.points);
+      if (pts > highPts) {
+        highPts = pts;
+        highTeamId = m.roster_id;
+        highRow = m;
+      }
+      if (pts < lowPts) {
+        lowPts = pts;
+        lowTeamId = m.roster_id;
+      }
+    }
+  }
+
+  if (highTeamId == null || lowTeamId == null || !Number.isFinite(highPts) || !Number.isFinite(lowPts)) {
+    return undefined;
+  }
 
   type CoachRow = {
     teamName: string;
@@ -444,7 +472,6 @@ function computeWeeklySuperlatives(
       benchPoints: worst.benchPoints,
       ...(worst.sitStartMiss ? { sitStartMiss: worst.sitStartMiss } : {}),
     };
-    // Best coach: least left on the bench (foil to worst); prefer a clean sit/start when available
     const clean = withBench.filter((r) => !r.hasMiss && r.teamName !== worst.teamName);
     const bestPool = clean.length ? clean : withBench.filter((r) => r.teamName !== worst.teamName);
     if (bestPool.length) {
@@ -460,43 +487,34 @@ function computeWeeklySuperlatives(
     }
   }
 
-  // Stole one / got robbed from completed H2H pairs
-  const byMatchup = new Map<number, SleeperMatchup[]>();
-  for (const m of matchups) {
-    if (!byMatchup.has(m.matchup_id)) byMatchup.set(m.matchup_id, []);
-    byMatchup.get(m.matchup_id)!.push(m);
-  }
-  let stoleOne: NonNullable<NonNullable<WeeklyEmailData["weeklySuperlatives"]>["stoleOne"]> | undefined;
-  let gotRobbed: NonNullable<NonNullable<WeeklyEmailData["weeklySuperlatives"]>["gotRobbed"]> | undefined;
-  for (const rows of byMatchup.values()) {
-    if (rows.length !== 2) continue;
-    const [a, b] = rows;
-    const aPts = safeNum(a.points);
-    const bPts = safeNum(b.points);
-    if (!(aPts > 0 || bPts > 0) || aPts === bPts) continue;
-    const winner = aPts > bPts ? a : b;
-    const loser = aPts > bPts ? b : a;
-    const wPts = safeNum(winner.points);
-    const lPts = safeNum(loser.points);
-    const wName = rosterNameByTeamId(String(winner.roster_id));
-    const lName = rosterNameByTeamId(String(loser.roster_id));
-    if (!stoleOne || wPts < stoleOne.points) {
-      stoleOne = { teamName: wName, points: wPts, opponentName: lName, opponentPoints: lPts };
-    }
-    if (!gotRobbed || lPts > gotRobbed.points) {
-      gotRobbed = { teamName: lName, points: lPts, opponentName: wName, opponentPoints: wPts };
-    }
-  }
+  // Stole one / got robbed: completed winners only
+  const stoleRobbed = pickStoleOneAndGotRobbed(matchups, { weekIsFinal });
+  const stoleOne = stoleRobbed
+    ? {
+        teamName: rosterNameByTeamId(String(stoleRobbed.stoleOne.teamRosterId)),
+        points: stoleRobbed.stoleOne.points,
+        opponentName: rosterNameByTeamId(String(stoleRobbed.stoleOne.opponentRosterId)),
+        opponentPoints: stoleRobbed.stoleOne.opponentPoints,
+      }
+    : undefined;
+  const gotRobbed = stoleRobbed
+    ? {
+        teamName: rosterNameByTeamId(String(stoleRobbed.gotRobbed.teamRosterId)),
+        points: stoleRobbed.gotRobbed.points,
+        opponentName: rosterNameByTeamId(String(stoleRobbed.gotRobbed.opponentRosterId)),
+        opponentPoints: stoleRobbed.gotRobbed.opponentPoints,
+      }
+    : undefined;
 
   return {
     highScore: {
-      teamName: rosterNameByTeamId(String(high.roster_id)),
-      points: safeNum(high.points),
-      keyPerformers: topPerformersForRow(high, playersById),
+      teamName: rosterNameByTeamId(String(highTeamId)),
+      points: highPts,
+      keyPerformers: highRow ? topPerformersForRow(highRow, playersById) : undefined,
     },
     lowScore: {
-      teamName: rosterNameByTeamId(String(low.roster_id)),
-      points: safeNum(low.points),
+      teamName: rosterNameByTeamId(String(lowTeamId)),
+      points: lowPts,
     },
     ...(worstCoach ? { worstCoach } : {}),
     ...(bestCoach ? { bestCoach } : {}),
@@ -557,9 +575,15 @@ export function playedScoresFromWeekMatchups(
   return scores;
 }
 
-function computeLeagueAverages(teams: PowerRankingsTeamInput[], weekMatchups: SleeperMatchup[]): WeeklyEmailData["leagueAverages"] {
-  // Week: canonical final played sides only (zeros kept if the game is final).
-  const weekScores = playedScoresFromWeekMatchups(weekMatchups, { weekIsFinal: true });
+function computeLeagueAverages(
+  teams: PowerRankingsTeamInput[],
+  weekMatchups: SleeperMatchup[],
+  weekIsFinal = true,
+): WeeklyEmailData["leagueAverages"] {
+  // Week: final played sides when the week is final; otherwise live scores for display only.
+  const weekScores = weekIsFinal
+    ? playedScoresFromWeekMatchups(weekMatchups, { weekIsFinal: true })
+    : weekMatchups.map((m) => safeNum(m.points));
   // Season: already-canonical weeklyScores on team state — do not drop zeros.
   const seasonScores = teams.flatMap((t) => (t.weeklyScores || []).map((w) => w.score));
   if (!weekScores.length && !seasonScores.length) return undefined;
@@ -711,6 +735,18 @@ export async function getWeeklyCommissionerEmail(
     throw new Error("No team data available for this league and week.");
   }
 
+  // Resolve week finality once for all winner-dependent consumers.
+  let weekIsFinal = false;
+  let leagueSeason: string | undefined;
+  try {
+    const [nfl, league] = await Promise.all([getNflWeekContext(), getLeague(leagueId)]);
+    leagueSeason = league.season;
+    weekIsFinal = isLeagueWeekFinal(week, league.season, nfl);
+  } catch {
+    // Unknown NFL/league state: do not invent winners for this week.
+    weekIsFinal = false;
+  }
+
   const rankings = generatePowerRankings(teams, previousRankings);
   const rosterNameByTeamId = (teamId: string) => {
     const t = teams.find((x) => x.teamId === teamId);
@@ -725,7 +761,7 @@ export async function getWeeklyCommissionerEmail(
   }
 
   const [villainOfTheWeek, fraudAlert] = await Promise.all([
-    pickVillain(leagueId, week, rankings, rosterNameByTeamId, weekMatchupsRaw),
+    pickVillain(leagueId, week, rankings, rosterNameByTeamId, weekMatchupsRaw, weekIsFinal),
     Promise.resolve(pickFraud(rankings)),
   ]);
 
@@ -734,10 +770,11 @@ export async function getWeeklyCommissionerEmail(
   if (weekMatchupsRaw.length > 0 && includeV2) {
     try {
       const narrative = await buildWeeklyRoastNarrative({
-        league: { league_id: leagueId, name: leagueName, season: undefined },
+        league: { league_id: leagueId, name: leagueName, season: leagueSeason },
         week,
         matchups: weekMatchupsRaw,
         rosterName: (rid: number) => rosterNameByTeamId(String(rid)),
+        weekIsFinal,
       });
       introSummary = `${narrative.headline} ${narrative.groupChatSummary}`;
       roastCallouts = buildRoastCalloutsFromNarrative(narrative);
@@ -760,8 +797,10 @@ export async function getWeeklyCommissionerEmail(
   } catch {
     playersById = null;
   }
-  const weeklySuperlatives = includeV2 ? computeWeeklySuperlatives(weekMatchupsRaw, rosterNameByTeamId, playersById) : undefined;
-  const leagueAverages = includeV2 ? computeLeagueAverages(teams, weekMatchupsRaw) : undefined;
+  const weeklySuperlatives = includeV2
+    ? computeWeeklySuperlatives(weekMatchupsRaw, rosterNameByTeamId, playersById, weekIsFinal)
+    : undefined;
+  const leagueAverages = includeV2 ? computeLeagueAverages(teams, weekMatchupsRaw, weekIsFinal) : undefined;
   const seasonRaces = includeV2 ? computeSeasonRaces(teams) : undefined;
   let positionLeaders: WeeklyEmailData["positionLeaders"] | undefined;
   if (includeV2) {
@@ -776,21 +815,29 @@ export async function getWeeklyCommissionerEmail(
   const matchupPairs = weekMatchups.map((m) => ({ teamA: m.teamA, teamB: m.teamB }));
   const narratives = await getLeagueHistoryNarratives(leagueId, matchupPairs);
 
-  // If matchup-to-watch was a nemesis (victim "has never beaten" dominator) and victim won this week, add story of the week
+  // If matchup-to-watch was a nemesis (victim "has never beaten" dominator) and victim won this week, add story of the week.
+  // Use canonical classification — display score order is not a completed winner.
   let storyOfTheWeek = narratives.storyOfTheWeek;
-  if (narratives.matchupToWatch && weekMatchups.length > 0) {
+  if (narratives.matchupToWatch && weekMatchupsRaw.length > 0 && weekIsFinal) {
     const nar = narratives.matchupToWatch.narrative;
     if (nar.includes("has never beaten")) {
       const victim = narratives.matchupToWatch.teamA;
       const dominator = narratives.matchupToWatch.teamB;
-      const row = weekMatchups.find(
-        (m) =>
-          (m.teamA === victim && m.teamB === dominator) || (m.teamA === dominator && m.teamB === victim),
-      );
-      if (row) {
-        const victimWon =
-          (row.teamA === victim && row.scoreA > row.scoreB) || (row.teamB === victim && row.scoreB > row.scoreA);
-        if (victimWon) storyOfTheWeek = { narrative: `Finally: ${victim} gets the W over ${dominator}.` };
+      const victimId = teams.find((t) => t.teamName === victim)?.teamId;
+      const dominatorId = teams.find((t) => t.teamName === dominator)?.teamId;
+      if (victimId && dominatorId) {
+        const victimRow = weekMatchupsRaw.find((m) => String(m.roster_id) === victimId);
+        const dominatorRow = weekMatchupsRaw.find((m) => String(m.roster_id) === dominatorId);
+        if (
+          victimRow &&
+          dominatorRow &&
+          victimRow.matchup_id === dominatorRow.matchup_id
+        ) {
+          const truth = matchupFinalityTruth(victimRow, dominatorRow, { weekIsFinal: true });
+          if (truth.hasWinner && String(truth.winnerRosterId) === victimId) {
+            storyOfTheWeek = { narrative: `Finally: ${victim} gets the W over ${dominator}.` };
+          }
+        }
       }
     }
   }

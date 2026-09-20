@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   nflWeekContextFromState,
   resolveFinalThroughWeek,
+  isLeagueWeekFinal,
 } from "./nflState";
 import { buildTeamsFromMatchupData } from "../lib/weeklyCommissioner";
 
@@ -34,6 +35,23 @@ describe("resolveFinalThroughWeek", () => {
 
   it("caps a live through-week at the latest final NFL week", () => {
     expect(resolveFinalThroughWeek(5, 4)).toBe(4);
+  });
+});
+
+describe("isLeagueWeekFinal", () => {
+  const nfl = { season: "2026", latestFinalWeek: 4 };
+
+  it("treats past league seasons as fully final", () => {
+    expect(isLeagueWeekFinal(17, "2025", nfl)).toBe(true);
+  });
+
+  it("treats future league seasons as not final", () => {
+    expect(isLeagueWeekFinal(1, "2027", nfl)).toBe(false);
+  });
+
+  it("uses latestFinalWeek for the current season", () => {
+    expect(isLeagueWeekFinal(4, "2026", nfl)).toBe(true);
+    expect(isLeagueWeekFinal(5, "2026", nfl)).toBe(false);
   });
 });
 

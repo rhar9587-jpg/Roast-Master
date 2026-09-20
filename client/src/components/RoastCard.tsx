@@ -568,7 +568,9 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
               : isNailBiter
                 ? "Heartbreaker."
                 : "You got clipped."
-            : "Dead even. The league will argue about this.";
+            : result === "TIE"
+              ? "Dead even. The league will argue about this."
+              : "Still playing — don't count the W yet.";
       deck.push({
         kicker: "YOUR MATCHUP",
         title: `${a.username.toUpperCase()} vs ${b.username.toUpperCase()}`,
