@@ -267,7 +267,7 @@ function pickVillain(
 /**
  * Pick fraud alert: team with good record but low power score / "danger ahead" commentary.
  */
-function pickFraud(rankings: PowerRankingRow[]): { teamName: string; reason: string } {
+export function pickFraud(rankings: PowerRankingRow[]): { teamName: string; reason: string } {
   const fraudCandidates = rankings.filter(
     (r) => r.wins >= 3 && r.commentary === "Winning games, but the numbers suggest danger ahead.",
   );
@@ -325,7 +325,7 @@ export function buildWeekMatchups(
  * Compute biggest riser and faller from current rankings vs previous week.
  * Riser = largest positive rank change; faller = largest negative change.
  */
-function computeBiggestMovers(
+export function computeBiggestMovers(
   rankings: PowerRankingRow[],
   previousRankings: { teamId: string; rank: number }[],
 ): { riser?: { teamName: string; change: number }; faller?: { teamName: string; change: number } } {
@@ -523,7 +523,7 @@ export function computeWeeklySuperlatives(
   };
 }
 
-function buildRoastCalloutsFromNarrative(
+export function buildRoastCalloutsFromNarrative(
   narrative: Awaited<ReturnType<typeof buildWeeklyRoastNarrative>>,
 ): WeeklyEmailData["roastCallouts"] {
   const out: NonNullable<WeeklyEmailData["roastCallouts"]> = [];
@@ -575,7 +575,7 @@ export function playedScoresFromWeekMatchups(
   return scores;
 }
 
-function computeLeagueAverages(
+export function computeLeagueAverages(
   teams: PowerRankingsTeamInput[],
   weekMatchups: SleeperMatchup[],
   weekIsFinal = true,
@@ -593,7 +593,7 @@ function computeLeagueAverages(
   };
 }
 
-function computeSeasonRaces(
+export function computeSeasonRaces(
   teams: PowerRankingsTeamInput[],
 ): WeeklyEmailData["seasonRaces"] {
   if (!teams.length) return undefined;

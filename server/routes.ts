@@ -1161,10 +1161,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const appOrigin = publicAppUrl(req);
       if (leagueId === STATIC_DEMO_LEAGUE_ID) {
         if (mode === "preview") {
-          const demoPayload = getDemoWeeklyPreviewPayload(week);
+          const demoPayload = await getDemoWeeklyPreviewPayload(week);
           html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), ...(signoff ? { commissionerSignoff: signoff.slice(0, 180) } : {}), appUrl: appOrigin });
         } else {
-          const demoPayload = getDemoWeeklyEmailPayload(week);
+          const demoPayload = await getDemoWeeklyEmailPayload(week);
           html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), ...(signoff ? { commissionerSignoff: signoff.slice(0, 180) } : {}), appUrl: appOrigin });
         }
       } else {
@@ -1285,7 +1285,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       let subject: string;
       if (mode === "preview") {
         if (league_id === STATIC_DEMO_LEAGUE_ID) {
-          const demoPayload = getDemoWeeklyPreviewPayload(week);
+          const demoPayload = await getDemoWeeklyPreviewPayload(week);
           leagueName = demoPayload.leagueName;
           emailHtml = generateWeeklyEmail({
             ...demoPayload,
@@ -1302,7 +1302,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         }
       } else {
         if (league_id === STATIC_DEMO_LEAGUE_ID) {
-          const demoPayload = getDemoWeeklyEmailPayload(week);
+          const demoPayload = await getDemoWeeklyEmailPayload(week);
           leagueName = demoPayload.leagueName;
           emailHtml = generateWeeklyEmail({
             ...demoPayload,
@@ -1396,9 +1396,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ message: "Invalid query params", issues: parsed.error.issues });
     }
 
-    // Demo league intercept - return static fictional data (no Sleeper API call)
+    // Demo league intercept — canonical fixture + production roast engine
     if (league_id === STATIC_DEMO_LEAGUE_ID) {
-      return res.json(getDemoWeeklyRoast({ week, roster_id }));
+      return res.json(await getDemoWeeklyRoast({ week, roster_id }));
     }
 
     try {
@@ -1416,10 +1416,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ message: "Invalid request body", issues: parsed.error.issues });
     }
 
-    // Demo league intercept - return static fictional data (no Sleeper API call)
+    // Demo league intercept — canonical fixture + production roast engine
     if (parsed.data.league_id === STATIC_DEMO_LEAGUE_ID) {
       trackEvent("nfl_roast_demo", "/api/roast", "POST", { week: parsed.data.week });
-      return res.json(getDemoWeeklyRoast({ week: parsed.data.week, roster_id: parsed.data.roster_id }));
+      return res.json(
+        await getDemoWeeklyRoast({
+          week: parsed.data.week,
+          roster_id: parsed.data.roster_id,
+        }),
+      );
     }
 
     try {
