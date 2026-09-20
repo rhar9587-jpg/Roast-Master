@@ -7,12 +7,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/track";
 import { markFreeSendUsed } from "./premium";
 import { setCommissionerEmail } from "./utils";
+import { weeklyHeadline, type WeeklyEmailMode } from "./weeklyContext";
 
 function WeeklyEmailSentStatus({ leagueId, week }: { leagueId: string; week: number }) {
   const { data } = useQuery({
@@ -49,7 +49,7 @@ function WeeklyEmailSentStatus({ leagueId, week }: { leagueId: string; week: num
 export type WeeklyCommissionerEmailSectionProps = {
   leagueId: string;
   leagueWeek: number;
-  weeklyCommissionerEmailMode: "recap" | "preview";
+  weeklyCommissionerEmailMode: WeeklyEmailMode;
   weeklyCommissionerNote: string;
   setWeeklyCommissionerNote: (v: string) => void;
   weeklyCommissionerSignoff: string;
@@ -94,29 +94,95 @@ export function WeeklyCommissionerEmailSection({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [optionalOpen, setOptionalOpen] = useState(false);
-  const [sendOpen, setSendOpen] = useState(false);
+  const [recipientOpen, setRecipientOpen] = useState(false);
 
   const trimmedId = leagueId.trim();
-  const modeLabel = weeklyCommissionerEmailMode === "recap" ? "Recap" : "Preview";
-  const helperText =
-    weeklyCommissionerEmailMode === "recap"
-      ? `Recap looks back at Week ${leagueWeek}.`
-      : `Preview looks ahead at Week ${leagueWeek}.`;
+  const headline = weeklyHeadline(leagueWeek, weeklyCommissionerEmailMode);
+
+  function openPreview() {
+    track("weekly_email_preview", {
+      league_id: trimmedId,
+      week: leagueWeek,
+      mode: weeklyCommissionerEmailMode,
+    });
+    const params = new URLSearchParams({
+      week: String(leagueWeek),
+      mode: weeklyCommissionerEmailMode,
+    });
+    if (weeklyCommissionerNote.trim()) params.set("note", weeklyCommissionerNote.trim());
+    if (weeklyCommissionerSignoff.trim()) params.set("signoff", weeklyCommissionerSignoff.trim());
+    const url = `/api/leagues/${encodeURIComponent(trimmedId)}/weekly-email/preview?${params.toString()}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function sendEmail() {
+    if (!commissionerEmail.trim()) {
+      setRecipientOpen(true);
+      toast({ title: "Enter commissioner email", variant: "destructive" });
+      return;
+    }
+    setWeeklyEmailSendLoading(true);
+    try {
+      const res = await fetch(`/api/leagues/${encodeURIComponent(trimmedId)}/weekly-email/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          week: leagueWeek,
+          commissioner_email: commissionerEmail.trim(),
+          note: weeklyCommissionerNote.trim() || undefined,
+          signoff: weeklyCommissionerSignoff.trim() || undefined,
+          mode: weeklyCommissionerEmailMode,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 402 || data?.code === "FREE_SEND_USED") {
+          setServerFreeSendUsed(true);
+          throw new Error("You've used your free send. Unlock to send again.");
+        }
+        throw new Error(data?.error || "Failed to send email.");
+      }
+      if (!showPremiumContent && !isDemo) {
+        markFreeSendUsed(trimmedId);
+        setServerFreeSendUsed(true);
+      }
+      track("weekly_email_sent", {
+        league_id: trimmedId,
+        week: leagueWeek,
+        mode: weeklyCommissionerEmailMode,
+      });
+      toast({
+        title: "Sent",
+        description:
+          weeklyCommissionerEmailMode === "preview"
+            ? "Matchup preview sent to commissioner."
+            : "Weekly email sent to commissioner.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["weekly-email-sent", trimmedId, leagueWeek] });
+    } catch (err: unknown) {
+      toast({
+        title: "Send failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setWeeklyEmailSendLoading(false);
+    }
+  }
 
   return (
     <section
       id="weekly-commissioner-email"
       className="rounded-lg border bg-muted/20 p-4 space-y-4 scroll-mt-24"
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-foreground">
-          Commissioner email · Week {leagueWeek} · {modeLabel}
-        </h3>
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold text-foreground">Commissioner recap</h3>
+        <p className="text-xs text-muted-foreground">
+          {headline}
+          {weeklyEmailGenerateLoading ? " · preparing…" : ""}
+        </p>
       </div>
-      <p className="text-xs text-muted-foreground">
-        {helperText} Preview it first, then send rankings and matchup notes to your commissioner.
-        Week and Recap/Preview are set in Week context above.
-      </p>
+
       {!showPremiumContent && !isDemo && (
         <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-3 text-sm text-amber-800 dark:text-amber-200">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
@@ -130,75 +196,37 @@ export function WeeklyCommissionerEmailSection({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            {freeSendAlreadyUsed ? "Commissioners send this every week." : "Your first send is free. Commissioners send this every week."}
+            {freeSendAlreadyUsed
+              ? "Commissioners send this every week."
+              : "Your first send is free. Commissioners send this every week."}
           </p>
         </div>
       )}
 
-      <div className="space-y-3">
-        <p className="text-xs font-medium text-foreground">Build email</p>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!canGenerateAndPreviewWeeklyEmail || weeklyEmailGenerateLoading}
-            onClick={async () => {
-              setWeeklyEmailGenerateLoading(true);
-              try {
-                const params = new URLSearchParams({
-                  league_id: trimmedId,
-                  week: String(leagueWeek),
-                  mode: weeklyCommissionerEmailMode,
-                });
-                if (weeklyCommissionerNote.trim()) params.set("note", weeklyCommissionerNote.trim());
-                if (weeklyCommissionerSignoff.trim()) params.set("signoff", weeklyCommissionerSignoff.trim());
-                const res = await fetch(`/api/weekly-email?${params.toString()}`);
-                if (!res.ok) {
-                  const data = await res.json().catch(() => ({}));
-                  throw new Error(data?.error || "Failed to generate email.");
-                }
-                toast({ title: "Email ready", description: "Use Preview or Send to Commissioner." });
-                track("weekly_email_generated", {
-                  league_id: trimmedId,
-                  week: leagueWeek,
-                  mode: weeklyCommissionerEmailMode,
-                });
-              } catch (err: unknown) {
-                toast({
-                  title: "Could not generate email",
-                  description: err instanceof Error ? err.message : "Unknown error",
-                  variant: "destructive",
-                });
-              } finally {
-                setWeeklyEmailGenerateLoading(false);
-              }
-            }}
-          >
-            {weeklyEmailGenerateLoading ? "Generating…" : "Generate Email"}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!canGenerateAndPreviewWeeklyEmail}
-            onClick={() => {
-              track("weekly_email_preview", {
-                league_id: trimmedId,
-                week: leagueWeek,
-                mode: weeklyCommissionerEmailMode,
-              });
-              const params = new URLSearchParams({
-                week: String(leagueWeek),
-                mode: weeklyCommissionerEmailMode,
-              });
-              if (weeklyCommissionerNote.trim()) params.set("note", weeklyCommissionerNote.trim());
-              if (weeklyCommissionerSignoff.trim()) params.set("signoff", weeklyCommissionerSignoff.trim());
-              const url = `/api/leagues/${encodeURIComponent(trimmedId)}/weekly-email/preview?${params.toString()}`;
-              window.open(url, "_blank", "noopener,noreferrer");
-            }}
-          >
-            Preview Email
-          </Button>
-        </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          disabled={!canGenerateAndPreviewWeeklyEmail}
+          onClick={() => {
+            setWeeklyEmailGenerateLoading(true);
+            try {
+              openPreview();
+            } finally {
+              // Preview opens a new tab; generation happens server-side on that request.
+              setTimeout(() => setWeeklyEmailGenerateLoading(false), 400);
+            }
+          }}
+        >
+          Preview
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={!canSendWeeklyEmail || weeklyEmailSendLoading}
+          onClick={() => void sendEmail()}
+        >
+          {weeklyEmailSendLoading ? "Sending…" : "Send"}
+        </Button>
       </div>
 
       {canGenerateAndPreviewWeeklyEmail && (
@@ -208,7 +236,7 @@ export function WeeklyCommissionerEmailSection({
               type="button"
               className="flex w-full items-center justify-between rounded-lg border border-dashed bg-background/50 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted/50"
             >
-              <span>Optional note &amp; sign-off</span>
+              <span>Customize note</span>
               <ChevronDown
                 className={cn("h-4 w-4 shrink-0 transition-transform", optionalOpen && "rotate-180")}
               />
@@ -216,7 +244,9 @@ export function WeeklyCommissionerEmailSection({
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-3 pt-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">Add a note at the top (optional)</label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Add a note at the top (optional)
+              </label>
               <input
                 type="text"
                 placeholder="e.g. Big week — trade deadline Tuesday!"
@@ -227,7 +257,9 @@ export function WeeklyCommissionerEmailSection({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">Sign-off line (optional)</label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Sign-off line (optional)
+              </label>
               <input
                 type="text"
                 placeholder="e.g. Good luck this week!"
@@ -241,105 +273,38 @@ export function WeeklyCommissionerEmailSection({
         </Collapsible>
       )}
 
-      <Collapsible open={sendOpen} onOpenChange={setSendOpen}>
+      <Collapsible open={recipientOpen} onOpenChange={setRecipientOpen}>
         <CollapsibleTrigger asChild>
           <button
             type="button"
             className="flex w-full items-center justify-between rounded-lg border border-dashed bg-background/50 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted/50"
           >
-            <span>Send to commissioner</span>
+            <span>Change recipient</span>
             <ChevronDown
-              className={cn("h-4 w-4 shrink-0 transition-transform", sendOpen && "rotate-180")}
+              className={cn("h-4 w-4 shrink-0 transition-transform", recipientOpen && "rotate-180")}
             />
           </button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-3">
-          <Separator className="mb-3 bg-border/80" />
-          <div className="space-y-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <div className="min-w-0 flex-1">
-                <label className="block text-xs font-medium text-muted-foreground">Commissioner email</label>
-                <input
-                  type="email"
-                  placeholder="commissioner@example.com"
-                  value={commissionerEmail}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setCommissionerEmailState(v);
-                    if (trimmedId) setCommissionerEmail(trimmedId, v);
-                  }}
-                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                  disabled={!canSendWeeklyEmail}
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  We&apos;ll send the report here. You can forward it to your league or BCC everyone.
-                </p>
-                {showPremiumContent && (
-                  <WeeklyEmailSentStatus leagueId={trimmedId} week={leagueWeek} />
-                )}
-              </div>
-              <Button
-                size="sm"
-                className="w-full shrink-0 sm:w-auto"
-                disabled={!canSendWeeklyEmail || !commissionerEmail.trim() || weeklyEmailSendLoading}
-                onClick={async () => {
-                  if (!commissionerEmail.trim()) {
-                    toast({ title: "Enter commissioner email", variant: "destructive" });
-                    return;
-                  }
-                  setWeeklyEmailSendLoading(true);
-                  try {
-                    const res = await fetch(`/api/leagues/${encodeURIComponent(trimmedId)}/weekly-email/send`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        week: leagueWeek,
-                        commissioner_email: commissionerEmail.trim(),
-                        note: weeklyCommissionerNote.trim() || undefined,
-                        signoff: weeklyCommissionerSignoff.trim() || undefined,
-                        mode: weeklyCommissionerEmailMode,
-                      }),
-                    });
-                    const data = await res.json().catch(() => ({}));
-                    if (!res.ok) {
-                      if (res.status === 402 || data?.code === "FREE_SEND_USED") {
-                        setServerFreeSendUsed(true);
-                        throw new Error("You've used your free send. Unlock to send again.");
-                      }
-                      throw new Error(data?.error || "Failed to send email.");
-                    }
-                    if (!showPremiumContent && !isDemo) {
-                      markFreeSendUsed(trimmedId);
-                      setServerFreeSendUsed(true);
-                    }
-                    track("weekly_email_sent", {
-                      league_id: trimmedId,
-                      week: leagueWeek,
-                      mode: weeklyCommissionerEmailMode,
-                    });
-                    toast({
-                      title: "Sent",
-                      description:
-                        weeklyCommissionerEmailMode === "preview"
-                          ? "Matchup preview sent to commissioner."
-                          : "Weekly email sent to commissioner.",
-                    });
-                    queryClient.invalidateQueries({ queryKey: ["weekly-email-sent", trimmedId, leagueWeek] });
-                  } catch (err: unknown) {
-                    toast({
-                      title: "Send failed",
-                      description: err instanceof Error ? err.message : "Unknown error",
-                      variant: "destructive",
-                    });
-                  } finally {
-                    setWeeklyEmailSendLoading(false);
-                  }
-                }}
-              >
-                {weeklyEmailSendLoading ? "Sending…" : "Send to Commissioner"}
-              </Button>
-            </div>
-          </div>
+        <CollapsibleContent className="pt-3 space-y-2">
+          <label className="block text-xs font-medium text-muted-foreground">Commissioner email</label>
+          <input
+            type="email"
+            placeholder="commissioner@example.com"
+            value={commissionerEmail}
+            onChange={(e) => {
+              const v = e.target.value;
+              setCommissionerEmailState(v);
+              if (trimmedId) setCommissionerEmail(trimmedId, v);
+            }}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            disabled={!canSendWeeklyEmail}
+          />
+          <p className="text-xs text-muted-foreground">
+            We&apos;ll send the report here. You can forward it to your league or BCC everyone.
+          </p>
+          {showPremiumContent && (
+            <WeeklyEmailSentStatus leagueId={trimmedId} week={leagueWeek} />
+          )}
         </CollapsibleContent>
       </Collapsible>
     </section>

@@ -142,12 +142,36 @@ export function WrappedCard({
               </div>
             ) : null}
 
-            {/* Title + subtitle */}
+            {/* Title + subtitle / matchup scoreboard */}
             <div className="mt-5 text-white">
               <div className="text-4xl md:text-6xl font-black leading-[0.9] whitespace-pre-line">
                 {title}
               </div>
-              {subtitle ? (
+              {isMatchup && matchupData ? (
+                <div className="mt-6 space-y-3">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm md:text-base font-semibold text-white/70 truncate">
+                        {matchupData.teamA}
+                      </div>
+                      <div className="text-3xl md:text-5xl font-black tabular-nums leading-none mt-1">
+                        {Number(matchupData.scoreA).toFixed(1)}
+                      </div>
+                    </div>
+                    <div className="text-white/40 text-xs font-bold tracking-widest uppercase pb-2">
+                      vs
+                    </div>
+                    <div className="min-w-0 flex-1 text-right">
+                      <div className="text-sm md:text-base font-semibold text-white/70 truncate">
+                        {matchupData.teamB}
+                      </div>
+                      <div className="text-3xl md:text-5xl font-black tabular-nums leading-none mt-1">
+                        {Number(matchupData.scoreB).toFixed(1)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : subtitle ? (
                 <div className="mt-3 text-sm md:text-base text-white/55 font-medium whitespace-pre-line">
                   {subtitle}
                 </div>

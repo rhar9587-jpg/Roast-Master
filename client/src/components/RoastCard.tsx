@@ -14,7 +14,6 @@ import {
 import type { Card, RoastResponse } from "@shared/schema";
 import { track } from "@/lib/track";
 import { getYoursLine, SHARE_FOOTER } from "@/lib/brand";
-import type { WrappedCardProps } from "@/components/WrappedCard";
 import { WrappedCard } from "@/components/WrappedCard";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +21,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { mapEngineCardToVisual } from "@/pages/LeagueHistory/weeklyShareCards";
 
 type Accent = "green" | "pink" | "blue" | "orange";
 
@@ -34,16 +34,6 @@ interface RoastCardProps {
 
 function safeNum(n: number | undefined | null, fallback = 0) {
   return typeof n === "number" && Number.isFinite(n) ? n : fallback;
-}
-
-function accentForEngineCard(type: string): NonNullable<WrappedCardProps["accent"]> {
-  const t = type.toLowerCase();
-  if (t.includes("top_dog") || t.includes("group_chat")) return "green";
-  if (t.includes("embarrassment") || t.includes("blowout")) return "pink";
-  if (t.includes("fraud")) return "orange";
-  if (t.includes("worst_coach") || t.includes("coaching")) return "blue";
-  if (t.includes("carry")) return "slate";
-  return "green";
 }
 
 type WeeklySlide =
@@ -60,14 +50,17 @@ function normalizeWeeklyEngineCards(data: RoastResponse): Card[] {
   const raw = data.cards;
   const incoming: Card[] = Array.isArray(raw) ? raw : [];
 
-  if (incoming.length >= 2) {
-    return incoming;
+  // Text-only group chat cards are not share graphics — keep them out of the carousel.
+  const visualIncoming = incoming.filter((c) => c.type !== "group_chat_drop");
+
+  if (visualIncoming.length >= 2) {
+    return visualIncoming;
   }
 
   const high = data.stats?.highestScorer;
   const low = data.stats?.lowestScorer;
   if (!high?.username || !low?.username) {
-    return incoming;
+    return visualIncoming;
   }
 
   const synthesized: Card[] = [
@@ -77,29 +70,20 @@ function normalizeWeeklyEngineCards(data: RoastResponse): Card[] {
       subtitle: `${high.username} paced the league this week.`,
       stat: `${safeNum(high.score).toFixed(1)} pts`,
       tagline: "Highest score on the board.",
+      meta: { roster_id: high.roster_id, score: high.score, username: high.username },
     },
     {
-      type: "fraud_watch",
-      title: "Fraud Watch",
+      type: "lowest_scorer",
+      title: "Straight to Jail",
       subtitle: `${low.username} scraped the bottom this week.`,
       stat: `${safeNum(low.score).toFixed(1)} pts`,
-      tagline: "Call it a rebuild.",
+      tagline: "Lowest score of the week.",
+      meta: { username: low.username, score: low.score },
     },
   ];
 
-  const g = data.groupChatSummary?.trim();
-  if (g) {
-    synthesized.push({
-      type: "group_chat_drop",
-      title: "Group Chat Drop",
-      subtitle: g.slice(0, 280) + (g.length > 280 ? "…" : ""),
-      tagline: "Copy, paste, send.",
-      stat: "League recap",
-    });
-  }
-
   const seen = new Set(synthesized.map((c) => c.type));
-  for (const c of incoming) {
+  for (const c of visualIncoming) {
     if (!seen.has(c.type)) {
       synthesized.push(c);
       seen.add(c.type);
@@ -172,10 +156,10 @@ function buildWeeklyRoastClipboardText(data: RoastResponse): string {
 
 function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremium: boolean }) {
   const [copied, setCopied] = useState(false);
-  const [copiedOneLiner, setCopiedOneLiner] = useState(false);
   const [copiedMatchup, setCopiedMatchup] = useState(false);
-  const [copiedFullRoast, setCopiedFullRoast] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [secondaryOpen, setSecondaryOpen] = useState(false);
   const [cardIndex, setCardIndex] = useState(0);
   const summary = data.groupChatSummary?.trim();
   const signalsParsed = useMemo(() => parseWeeklySignals(data), [data.signals]);
@@ -203,25 +187,46 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
   const goNext = () =>
     setCardIndex((i) => (slideCount > 0 ? (i + 1) % slideCount : 0));
 
-  const copySummary = async () => {
-    if (!summary) return;
+  const roastClipboardText = useMemo(() => buildWeeklyRoastClipboardText(data), [data]);
+
+  const shareWeek = async () => {
+    setShareBusy(true);
     try {
-      await navigator.clipboard.writeText(summary);
+      track("weekly_share_clicked", {
+        week: data.week,
+        league_id: data.league.league_id,
+      });
+      const shareText = roastClipboardText;
+      if (typeof navigator !== "undefined" && "share" in navigator) {
+        try {
+          await navigator.share({
+            title: `Week ${data.week} Roast`,
+            text: shareText,
+          });
+          return;
+        } catch {
+          /* fall through to clipboard */
+        }
+      }
+      await navigator.clipboard.writeText(shareText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       /* ignore */
+    } finally {
+      setShareBusy(false);
     }
   };
 
-  const copyWeekOneLiner = async () => {
-    const text = summary
-      ? `${data.headline}\n\n${summary}`
-      : data.headline;
+  const copyText = async () => {
     try {
-      await navigator.clipboard.writeText(text);
-      setCopiedOneLiner(true);
-      setTimeout(() => setCopiedOneLiner(false), 2000);
+      await navigator.clipboard.writeText(roastClipboardText);
+      track("weekly_roast_copied", {
+        league_id: data.league.league_id,
+        week: data.week,
+      });
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       /* ignore */
     }
@@ -240,35 +245,26 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
     }
   };
 
-  const copyFullWeeklyRoast = async () => {
-    const text = buildWeeklyRoastClipboardText(data);
-    try {
-      await navigator.clipboard.writeText(text);
-      track("weekly_roast_copied", {
-        league_id: data.league.league_id,
-        week: data.week,
-      });
-      setCopiedFullRoast(true);
-      setTimeout(() => setCopiedFullRoast(false), 2000);
-    } catch {
-      /* ignore */
-    }
-  };
-
   const currentSlide = slides[cardIndex];
 
   const renderEngineCard = (idx: number) => {
     const c = engineCards[idx];
     if (!c) return null;
+    const visual = mapEngineCardToVisual(c, data.week, data);
     return (
       <WrappedCard
-        kicker={c.title}
+        kicker={visual.kicker}
         kickerIcon={null}
-        title={(c.subtitle ?? c.title).slice(0, 280)}
-        {...(c.stat ? { bigValue: c.stat, statLabel: "Stat" as const } : {})}
-        tagline={c.tagline}
+        title={visual.title}
+        subtitle={visual.subtitle}
+        {...(visual.bigValue
+          ? { bigValue: visual.bigValue, statLabel: visual.statLabel ?? "Stat" }
+          : {})}
+        tagline={visual.tagline}
         footer={SHARE_FOOTER}
-        accent={accentForEngineCard(c.type)}
+        accent={visual.accent}
+        isMatchup={visual.isMatchup}
+        matchupData={visual.matchupData}
         isPremium={isPremium}
       />
     );
@@ -276,50 +272,145 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
 
   return (
     <div className="w-full max-w-3xl mx-auto space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1 min-w-0">
-          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
-            🔥 THIS WEEK&apos;S ROAST
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Week {data.week}
-            {data.league?.name ? ` · ${data.league.name}` : ""}
-          </p>
-        </div>
-        <div className="shrink-0">
-          <Button
-            type="button"
-            size="sm"
-            className="font-semibold interact-cta"
-            onClick={copyFullWeeklyRoast}
-          >
-            {copiedFullRoast ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-            {copiedFullRoast ? "Copied" : "🔥 Copy and drop in your group chat"}
-          </Button>
-          <p className="text-[11px] text-muted-foreground mt-1">Perfect for your group chat 💬</p>
-        </div>
+      <div className="space-y-1">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Week {data.week}
+          {data.league?.name ? ` · ${data.league.name}` : ""}
+        </p>
+        <h2 className="text-2xl md:text-3xl font-black tracking-tight text-foreground leading-tight">
+          {data.headline}
+        </h2>
       </div>
 
-      <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/10 to-muted/30 px-4 py-6 md:px-8 md:py-8">
-        <p className="text-2xl md:text-3xl font-bold text-foreground leading-tight tracking-tight">
-          {data.headline}
-        </p>
-        <div className="mt-5 flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <span className="rounded-full border bg-background/80 px-2 py-0.5">
-            Avg {safeNum(data.stats.averageScore).toFixed(1)} pts
+      {/* Shareable roast cards — hero */}
+      <div className="space-y-2">
+        {slideCount === 0 ? (
+          <p className="text-sm text-muted-foreground rounded-lg border border-dashed bg-muted/20 px-3 py-4">
+            No shareable league cards for this week yet. Check back when scores are in.
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+              <p className="text-sm font-semibold text-foreground tracking-tight">
+                {slideCount} share card{slideCount === 1 ? "" : "s"}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={goPrev}
+                  className="h-10 w-10 rounded-xl border bg-background flex items-center justify-center interact-icon"
+                  aria-label="Previous card"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="h-10 w-10 rounded-xl border bg-background flex items-center justify-center interact-icon"
+                  aria-label="Next card"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+
+            {currentSlide && (
+              <motion.div
+                key={`${currentSlide.kind}-${currentSlide.kind === "engine" ? currentSlide.idx : "m"}`}
+                initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.25 }}
+              >
+                {currentSlide.kind === "engine"
+                  ? renderEngineCard(currentSlide.idx)
+                  : data.matchup ? (
+                      <WrappedCard
+                        kicker="YOUR MATCHUP"
+                        kickerIcon={<Swords className="w-3.5 h-3.5" />}
+                        title={`${data.matchup.you.username} vs ${data.matchup.opponent.username}`}
+                        subtitle={`Result: ${data.matchup.result}`}
+                        bigValue={`${safeNum(data.matchup.you.score).toFixed(1)}–${safeNum(data.matchup.opponent.score).toFixed(1)}`}
+                        tagline="Receipts attached."
+                        footer={SHARE_FOOTER}
+                        accent="green"
+                        isPremium={isPremium}
+                      />
+                    ) : null}
+              </motion.div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Primary share action */}
+      <div className="flex flex-col gap-2">
+        <Button
+          type="button"
+          size="lg"
+          className="w-full sm:w-auto font-bold interact-cta"
+          disabled={shareBusy}
+          onClick={() => void shareWeek()}
+        >
+          {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+          {copied ? "Copied" : shareBusy ? "Sharing…" : `Share Week ${data.week}`}
+        </Button>
+
+        <Collapsible open={secondaryOpen} onOpenChange={setSecondaryOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              More share options
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform ${secondaryOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2 space-y-2">
+            {summary && (
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                  Group chat text
+                </p>
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{summary}</p>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => void copyText()}>
+                {copied ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+                {copied ? "Copied" : "Copy text"}
+              </Button>
+              {data.matchup && (
+                <Button type="button" variant="outline" size="sm" onClick={() => void copyMatchupLine()}>
+                  {copiedMatchup ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+                  {copiedMatchup ? "Copied" : "Copy matchup line"}
+                </Button>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Download PNG from any card above when you want a story asset.
+            </p>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+
+      {/* Supporting detail */}
+      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+        <span className="rounded-md border bg-background/80 px-2 py-0.5">
+          Avg {safeNum(data.stats.averageScore).toFixed(1)} pts
+        </span>
+        <span className="rounded-md border bg-background/80 px-2 py-0.5">
+          High {safeNum(data.stats.highestScorer.score).toFixed(1)}
+        </span>
+        <span className="rounded-md border bg-background/80 px-2 py-0.5">
+          Low {safeNum(data.stats.lowestScorer.score).toFixed(1)}
+        </span>
+        {signalsParsed?.medianScore != null && (
+          <span className="rounded-md border bg-background/80 px-2 py-0.5">
+            Median {safeNum(signalsParsed.medianScore).toFixed(1)}
           </span>
-          <span className="rounded-full border bg-background/80 px-2 py-0.5">
-            High {safeNum(data.stats.highestScorer.score).toFixed(1)}
-          </span>
-          <span className="rounded-full border bg-background/80 px-2 py-0.5">
-            Low {safeNum(data.stats.lowestScorer.score).toFixed(1)}
-          </span>
-          {signalsParsed?.medianScore != null && (
-            <span className="rounded-full border bg-background/80 px-2 py-0.5">
-              Median {safeNum(signalsParsed.medianScore).toFixed(1)}
-            </span>
-          )}
-        </div>
+        )}
       </div>
 
       {signalsParsed && (
@@ -357,120 +448,6 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
             )}
           </CollapsibleContent>
         </Collapsible>
-      )}
-
-      {summary && (
-        <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-3">
-          <div className="flex flex-col sm:flex-row sm:items-start gap-2">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                Group chat drop
-              </p>
-              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{summary}</p>
-            </div>
-            <div className="flex flex-wrap gap-2 shrink-0 justify-end sm:flex-col sm:items-stretch">
-              <Button type="button" variant="outline" size="sm" onClick={copySummary}>
-                {copied ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-                {copied ? "Copied" : "Copy drop"}
-              </Button>
-              <Button type="button" variant="secondary" size="sm" onClick={copyWeekOneLiner}>
-                {copiedOneLiner ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-                {copiedOneLiner ? "Copied" : "Copy week one-liner"}
-              </Button>
-            </div>
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            Week one-liner = verdict headline + group chat paragraph (one paste for iMessage / Discord).
-          </p>
-        </div>
-      )}
-
-      {!summary && (
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="secondary" size="sm" onClick={copyWeekOneLiner}>
-            {copiedOneLiner ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-            {copiedOneLiner ? "Copied" : "Copy week one-liner"}
-          </Button>
-        </div>
-      )}
-
-      {/* Same interaction model as Season Wrapped: one card + ‹ › (not a vertical list). */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-muted-foreground">League cards</p>
-        {slideCount === 0 ? (
-          <p className="text-sm text-muted-foreground rounded-lg border border-dashed bg-muted/20 px-3 py-4">
-            No shareable league cards for this response. Generate again after scores are in.
-          </p>
-        ) : (
-          <>
-            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-              <div className="space-y-0.5">
-                <p className="text-sm font-bold text-foreground tracking-tight">
-                  🔥 {slideCount} ROAST{slideCount === 1 ? "" : "S"} THIS WEEK — KEEP GOING →
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Swipe or tap to see who got cooked
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={goPrev}
-                  className="h-10 w-10 rounded-xl border bg-background flex items-center justify-center interact-icon"
-                  aria-label="Previous card"
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  className="h-10 w-10 rounded-xl border bg-background flex items-center justify-center interact-icon"
-                  aria-label="Next card"
-                >
-                  ›
-                </button>
-              </div>
-            </div>
-
-            {currentSlide && (
-              <motion.div
-                key={`${currentSlide.kind}-${currentSlide.kind === "engine" ? currentSlide.idx : "m"}`}
-                initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.25 }}
-              >
-                {currentSlide.kind === "engine"
-                  ? renderEngineCard(currentSlide.idx)
-                  : data.matchup ? (
-                      <WrappedCard
-                        kicker="YOUR MATCHUP"
-                        kickerIcon={<Swords className="w-3.5 h-3.5" />}
-                        title={`${data.matchup.you.username} vs ${data.matchup.opponent.username}`}
-                        subtitle={`Result: ${data.matchup.result}`}
-                        bigValue={`${safeNum(data.matchup.you.score).toFixed(2)}–${safeNum(data.matchup.opponent.score).toFixed(2)}`}
-                        tagline="Receipts attached."
-                        footer={SHARE_FOOTER}
-                        accent="green"
-                        isPremium={isPremium}
-                      />
-                    ) : null}
-              </motion.div>
-            )}
-          </>
-        )}
-      </div>
-
-      {data.matchup && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2.5">
-          <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Your matchup</span> — copy a one-line brag or shame
-            for your chat.
-          </p>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={copyMatchupLine}>
-            {copiedMatchup ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-            {copiedMatchup ? "Copied" : "Copy matchup line"}
-          </Button>
-        </div>
       )}
     </div>
   );

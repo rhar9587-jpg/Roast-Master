@@ -47,6 +47,11 @@ import { LockedModePreview } from "./LockedModePreview";
 import { WeeklyCommissionerEmailSection } from "./WeeklyCommissionerEmailSection";
 import { WeeklyEmailBridgeStrip } from "./WeeklyEmailBridgeStrip";
 import { WeeklyWeekContextBar } from "./WeeklyWeekContextBar";
+import {
+  resolveDefaultWeeklyContext,
+  resolveWeekForMode,
+  type WeeklyEmailMode,
+} from "./weeklyContext";
 import { isLeagueUnlocked, unlockLeague, unlockLeagues, lockLeague, hasUsedFreeSend } from "./premium";
 import { createCheckoutSession } from "@/lib/checkout";
 import { RestorePurchaseModal } from "./RestorePurchaseModal";
@@ -450,10 +455,14 @@ export default function LeagueHistoryPage() {
   const [leagueWeek, setLeagueWeek] = useState<number>(1);
   const [nflRecapWeek, setNflRecapWeek] = useState(1);
   const [nflPreviewWeek, setNflPreviewWeek] = useState(1);
-  const [weekOverride, setWeekOverride] = useState(false);
+  const [nflLatestFinalWeek, setNflLatestFinalWeek] = useState(0);
+  const [nflContextReady, setNflContextReady] = useState(false);
+  const [, setWeekOverride] = useState(false);
   const [weeklyRoastData, setWeeklyRoastData] = useState<RoastResponse | null>(null);
   const [weeklyRoastLoading, setWeeklyRoastLoading] = useState(false);
   const [weeklyRoastError, setWeeklyRoastError] = useState<string | null>(null);
+  const weeklyAutoLoadKeyRef = useRef<string | null>(null);
+  const weekOverrideRef = useRef(false);
   const [seasonWrappedData, setSeasonWrappedData] = useState<WrappedResponse | null>(null);
   const [seasonWrappedLoading, setSeasonWrappedLoading] = useState(false);
   const [seasonWrappedError, setSeasonWrappedError] = useState<string | null>(null);
@@ -466,7 +475,7 @@ export default function LeagueHistoryPage() {
   const [commissionerEmail, setCommissionerEmailState] = useState("");
   const [weeklyCommissionerNote, setWeeklyCommissionerNote] = useState("");
   const [weeklyCommissionerSignoff, setWeeklyCommissionerSignoff] = useState("");
-  const [weeklyCommissionerEmailMode, setWeeklyCommissionerEmailMode] = useState<"recap" | "preview">("recap");
+  const [weeklyCommissionerEmailMode, setWeeklyCommissionerEmailMode] = useState<WeeklyEmailMode>("recap");
   const [weeklyEmailGenerateLoading, setWeeklyEmailGenerateLoading] = useState(false);
   const [weeklyEmailSendLoading, setWeeklyEmailSendLoading] = useState(false);
   const [serverFreeSendUsed, setServerFreeSendUsed] = useState(false);
@@ -1371,41 +1380,66 @@ export default function LeagueHistoryPage() {
         if (!res.ok) throw new Error("nfl state failed");
         return res.json();
       })
-      .then((data: { recapWeek?: number; previewWeek?: number }) => {
+      .then((data: { recapWeek?: number; previewWeek?: number; latestFinalWeek?: number }) => {
         if (cancelled) return;
         const previewWeek = Math.min(18, Math.max(1, Number(data.previewWeek) || 1));
-        const recapWeek = Math.min(18, Math.max(1, Number(data.recapWeek) || Math.max(1, previewWeek - 1)));
+        const latestFinalWeek = Math.max(0, Number(data.latestFinalWeek) || 0);
+        const recapWeek = Math.min(
+          18,
+          Math.max(1, Number(data.recapWeek) || Math.max(1, latestFinalWeek || previewWeek - 1 || 1)),
+        );
         setNflPreviewWeek(previewWeek);
         setNflRecapWeek(recapWeek);
-        setWeekOverride(false);
-        setWeeklyCommissionerEmailMode("recap");
-        setLeagueWeek(recapWeek);
+        setNflLatestFinalWeek(latestFinalWeek);
+        if (!weekOverrideRef.current) {
+          const sel = resolveDefaultWeeklyContext({
+            latestFinalWeek,
+            recapWeek,
+            previewWeek,
+          });
+          setWeeklyCommissionerEmailMode(sel.mode);
+          setLeagueWeek(sel.week);
+        }
+        setNflContextReady(true);
       })
       .catch(() => {
         if (cancelled) return;
-        // Fallback: stay on week 1 recap if NFL state unavailable
+        // Fallback: preview week 1 when NFL state unavailable (no completed week assumed)
         setNflPreviewWeek(1);
         setNflRecapWeek(1);
+        setNflLatestFinalWeek(0);
+        if (!weekOverrideRef.current) {
+          const sel = resolveDefaultWeeklyContext({
+            latestFinalWeek: 0,
+            recapWeek: 1,
+            previewWeek: 1,
+          });
+          setWeeklyCommissionerEmailMode(sel.mode);
+          setLeagueWeek(sel.week);
+        }
+        setNflContextReady(true);
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Clear stale roast when week changes so cards never drift from email week
-  useEffect(() => {
-    setWeeklyRoastData(null);
-    setWeeklyRoastError(null);
-  }, [leagueWeek]);
-
-  function applyWeeklyMode(mode: "recap" | "preview") {
+  function applyWeeklyMode(mode: WeeklyEmailMode) {
     setWeeklyCommissionerEmailMode(mode);
     setWeekOverride(false);
-    setLeagueWeek(mode === "recap" ? nflRecapWeek : nflPreviewWeek);
+    weekOverrideRef.current = false;
+    setLeagueWeek(
+      resolveWeekForMode(mode, {
+        latestFinalWeek: nflLatestFinalWeek,
+        recapWeek: nflRecapWeek,
+        previewWeek: nflPreviewWeek,
+      }),
+    );
   }
 
   function overrideLeagueWeek(week: number) {
     setWeekOverride(true);
+    weekOverrideRef.current = true;
     setLeagueWeek(week);
   }
 
@@ -1680,10 +1714,17 @@ export default function LeagueHistoryPage() {
     if (!leagueId) return;
     setActiveMode("history");
     setWeekOverride(false);
-    setLeagueWeek(nflRecapWeek);
-    setWeeklyCommissionerEmailMode("recap");
+    weekOverrideRef.current = false;
+    const sel = resolveDefaultWeeklyContext({
+      latestFinalWeek: nflLatestFinalWeek,
+      recapWeek: nflRecapWeek,
+      previewWeek: nflPreviewWeek,
+    });
+    setLeagueWeek(sel.week);
+    setWeeklyCommissionerEmailMode(sel.mode);
     setWeeklyRoastData(null);
     setWeeklyRoastError(null);
+    weeklyAutoLoadKeyRef.current = null;
     setSeasonWrappedData(null);
     setSeasonWrappedError(null);
     setSeasonRosterId("");
@@ -1779,6 +1820,37 @@ export default function LeagueHistoryPage() {
       setWeeklyRoastLoading(false);
     }
   }
+
+  // Auto-load Weekly roast when entering the tab / week changes (no manual Generate).
+  useEffect(() => {
+    if (!WEEKLY_ENABLED) return;
+    if (activeMode !== "weekly") return;
+    if (!showPremiumContent) return;
+    if (!hasData || !leagueId.trim()) return;
+    if (!nflContextReady) return;
+
+    const key = `${leagueId.trim()}|${leagueWeek}|${viewerKey.trim()}`;
+    if (weeklyAutoLoadKeyRef.current === key) return;
+    weeklyAutoLoadKeyRef.current = key;
+
+    track("weekly_auto_loaded", {
+      week: leagueWeek,
+      mode: weeklyCommissionerEmailMode,
+    });
+
+    setWeeklyRoastData(null);
+    setWeeklyRoastError(null);
+    void fetchWeeklyRoast();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-run on week/tab/league entry
+  }, [
+    activeMode,
+    showPremiumContent,
+    hasData,
+    leagueId,
+    leagueWeek,
+    viewerKey,
+    nflContextReady,
+  ]);
 
   async function fetchSeasonWrapped() {
     if (!leagueId.trim()) return;
@@ -2023,7 +2095,7 @@ export default function LeagueHistoryPage() {
       {hasData && (
         <p className="text-sm text-muted-foreground">
           {activeMode === "history" && "See who owns who. Share the receipts."}
-          {WEEKLY_ENABLED && activeMode === "weekly" && "Pick a week. Get the chaos from that matchup slate."}
+          {WEEKLY_ENABLED && activeMode === "weekly" && "Open it. Laugh. Send it to the group chat."}
           {activeMode === "season" && "Your season. Your wins. Your choke jobs. No hiding."}
           {activeMode === "end" && "The final verdict on this season. Someone's getting exposed."}
         </p>
@@ -2076,8 +2148,6 @@ export default function LeagueHistoryPage() {
         <WeeklyWeekContextBar
           mode={weeklyCommissionerEmailMode}
           leagueWeek={leagueWeek}
-          recapWeek={nflRecapWeek}
-          previewWeek={nflPreviewWeek}
           onModeChange={applyWeeklyMode}
           onWeekOverride={overrideLeagueWeek}
         />
@@ -2086,11 +2156,11 @@ export default function LeagueHistoryPage() {
       {WEEKLY_ENABLED && hasData && activeMode === "weekly" && !showPremiumContent && (
         <LockedModePreview
           title="Weekly is included"
-          description={`${unlockCtaLabel()} — then generate this week's cards and commissioner email.`}
+          description={`${unlockCtaLabel()} — then this week's cards and commissioner email load instantly.`}
           previewItems={[
-            "Top Dog, Biggest Embarrassment, Fraud Watch, Most Points Left on Bench, Carry Job, Group Chat Drop",
-            "One scroll of league cards + copy-paste group chat summary",
-            "Recap = last week; Preview = this week — then send the commissioner email",
+            "Top Dog, Biggest Blowout, Fraud Watch, Bench Crimes — one idea per share card",
+            "Share Week X for the group chat in one tap",
+            "Commissioner Preview & Send right under the roast",
           ]}
           onUnlock={handleCheckout}
           lockedTotalCount={lockedTotalCount}
@@ -2099,20 +2169,54 @@ export default function LeagueHistoryPage() {
 
       {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && (
         <>
-          <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                Generate roast for <span className="font-semibold text-foreground">Week {leagueWeek}</span>
-                {weekOverride ? " (custom)" : ""}.
+          {weeklyRoastLoading && !weeklyRoastData && (
+            <div
+              className="rounded-lg border bg-muted/20 p-8 text-center space-y-2"
+              aria-busy="true"
+              aria-live="polite"
+            >
+              <p className="text-sm font-medium text-foreground">
+                Loading Week {leagueWeek}…
               </p>
-              <Button onClick={fetchWeeklyRoast} disabled={weeklyRoastLoading}>
-                {weeklyRoastLoading ? "Generating…" : `Generate roast for Week ${leagueWeek}`}
+              <p className="text-xs text-muted-foreground">
+                Pulling scores and cooking the roast.
+              </p>
+            </div>
+          )}
+
+          {weeklyRoastError && !weeklyRoastLoading && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center space-y-3">
+              <p className="text-sm font-medium text-foreground">
+                Couldn&apos;t load Week {leagueWeek}
+              </p>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                {weeklyRoastError}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  weeklyAutoLoadKeyRef.current = null;
+                  void fetchWeeklyRoast();
+                }}
+              >
+                Try again
               </Button>
             </div>
-            {weeklyRoastError && (
-              <p className="text-xs text-red-600">{weeklyRoastError}</p>
-            )}
-          </section>
+          )}
+
+          {!weeklyRoastLoading && !weeklyRoastError && !weeklyRoastData && (
+            <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center space-y-1">
+              <p className="text-sm font-medium text-foreground">
+                No roast for Week {leagueWeek} yet
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Scores may still be coming in, or this league has no matchups for that week.
+                Try another week above.
+              </p>
+            </div>
+          )}
 
           {weeklyRoastData && (
             <RoastCard data={weeklyRoastData} isPremium={showPremiumContent} variant="weekly" />
@@ -2123,13 +2227,6 @@ export default function LeagueHistoryPage() {
               leagueName={weeklyRoastData.league?.name}
               emailMode={weeklyCommissionerEmailMode}
             />
-          )}
-          {!weeklyRoastData && !weeklyRoastLoading && (
-            <div className="rounded-lg border border-dashed bg-muted/10 p-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                Tap generate for Week {leagueWeek}&apos;s league roast, then build the commissioner email below.
-              </p>
-            </div>
           )}
         </>
       )}
