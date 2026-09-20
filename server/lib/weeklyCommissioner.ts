@@ -420,6 +420,7 @@ export function computeWeeklySuperlatives(
   }
 
   type CoachRow = {
+    teamId: string;
     teamName: string;
     benchPoints: number;
     sitStartMiss?: string;
@@ -447,17 +448,14 @@ export function computeWeeklySuperlatives(
           [playersById?.[topBench.pid]?.first_name, playersById?.[topBench.pid]?.last_name].filter(Boolean).join(" ") ||
           `Player ${topBench.pid}`)
       : "";
-    const starterName = lowStarter
-      ? (playersById?.[lowStarter.pid]?.full_name ||
-          [playersById?.[lowStarter.pid]?.first_name, playersById?.[lowStarter.pid]?.last_name].filter(Boolean).join(" ") ||
-          `Player ${lowStarter.pid}`)
-      : "";
+    // Do not claim a legal sit/start swap without positional eligibility checks.
     coachRows.push({
+      teamId: String(row.roster_id),
       teamName: rosterNameByTeamId(String(row.roster_id)),
       benchPoints,
       hasMiss,
-      ...(hasMiss && benchName && starterName
-        ? { sitStartMiss: `${benchName} should have started over ${starterName}.` }
+      ...(hasMiss && benchName
+        ? { sitStartMiss: `Left ${benchName} (${safeNum(topBench!.pts).toFixed(1)} pts) on the bench.` }
         : {}),
     });
   }
@@ -472,8 +470,8 @@ export function computeWeeklySuperlatives(
       benchPoints: worst.benchPoints,
       ...(worst.sitStartMiss ? { sitStartMiss: worst.sitStartMiss } : {}),
     };
-    const clean = withBench.filter((r) => !r.hasMiss && r.teamName !== worst.teamName);
-    const bestPool = clean.length ? clean : withBench.filter((r) => r.teamName !== worst.teamName);
+    const clean = withBench.filter((r) => !r.hasMiss && r.teamId !== worst.teamId);
+    const bestPool = clean.length ? clean : withBench.filter((r) => r.teamId !== worst.teamId);
     if (bestPool.length) {
       const best = [...bestPool].sort((a, b) => a.benchPoints - b.benchPoints)[0]!;
       bestCoach = {
@@ -481,8 +479,8 @@ export function computeWeeklySuperlatives(
         benchPoints: best.benchPoints,
         note:
           best.benchPoints < 8
-            ? "Accidental competence — barely anything left on the pine."
-            : "Left the least on the bench this week.",
+            ? "Barely anything left on the pine."
+            : "Fewest bench points this week.",
       };
     }
   }
@@ -818,19 +816,53 @@ export async function getWeeklyCommissionerEmail(
     }
   }
 
-  const matchupPairs = weekMatchups.map((m) => ({ teamA: m.teamA, teamB: m.teamB }));
+  const matchupPairs = (() => {
+    const pairs: Array<{
+      teamAKey: string;
+      teamBKey: string;
+      teamAName: string;
+      teamBName: string;
+      teamAId: string;
+      teamBId: string;
+    }> = [];
+    const seen = new Set<number>();
+    for (const row of weekMatchupsRaw) {
+      if (row.matchup_id == null || seen.has(row.matchup_id)) continue;
+      seen.add(row.matchup_id);
+      const a = weekMatchupsRaw.find((m) => m.matchup_id === row.matchup_id);
+      const b = weekMatchupsRaw.find(
+        (m) => m.matchup_id === row.matchup_id && m.roster_id !== a?.roster_id,
+      );
+      if (!a || !b) continue;
+      const teamA = teams.find((t) => t.teamId === String(a.roster_id));
+      const teamB = teams.find((t) => t.teamId === String(b.roster_id));
+      if (!teamA?.ownerKey || !teamB?.ownerKey) continue;
+      pairs.push({
+        teamAKey: teamA.ownerKey,
+        teamBKey: teamB.ownerKey,
+        teamAName: teamA.teamName,
+        teamBName: teamB.teamName,
+        teamAId: teamA.teamId,
+        teamBId: teamB.teamId,
+      });
+    }
+    return pairs;
+  })();
   const narratives = await getLeagueHistoryNarratives(leagueId, matchupPairs);
 
   // If matchup-to-watch was a nemesis (victim "has never beaten" dominator) and victim won this week, add story of the week.
-  // Use canonical classification — display score order is not a completed winner.
+  // Resolve victim/dominator by stable roster id / owner key — never by display name.
   let storyOfTheWeek = narratives.storyOfTheWeek;
   if (narratives.matchupToWatch && weekMatchupsRaw.length > 0 && weekIsFinal) {
     const nar = narratives.matchupToWatch.narrative;
     if (nar.includes("has never beaten")) {
-      const victim = narratives.matchupToWatch.teamA;
-      const dominator = narratives.matchupToWatch.teamB;
-      const victimId = teams.find((t) => t.teamName === victim)?.teamId;
-      const dominatorId = teams.find((t) => t.teamName === dominator)?.teamId;
+      const watch = narratives.matchupToWatch;
+      const victimId =
+        watch.teamAId ??
+        teams.find((t) => t.ownerKey === watch.teamAKey)?.teamId;
+      const dominatorId =
+        watch.teamBId ??
+        teams.find((t) => t.ownerKey === watch.teamBKey)?.teamId;
       if (victimId && dominatorId) {
         const victimRow = weekMatchupsRaw.find((m) => String(m.roster_id) === victimId);
         const dominatorRow = weekMatchupsRaw.find((m) => String(m.roster_id) === dominatorId);
@@ -841,7 +873,9 @@ export async function getWeeklyCommissionerEmail(
         ) {
           const truth = matchupFinalityTruth(victimRow, dominatorRow, { weekIsFinal: true });
           if (truth.hasWinner && String(truth.winnerRosterId) === victimId) {
-            storyOfTheWeek = { narrative: `Finally: ${victim} gets the W over ${dominator}.` };
+            storyOfTheWeek = {
+              narrative: `Finally: ${watch.teamA} gets the W over ${watch.teamB}.`,
+            };
           }
         }
       }

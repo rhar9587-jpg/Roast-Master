@@ -1,6 +1,7 @@
 /**
  * Fantasy Roast — Weekly Preview Email (pre-week matchups, blowout/upset, projections).
  * Uses rankings through week N-1 and matchups for week N (pairings only).
+ * Joins rankings / narratives by stable teamId / ownerKey — never by display name.
  */
 
 import { getMatchups } from "../league-history/sleeper";
@@ -17,28 +18,40 @@ function safeNum(n: unknown): number {
   return Number.isFinite(x) ? x : 0;
 }
 
+type UpcomingMatchup = {
+  teamAId: string;
+  teamBId: string;
+  teamAKey: string;
+  teamBKey: string;
+  teamA: string;
+  teamB: string;
+  winPctA?: number;
+  winPctB?: number;
+};
+
 /**
  * Build upcoming matchups (pairings only) and optional win % from power scores.
  * Win % from power-score diff: 50 + (scoreA - scoreB) * 0.5, clamped 5–95.
  */
 function buildUpcomingMatchups(
   matchups: SleeperMatchup[],
-  rosterNameByTeamId: (id: string) => string,
+  teamById: Map<string, { teamName: string; ownerKey?: string }>,
   scoreByTeamId: Map<string, number>,
-): Array<{ teamA: string; teamB: string; winPctA?: number; winPctB?: number }> {
+): UpcomingMatchup[] {
   const byMatchup = new Map<number, { roster_id: number; points: number }[]>();
   for (const m of matchups) {
     if (!byMatchup.has(m.matchup_id)) byMatchup.set(m.matchup_id, []);
     byMatchup.get(m.matchup_id)!.push({ roster_id: m.roster_id, points: safeNum(m.points) });
   }
-  const out: Array<{ teamA: string; teamB: string; winPctA?: number; winPctB?: number }> = [];
+  const out: UpcomingMatchup[] = [];
   for (const rows of Array.from(byMatchup.values())) {
     if (rows.length !== 2) continue;
     const [a, b] = rows;
     const teamIdA = String(a.roster_id);
     const teamIdB = String(b.roster_id);
-    const nameA = rosterNameByTeamId(teamIdA);
-    const nameB = rosterNameByTeamId(teamIdB);
+    const teamA = teamById.get(teamIdA);
+    const teamB = teamById.get(teamIdB);
+    if (!teamA?.ownerKey || !teamB?.ownerKey) continue;
     const scoreA = scoreByTeamId.get(teamIdA) ?? 50;
     const scoreB = scoreByTeamId.get(teamIdB) ?? 50;
     const diff = scoreA - scoreB;
@@ -46,8 +59,12 @@ function buildUpcomingMatchups(
     const pctA = Math.max(5, Math.min(95, Math.round(100 * winPctA)));
     const pctB = 100 - pctA;
     out.push({
-      teamA: nameA,
-      teamB: nameB,
+      teamAId: teamIdA,
+      teamBId: teamIdB,
+      teamAKey: teamA.ownerKey,
+      teamBKey: teamB.ownerKey,
+      teamA: teamA.teamName,
+      teamB: teamB.teamName,
       winPctA: pctA,
       winPctB: pctB,
     });
@@ -59,18 +76,18 @@ function buildUpcomingMatchups(
  * Likely blowout: matchup with largest power-score gap (favorite vs underdog by rank).
  */
 function pickLikelyBlowout(
-  upcomingMatchups: Array<{ teamA: string; teamB: string }>,
+  upcomingMatchups: UpcomingMatchup[],
   rankings: PowerRankingRow[],
 ): { teamA: string; teamB: string; narrative: string } | null {
   if (!rankings.length || !upcomingMatchups.length) return null;
-  const rankByName = new Map(rankings.map((r, i) => [r.teamName, { rank: i + 1, powerScore: r.powerScore }]));
+  const rankById = new Map(rankings.map((r, i) => [r.teamId, { rank: i + 1, powerScore: r.powerScore, teamName: r.teamName }]));
   let best: { teamA: string; teamB: string; gap: number; rankA: number; rankB: number } | null = null;
   for (const mu of upcomingMatchups) {
-    const ra = rankByName.get(mu.teamA);
-    const rb = rankByName.get(mu.teamB);
+    const ra = rankById.get(mu.teamAId);
+    const rb = rankById.get(mu.teamBId);
     if (!ra || !rb) continue;
     const gap = Math.abs(ra.powerScore - rb.powerScore);
-    const [fav, und] = ra.powerScore >= rb.powerScore ? [mu.teamA, mu.teamB] : [mu.teamB, mu.teamA];
+    const [fav, und] = ra.powerScore >= rb.powerScore ? [ra.teamName, rb.teamName] : [rb.teamName, ra.teamName];
     const [rankFav, rankUnd] = ra.powerScore >= rb.powerScore ? [ra.rank, rb.rank] : [rb.rank, ra.rank];
     if (!best || gap > best.gap) best = { teamA: fav, teamB: und, gap, rankA: rankFav, rankB: rankUnd };
   }
@@ -86,21 +103,20 @@ function pickLikelyBlowout(
  * Upset of the week: underdog (by rank) with strong underlying numbers (expectedWins or luckDelta).
  */
 function pickUpsetOfTheWeek(
-  upcomingMatchups: Array<{ teamA: string; teamB: string }>,
+  upcomingMatchups: UpcomingMatchup[],
   rankings: PowerRankingRow[],
 ): { underdog: string; favorite: string; narrative: string } | null {
   if (!rankings.length || !upcomingMatchups.length) return null;
-  const byName = new Map(rankings.map((r) => [r.teamName, r]));
+  const byId = new Map(rankings.map((r) => [r.teamId, r]));
   let best: { underdog: string; favorite: string; score: number } | null = null;
   for (const mu of upcomingMatchups) {
-    const ra = byName.get(mu.teamA);
-    const rb = byName.get(mu.teamB);
+    const ra = byId.get(mu.teamAId);
+    const rb = byId.get(mu.teamBId);
     if (!ra || !rb) continue;
-    const [underdog, favorite] = ra.rank <= rb.rank ? [mu.teamB, mu.teamA] : [mu.teamA, mu.teamB];
-    const underdogRow = ra.rank <= rb.rank ? rb : ra;
-    const upsetScore = underdogRow.expectedWins + (underdogRow.luckDelta > 0 ? underdogRow.luckDelta * 2 : 0);
+    const [underdog, favorite] = ra.rank <= rb.rank ? [rb, ra] : [ra, rb];
+    const upsetScore = underdog.expectedWins + (underdog.luckDelta > 0 ? underdog.luckDelta * 2 : 0);
     if (upsetScore > 0 && (!best || upsetScore > best.score))
-      best = { underdog, favorite, score: upsetScore };
+      best = { underdog: underdog.teamName, favorite: favorite.teamName, score: upsetScore };
   }
   if (!best) return null;
   return {
@@ -112,7 +128,7 @@ function pickUpsetOfTheWeek(
 
 /** Closest power-rank odds to a coin flip. */
 function pickTightestMatchup(
-  upcoming: Array<{ teamA: string; teamB: string; winPctA?: number; winPctB?: number }>,
+  upcoming: UpcomingMatchup[],
 ): WeeklyEmailData["tightestMatchup"] {
   let best: NonNullable<WeeklyEmailData["tightestMatchup"]> | null = null;
   let bestDist = Infinity;
@@ -135,16 +151,16 @@ function pickTightestMatchup(
 
 /** Hot recent form vs cold — largest recentFormAverage gap among upcoming pairs. */
 function pickFormMatchup(
-  upcoming: Array<{ teamA: string; teamB: string }>,
+  upcoming: UpcomingMatchup[],
   rankings: PowerRankingRow[],
 ): WeeklyEmailData["formMatchup"] {
   if (rankings.length < 2 || !upcoming.length) return undefined;
-  const byName = new Map(rankings.map((r) => [r.teamName, r]));
+  const byId = new Map(rankings.map((r) => [r.teamId, r]));
   let best: { teamA: string; teamB: string; gap: number; hot: string; cold: string; hotAvg: number; coldAvg: number } | null =
     null;
   for (const mu of upcoming) {
-    const ra = byName.get(mu.teamA);
-    const rb = byName.get(mu.teamB);
+    const ra = byId.get(mu.teamAId);
+    const rb = byId.get(mu.teamBId);
     if (!ra || !rb) continue;
     const gap = Math.abs(ra.recentFormAverage - rb.recentFormAverage);
     if (gap < 8) continue;
@@ -219,10 +235,9 @@ export async function getWeeklyPreviewEmail(
   const { leagueName, teams } = await buildTeamsFromSleeper(leagueId, throughWeek);
   const previousRankings = getStoredPreviousRankings(leagueId, week);
   const rankings = teams.length > 0 ? generatePowerRankings(teams, previousRankings) : [];
-  const rosterNameByTeamId = (teamId: string) => {
-    const t = teams.find((x) => x.teamId === teamId);
-    return t?.teamName ?? teamId;
-  };
+  const teamById = new Map(
+    teams.map((t) => [t.teamId, { teamName: t.teamName, ownerKey: t.ownerKey }]),
+  );
 
   let matchupsRaw: SleeperMatchup[] = [];
   try {
@@ -232,7 +247,7 @@ export async function getWeeklyPreviewEmail(
   }
 
   const scoreByTeamId = new Map(rankings.map((r) => [r.teamId, r.powerScore]));
-  const upcomingMatchups = buildUpcomingMatchups(matchupsRaw, rosterNameByTeamId, scoreByTeamId);
+  const upcomingMatchups = buildUpcomingMatchups(matchupsRaw, teamById, scoreByTeamId);
   const likelyBlowout = pickLikelyBlowout(upcomingMatchups, rankings);
   const upsetOfTheWeek = pickUpsetOfTheWeek(upcomingMatchups, rankings);
   const tightestMatchup = pickTightestMatchup(upcomingMatchups);
@@ -240,7 +255,14 @@ export async function getWeeklyPreviewEmail(
   const { board: previewPowerBoard, mover: previewBiggestMover } =
     week > 1 && rankings.length ? buildPreviewPowerBoard(rankings, previousRankings) : { board: [], mover: undefined };
 
-  const pairs: MatchupPair[] = upcomingMatchups.map((m) => ({ teamA: m.teamA, teamB: m.teamB }));
+  const pairs: MatchupPair[] = upcomingMatchups.map((m) => ({
+    teamAKey: m.teamAKey,
+    teamBKey: m.teamBKey,
+    teamAName: m.teamA,
+    teamBName: m.teamB,
+    teamAId: m.teamAId,
+    teamBId: m.teamBId,
+  }));
   const narratives = await getLeagueHistoryNarratives(leagueId, pairs);
 
   const introSummary =
@@ -260,7 +282,16 @@ export async function getWeeklyPreviewEmail(
       : { previewDisclaimer: "Win % is based on power rankings through last week — not player projections." }),
     ...(previewPowerBoard.length > 0 ? { previewPowerBoard } : {}),
     ...(previewBiggestMover ? { previewBiggestMover } : {}),
-    ...(upcomingMatchups.length > 0 ? { upcomingMatchups } : {}),
+    ...(upcomingMatchups.length > 0
+      ? {
+          upcomingMatchups: upcomingMatchups.map((m) => ({
+            teamA: m.teamA,
+            teamB: m.teamB,
+            winPctA: m.winPctA,
+            winPctB: m.winPctB,
+          })),
+        }
+      : {}),
     ...(tightestMatchup ? { tightestMatchup } : {}),
     ...(formMatchup ? { formMatchup } : {}),
     ...(likelyBlowout ? { likelyBlowout } : {}),

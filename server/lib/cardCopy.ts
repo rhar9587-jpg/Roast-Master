@@ -196,7 +196,7 @@ const CARD_COPY: Record<CardType, { safe: string[]; spicy: string[] }> = {
   highest_loss: {
     safe: [
       "Did everything right. Still lost.",
-      "The unluckiest loss of the year.",
+      "Highest-scoring loss of the year.",
       "Fantasy is cruel sometimes.",
       "Wrong week to go off.",
       "Points don't always mean wins.",

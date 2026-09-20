@@ -624,7 +624,7 @@ export function computeYourRoast(
       emoji: CARD_EMOJI["your-lucky-wins"],
       statPrimary: String(luckyWins.length),
       metricLabel: luckyWins.length === 1 ? "lucky win" : "lucky wins",
-      statSecondary: `Luckiest: ${luckiest.points.toFixed(1)} pts`,
+      statSecondary: `Lowest-scoring win: ${luckiest.points.toFixed(1)} pts`,
       meta: `Week ${luckiest.week}, ${luckiest.season}`,
       line: luckyWins.length === 1
         ? `Scored below half the league and still won.`

@@ -280,7 +280,7 @@ function computeNflDoppelganger(
       reasons: [
         `Lost ${closeLosses} games by 5 pts or less.`,
         "Fantasy football personally victimized you.",
-        "The unluckiest manager in the league.",
+        "More heartbreakers than anyone this season.",
       ],
       roastLine: "You invented new ways to suffer.",
     },
@@ -2038,7 +2038,7 @@ export default function LeagueHistoryPage() {
           title="Weekly Roast"
           description="Pick Recap or Preview above, then generate the chaos from that slate."
           previewItems={[
-            "Top Dog, Biggest Embarrassment, Fraud Watch, Worst Coaching, Carry Job, Group Chat Drop",
+            "Top Dog, Biggest Embarrassment, Fraud Watch, Most Points Left on Bench, Carry Job, Group Chat Drop",
             "One scroll of league cards + copy-paste group chat summary",
             "Recap = last week; Preview = this week — then send the commissioner email",
           ]}

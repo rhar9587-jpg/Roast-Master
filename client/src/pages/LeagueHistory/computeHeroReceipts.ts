@@ -108,7 +108,7 @@ export function computeHeroReceipts(
   if (allGas) receipts.push(allGas);
   else logHeroReceiptSkip("All Gas, No Playoffs", "no non-playoff high scorer found");
 
-  const playoffChoker = computePlayoffChoker(completedSeasonStats, weeklyMatchups, managers, avatarByKey, emojiByKey);
+  const playoffChoker = computePlayoffChoker(completedSeasonStats, weeklyMatchups, managers, avatarByKey, leagueId, emojiByKey);
   if (playoffChoker) receipts.push(playoffChoker);
   else logHeroReceiptSkip("Playoff Choker", "no qualifying playoff choker found");
 
@@ -158,25 +158,39 @@ function seasonToNumber(season?: string) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function getLongestStreak(
+/**
+ * Longest run of consecutive calendar seasons matching `isBadSeason`.
+ * Gaps in season years break the streak (e.g. 2021, 2022, 2024 → max length 2).
+ */
+export function getLongestConsecutiveSeasonStreak(
   stats: SeasonStat[],
   isBadSeason: (stat: SeasonStat) => boolean,
 ) {
   const sorted = [...stats].sort((a, b) => seasonToNumber(a.season) - seasonToNumber(b.season));
   let best = { length: 0, start: "", end: "" };
   let current = { length: 0, start: "", end: "" };
+  let prevYear = 0;
 
   for (const stat of sorted) {
-    if (isBadSeason(stat)) {
-      if (current.length === 0) {
-        current.start = stat.season;
-      }
+    const year = seasonToNumber(stat.season);
+    if (!year || !isBadSeason(stat)) {
+      if (current.length > best.length) best = { ...current };
+      current = { length: 0, start: "", end: "" };
+      prevYear = 0;
+      continue;
+    }
+
+    if (current.length === 0) {
+      current = { length: 1, start: stat.season, end: stat.season };
+    } else if (year === prevYear + 1) {
       current.length += 1;
       current.end = stat.season;
     } else {
+      // Non-consecutive calendar year — start a new streak
       if (current.length > best.length) best = { ...current };
-      current = { length: 0, start: "", end: "" };
+      current = { length: 1, start: stat.season, end: stat.season };
     }
+    prevYear = year;
   }
 
   if (current.length > best.length) best = { ...current };
@@ -203,7 +217,7 @@ function computePlayoffDrought(
 
   for (const [managerKey, stats] of statsByManager) {
     if (stats.length < MIN_DROUGHT_SEASONS) continue;
-    const streak = getLongestStreak(stats, (s) => !s.playoffQualified);
+    const streak = getLongestConsecutiveSeasonStreak(stats, (s) => !s.playoffQualified);
     if (streak.length >= MIN_DROUGHT_SEASONS) {
       if (
         !best ||
@@ -667,6 +681,7 @@ function computePlayoffChoker(
   weeklyMatchups: WeeklyMatchupDetail[],
   managers: ManagerRow[],
   avatarByKey: Record<string, string | null>,
+  leagueId: string,
   emojiByKey: Record<string, string | null> = {},
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0 || weeklyMatchups.length === 0) return null;
@@ -730,12 +745,12 @@ function computePlayoffChoker(
 
   if (playoffLossesByManager.size === 0) return null;
 
-  // Find manager with most playoff losses who had a bye (top 2-4 seeds typically get byes)
+  // Top seeds with multiple playoff losses. Do not claim a bye unless bracket data proves one
+  // (this path only has weekly playoff matchups + seed — omit bye copy).
   let maxLosses = 0;
   let worst: { managerKey: string; losses: number; season: string; rank: number; countedWeeks: Array<{ week: number; won: boolean; points: number }> } | null = null;
 
   for (const [managerKey, data] of playoffLossesByManager) {
-    // Only consider top 4 seeds (likely had bye) who lost multiple playoff games
     if (data.rank <= 4 && data.rank >= 1 && data.losses >= 2 && data.losses > maxLosses) {
       maxLosses = data.losses;
       worst = { managerKey, ...data };
@@ -748,6 +763,7 @@ function computePlayoffChoker(
   if (!manager) return null;
 
   const rankDisplay = getRankLabel(worst.rank);
+  const copy = getPlayoffChokerCopy(leagueId, maxLosses);
 
   // Debug logging
   if (shouldDebugHeroReceipts) {
@@ -766,7 +782,7 @@ function computePlayoffChoker(
   return {
     id: "playoff-choker",
     badge: "NEMESIS",
-    title: "PLAYOFF CHOKER 💔",
+    title: copy?.headline ?? "PLAYOFF CHOKER 💔",
     name: manager.name,
     avatarUrl: avatarByKey[worst.managerKey] ?? null,
     emoji: emojiByKey[worst.managerKey] ?? null,
@@ -774,7 +790,9 @@ function computePlayoffChoker(
       value: String(maxLosses),
       label: "PLAYOFF LOSSES",
     },
-    punchline: `Had a bye week, then lost ${maxLosses} playoff games. The choke is real.`,
+    punchline:
+      copy?.punchline ??
+      `${rankDisplay} seed. Lost ${maxLosses} playoff games. The choke is real.`,
     lines: [
       { label: "Regular Season Seed", value: rankDisplay },
       { label: "Season", value: worst.season },
@@ -878,11 +896,12 @@ function computePaperChampion(
       value: Math.round(best.totalPF).toLocaleString(),
       label: "PTS, NO TITLE",
     },
-    punchline: `Best regular season (${getRankLabel(regularSeasonRankOf(best) ?? 1)}) but couldn't seal the deal.`,
+    punchline: `#1 regular-season seed. Did not win the championship.`,
     lines: [
+      { label: "Regular Season Seed", value: getRankLabel(regularSeasonRankOf(best) ?? 1) },
       { label: "Record", value: `${best.wins}-${best.losses}` },
       { label: "Season", value: bestSeason },
-      { label: "Playoff Teams", value: String(best.playoffTeams) },
+      { label: "Championship", value: "No" },
     ],
     season: bestSeason,
   };

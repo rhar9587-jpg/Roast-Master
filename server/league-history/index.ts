@@ -7,6 +7,7 @@ import { isCompletedMatchupPoints } from "../lib/domain/matchupStatus";
 import { buildTeamStatesThroughWeek } from "../lib/domain/teamStateThroughWeek";
 import { buildSeasonOutcomes, matchupsByWeekForSeasonOutcomes } from "../lib/domain/seasonOutcome";
 import type { SeasonOutcome } from "../lib/domain/seasonOutcome";
+import { canonicalManagerKey, managerDisplayName } from "../lib/domain/managerIdentity";
 
 function nameForRoster(
   roster_id: number,
@@ -19,8 +20,8 @@ function nameForRoster(
 }
 
 interface Manager {
-  // canonical across seasons
-  key: string; // owner_id preferred; fallback to username/display
+  // canonical across seasons via owner_id (or season-scoped roster fallback)
+  key: string;
   name: string;
   avatarUrl?: string | null; // ✅ add
 }
@@ -328,7 +329,7 @@ export async function handleLeagueHistoryDominance(params: {
   const chain = await getLeagueChain(league_id, 15);
 
   // We'll build canonical manager keys across seasons:
-  // owner_id is best; fallback is username/display_name (stable enough for most leagues)
+  // owner_id preferred; roster-scoped fallback (never display name alone).
   const managerByKey = new Map<string, Manager>();
 
   // Build matchups across all seasons in chain
@@ -372,15 +373,26 @@ export async function handleLeagueHistoryDominance(params: {
       const ownerId = r.owner_id;
       const u = ownerId ? userById.get(ownerId) : undefined;
 
-      const fallbackKey = (u?.username || u?.display_name || `roster:${r.roster_id}`).toLowerCase();
-      const key = ownerId ? `owner:${ownerId}` : `name:${fallbackKey}`;
+      // Stable identity: owner_id across seasons; never display-name keys (rename + collision safe).
+      const key = canonicalManagerKey({
+        ownerId,
+        rosterId: r.roster_id,
+        seasonLeagueId: seasonLeague.league_id,
+        username: u?.username,
+        displayName: u?.display_name,
+      });
 
-      const name = u?.display_name || u?.username || `Roster ${r.roster_id}`;
+      const name = managerDisplayName({
+        displayName: u?.display_name,
+        username: u?.username,
+        rosterId: r.roster_id,
+      });
       const avatarUrl = avatarUrlForOwnerId(ownerId);
 
       rosterToManagerKey.set(r.roster_id, { key, name });
 
       if (!managerByKey.has(key)) {
+        // Chain is newest → oldest, so first write keeps the current display name after renames.
         managerByKey.set(key, { key, name, avatarUrl });
       } else {
         const existing = managerByKey.get(key)!;

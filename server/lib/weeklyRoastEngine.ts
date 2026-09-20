@@ -254,15 +254,13 @@ async function computeWorstCoaching(
           [playersById[topBench.pid]?.first_name, playersById[topBench.pid]?.last_name].filter(Boolean).join(" ") ||
           `Player ${topBench.pid}`
         : "";
-      const starterName = lowStarter
-        ? playersById[lowStarter.pid]?.full_name ||
-          [playersById[lowStarter.pid]?.first_name, playersById[lowStarter.pid]?.last_name].filter(Boolean).join(" ") ||
-          `Player ${lowStarter.pid}`
-        : "";
       worst = {
         roster_id: row.roster_id,
         benchPoints,
-        ...(benchName && starterName ? { sitStartMiss: `${benchName} rode the bench over ${starterName}.` } : {}),
+        // Soft wording only — no legal sit/start swap claim without positional eligibility.
+        ...(benchName && topBench
+          ? { sitStartMiss: `Left ${benchName} (${formatPts(topBench.pts)} pts) on the bench.` }
+          : {}),
       };
     }
   }
@@ -271,10 +269,10 @@ async function computeWorstCoaching(
   const team = rosterName(worst.roster_id);
   return {
     type: "worst_coaching",
-    title: "Worst Coaching",
+    title: "Most Points Left on Bench",
     subtitle: worst.sitStartMiss ?? `${team} left ${formatPts(worst.benchPoints)} pts on the bench.`,
     stat: `${formatPts(worst.benchPoints)} bench pts`,
-    tagline: "Starts matter.",
+    tagline: "Bench points, not a full coaching grade.",
     meta: { roster_id: worst.roster_id, benchPoints: worst.benchPoints },
   };
 }

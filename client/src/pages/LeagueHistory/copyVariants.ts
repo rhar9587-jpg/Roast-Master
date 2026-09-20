@@ -163,12 +163,12 @@ export const BIGGEST_BLOWOUT_VARIANTS: CopyVariant[] = [
 export const PLAYOFF_CHOKER_VARIANTS: CopyVariant[] = [
   {
     headline: "PLAYOFF CHOKER 💔",
-    punchline: "Had a bye week, then found a way to lose. The Chargering is real.",
+    punchline: "Top seed energy. Then {losses} playoff losses. The Chargering is real.",
     severity: "nuclear",
   },
   {
     headline: "PLAYOFF CHOKER 💔",
-    punchline: "Top seed. First-round exit. A tradition unlike any other.",
+    punchline: "Strong seed. Soft finish. {losses} playoff losses.",
     severity: "nuclear",
   },
   {
