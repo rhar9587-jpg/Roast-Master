@@ -3,6 +3,9 @@
  *
  * Completion detection is intentionally pluggable so it can grow beyond the
  * current Sleeper 0–0 shell heuristic without rewriting call sites.
+ *
+ * Callers must say whether a week is final before nonzero scores become W/L:
+ * partial live scores must not contaminate standings.
  */
 
 export type MatchupCompletionHeuristic = "nonzero_points";
@@ -15,16 +18,23 @@ export type MatchupSide = {
 export type MatchupClassification =
   | { status: "malformed"; reason: "missing_side" | "incomplete_pair" | "invalid_points" }
   | { status: "scheduled" }
+  /** Nonzero (or otherwise "started") scores, but caller marked the week not final. */
+  | { status: "in_progress"; a: MatchupSide; b: MatchupSide }
   | { status: "tie"; a: MatchupSide; b: MatchupSide }
   | { status: "completed"; winner: MatchupSide; loser: MatchupSide };
 
 export type ClassifyMatchupOptions = {
   /**
-   * How to decide a pair has been played.
+   * How to decide a pair has started / left the unplayed shell.
    * Default: either side has points > 0 (existing Sleeper unplayed-shell heuristic).
    * Future heuristics (starters present, league status, etc.) plug in here.
    */
   completionHeuristic?: MatchupCompletionHeuristic;
+  /**
+   * When false, pairs that look scored are `in_progress` — never win/loss/tie.
+   * Defaults to true (caller asserts the week is final). Do not infer from scores alone.
+   */
+  weekIsFinal?: boolean;
 };
 
 function safePoints(n: unknown): number | null {
@@ -35,6 +45,7 @@ function safePoints(n: unknown): number | null {
 /**
  * Existing history heuristic: unplayed Sleeper shells are 0–0.
  * Exported so League History can share one definition.
+ * This is only "has scoring activity" — not "week is final".
  */
 export function isCompletedMatchupPoints(
   aPoints: number,
@@ -48,13 +59,14 @@ export function isCompletedMatchupPoints(
   return aPoints > 0 || bPoints > 0;
 }
 
-function isPairCompleted(a: MatchupSide, b: MatchupSide, heuristic: MatchupCompletionHeuristic): boolean {
+function hasScoringActivity(a: MatchupSide, b: MatchupSide, heuristic: MatchupCompletionHeuristic): boolean {
   return isCompletedMatchupPoints(a.points, b.points, heuristic);
 }
 
 /**
  * Classify a head-to-head pair. Never uses >= to pick a winner:
- * equal completed scores are ties; only strict > assigns a winner.
+ * equal final scores are ties; only strict > assigns a winner.
+ * Non-final weeks with scoring activity are `in_progress`.
  */
 export function classifyMatchupPair(
   a: MatchupSide | null | undefined,
@@ -62,6 +74,7 @@ export function classifyMatchupPair(
   options: ClassifyMatchupOptions = {},
 ): MatchupClassification {
   const heuristic = options.completionHeuristic ?? "nonzero_points";
+  const weekIsFinal = options.weekIsFinal !== false;
 
   if (!a || !b) {
     return { status: "malformed", reason: "missing_side" };
@@ -73,8 +86,12 @@ export function classifyMatchupPair(
     return { status: "malformed", reason: "invalid_points" };
   }
 
-  if (!isPairCompleted(a, b, heuristic)) {
+  if (!hasScoringActivity(a, b, heuristic)) {
     return { status: "scheduled" };
+  }
+
+  if (!weekIsFinal) {
+    return { status: "in_progress", a, b };
   }
 
   if (a.points === b.points) {
@@ -109,9 +126,16 @@ export function classifyMatchupGroup(
   );
 }
 
-/** True when the classification is a played game (win/loss or tie). */
+/** True when the classification is a final played game (win/loss or tie). */
 export function isPlayableClassification(
   c: MatchupClassification,
 ): c is Extract<MatchupClassification, { status: "completed" | "tie" }> {
   return c.status === "completed" || c.status === "tie";
+}
+
+/** Scores from a final played classification (includes legitimate zeros). */
+export function scoresFromPlayedClassification(c: MatchupClassification): number[] {
+  if (c.status === "completed") return [c.winner.points, c.loser.points];
+  if (c.status === "tie") return [c.a.points, c.b.points];
+  return [];
 }

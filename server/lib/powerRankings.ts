@@ -71,6 +71,7 @@ function scoresByWeek(scores: WeekKeyedScore[] | undefined): Map<number, number>
  * Expected wins: for each week this team played, compare against opponents
  * who also have a score for that same week. Missing weeks are skipped —
  * no index alignment and no silent zero for absent scores.
+ * Equal scores contribute 0.5 (tie), not 0.
  */
 export function computeExpectedWins(
   team: PowerRankingsTeamInput,
@@ -91,7 +92,9 @@ export function computeExpectedWins(
     for (const other of otherMaps) {
       if (!other.has(week)) continue;
       compared += 1;
-      if (myScore > other.get(week)!) beatCount += 1;
+      const otherScore = other.get(week)!;
+      if (myScore > otherScore) beatCount += 1;
+      else if (myScore === otherScore) beatCount += 0.5;
     }
     if (compared > 0) {
       expectedWins += beatCount / compared;
@@ -129,7 +132,9 @@ function enrichTeam(team: PowerRankingsTeamInput, allTeams: PowerRankingsTeamInp
       ? safeAverage(recentSorted.slice(-3).map((w) => w.score))
       : averagePoints;
   const expectedWins = computeExpectedWins(team, allTeams);
-  const luckDelta = Math.round((wins - expectedWins) * 100) / 100;
+  // Same half-win tie semantics as winPct
+  const actualWinEquiv = wins + 0.5 * ties;
+  const luckDelta = Math.round((actualWinEquiv - expectedWins) * 100) / 100;
   return {
     ...team,
     ties,

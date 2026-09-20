@@ -4,7 +4,7 @@ import {
   generatePowerRankings,
   type PowerRankingsTeamInput,
 } from "./powerRankings";
-import { buildTeamsFromMatchupData } from "./weeklyCommissioner";
+import { buildTeamsFromMatchupData, playedScoresFromWeekMatchups } from "./weeklyCommissioner";
 
 describe("computeExpectedWins (week-keyed)", () => {
   it("joins by actual week number when Week 2 is missing", () => {
@@ -60,6 +60,29 @@ describe("computeExpectedWins (week-keyed)", () => {
     // No comparable opponents that week → 0 expected wins (not a free win vs 0)
     expect(computeExpectedWins(a, [a, b])).toBe(0);
   });
+
+  it("counts equal scores as 0.5 expected win (tie), not 0", () => {
+    const a: PowerRankingsTeamInput = {
+      teamId: "1",
+      teamName: "A",
+      wins: 0,
+      losses: 0,
+      ties: 1,
+      pointsFor: 100,
+      weeklyScores: [{ week: 1, score: 100 }],
+    };
+    const b: PowerRankingsTeamInput = {
+      teamId: "2",
+      teamName: "B",
+      wins: 0,
+      losses: 0,
+      ties: 1,
+      pointsFor: 100,
+      weeklyScores: [{ week: 1, score: 100 }],
+    };
+    expect(computeExpectedWins(a, [a, b])).toBe(0.5);
+    expect(computeExpectedWins(b, [a, b])).toBe(0.5);
+  });
 });
 
 describe("generatePowerRankings record / ties", () => {
@@ -101,6 +124,64 @@ describe("generatePowerRankings record / ties", () => {
     // winPct = (2 + 0.5) / 4 = 0.625
     expect(tied.winPct).toBe(0.625);
   });
+
+  it("luckDelta uses wins + 0.5*ties (same tie semantics as winPct)", () => {
+    // One team: 0-0-1 with score 100; other: 0-0-1 with score 100
+    // EW = 0.5 each; actualWinEquiv = 0.5; luckDelta = 0
+    const teams: PowerRankingsTeamInput[] = [
+      {
+        teamId: "1",
+        teamName: "A",
+        wins: 0,
+        losses: 0,
+        ties: 1,
+        pointsFor: 100,
+        weeklyScores: [{ week: 1, score: 100 }],
+      },
+      {
+        teamId: "2",
+        teamName: "B",
+        wins: 0,
+        losses: 0,
+        ties: 1,
+        pointsFor: 100,
+        weeklyScores: [{ week: 1, score: 100 }],
+      },
+    ];
+    const rows = generatePowerRankings(teams);
+    for (const row of rows) {
+      expect(row.expectedWins).toBe(0.5);
+      expect(row.winPct).toBe(0.5); // (0 + 0.5*1) / 1
+      // Must NOT be luckDelta = 0 - 0.5 = -0.5 (wins-only)
+      expect(row.luckDelta).toBe(0);
+    }
+  });
+});
+
+describe("playedScoresFromWeekMatchups / league average consistency", () => {
+  it("keeps a legitimate zero score from a final completed matchup", () => {
+    const scores = playedScoresFromWeekMatchups(
+      [
+        { matchup_id: 1, roster_id: 1, points: 0 },
+        { matchup_id: 1, roster_id: 2, points: 12 },
+      ],
+      { weekIsFinal: true },
+    );
+    // Old filter (score > 0) would drop the zero and average only 12.
+    expect(scores).toEqual([12, 0]);
+    expect(scores.reduce((a, b) => a + b, 0) / scores.length).toBe(6);
+  });
+
+  it("does not treat in-progress nonzero scores as played for averages", () => {
+    const scores = playedScoresFromWeekMatchups(
+      [
+        { matchup_id: 1, roster_id: 1, points: 40 },
+        { matchup_id: 1, roster_id: 2, points: 35 },
+      ],
+      { weekIsFinal: false },
+    );
+    expect(scores).toEqual([]);
+  });
 });
 
 describe("buildTeamsFromMatchupData / buildTeamsFromSleeper contract", () => {
@@ -108,6 +189,10 @@ describe("buildTeamsFromMatchupData / buildTeamsFromSleeper contract", () => {
    * Most important regression:
    * Current Sleeper roster.settings are 8–2, but matchups through Week 3 are 2–1.
    * Through-week builder must return 2–1 and Week 1–3 PF/PA.
+   *
+   * Note: if weeks 4–10 in this fixture were all counted, Alpha would be 9–1
+   * (2–1 through week 3, then 7 more wins) — not 8–2. The 8–2 is only the
+   * misleading roster.settings value under test.
    */
   it("returns through-week 2–1 despite current 8–2 roster.settings", () => {
     const rosters = [
@@ -149,7 +234,8 @@ describe("buildTeamsFromMatchupData / buildTeamsFromSleeper contract", () => {
         { matchup_id: 1, roster_id: 1, points: 120 },
         { matchup_id: 1, roster_id: 2, points: 90 },
       ],
-      // Later weeks that would produce 8–2 if incorrectly included:
+      // Later weeks present in the payload but excluded by throughWeek: 3.
+      // Counting all of them would yield 9–1 for Alpha (not the settings 8–2).
       4: [
         { matchup_id: 1, roster_id: 1, points: 130 },
         { matchup_id: 1, roster_id: 2, points: 70 },
@@ -198,7 +284,7 @@ describe("buildTeamsFromMatchupData / buildTeamsFromSleeper contract", () => {
     expect(alpha.pointsAgainst).not.toBe(900);
     expect(alpha.weeklyScores.map((w) => w.week)).toEqual([1, 2, 3]);
     expect(alpha.weeklyScores.map((w) => w.score)).toEqual([110, 95, 120]);
-    // Must not leak current 8–2
+    // Must not leak current settings 8–2
     expect(alpha.wins).not.toBe(8);
     expect(alpha.losses).not.toBe(2);
   });

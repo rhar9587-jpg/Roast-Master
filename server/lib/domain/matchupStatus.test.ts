@@ -67,6 +67,29 @@ describe("matchupStatus", () => {
     expect(tied.status).toBe("tie");
     expect(tied).not.toHaveProperty("winner");
   });
+
+  it("marks nonzero scores as in_progress when weekIsFinal is false", () => {
+    const result = classifyMatchupPair(
+      { rosterId: 1, points: 45.2 },
+      { rosterId: 2, points: 38.0 },
+      { weekIsFinal: false },
+    );
+    expect(result).toEqual({
+      status: "in_progress",
+      a: { rosterId: 1, points: 45.2 },
+      b: { rosterId: 2, points: 38.0 },
+    });
+  });
+
+  it("still treats 0–0 as scheduled even when weekIsFinal is false", () => {
+    expect(
+      classifyMatchupPair(
+        { rosterId: 1, points: 0 },
+        { rosterId: 2, points: 0 },
+        { weekIsFinal: false },
+      ),
+    ).toEqual({ status: "scheduled" });
+  });
 });
 
 describe("buildTeamStatesThroughWeek", () => {
@@ -223,7 +246,8 @@ describe("buildTeamStatesThroughWeek", () => {
       { matchup_id: 1, roster_id: 1, points: 120 },
       { matchup_id: 1, roster_id: 2, points: 80 },
     ];
-    // Weeks 4–10: Alpha wins the rest (would be 8–2 overall)
+    // Weeks 4–10: Alpha wins every remaining week → through Week 10 is 9–1
+    // (not 8–2; that figure is only used as misleading roster.settings elsewhere)
     for (let w = 4; w <= 10; w++) {
       matchupsByWeek[w] = [
         { matchup_id: 1, roster_id: 1, points: 130 },
@@ -250,6 +274,67 @@ describe("buildTeamStatesThroughWeek", () => {
 
     expect(through10.wins).toBe(9);
     expect(through10.losses).toBe(1);
+  });
+
+  it("completed historical matchup counts toward W/L", () => {
+    const alpha = buildTeamStatesThroughWeek({
+      throughWeek: 1,
+      identities: identities.slice(0, 2),
+      matchupsByWeek: {
+        1: [
+          { matchup_id: 1, roster_id: 1, points: 110 },
+          { matchup_id: 1, roster_id: 2, points: 100 },
+        ],
+      },
+      isWeekFinal: () => true,
+    })[0]!;
+    expect(alpha.wins).toBe(1);
+    expect(alpha.losses).toBe(0);
+    expect(alpha.weeklyScores.get(1)).toBe(110);
+  });
+
+  it("future 0–0 does not count toward standings", () => {
+    const alpha = buildTeamStatesThroughWeek({
+      throughWeek: 1,
+      identities: identities.slice(0, 2),
+      matchupsByWeek: {
+        1: [
+          { matchup_id: 1, roster_id: 1, points: 0 },
+          { matchup_id: 1, roster_id: 2, points: 0 },
+        ],
+      },
+    })[0]!;
+    expect(alpha.wins).toBe(0);
+    expect(alpha.losses).toBe(0);
+    expect(alpha.weeklyScores.size).toBe(0);
+  });
+
+  it("nonzero in-progress matchup does NOT produce W/L when week is not final", () => {
+    const states = buildTeamStatesThroughWeek({
+      throughWeek: 2,
+      identities: identities.slice(0, 2),
+      matchupsByWeek: {
+        1: [
+          { matchup_id: 1, roster_id: 1, points: 100 },
+          { matchup_id: 1, roster_id: 2, points: 90 },
+        ],
+        2: [
+          { matchup_id: 1, roster_id: 1, points: 55.5 },
+          { matchup_id: 1, roster_id: 2, points: 42.0 },
+        ],
+      },
+      // Week 1 final; Week 2 still live
+      isWeekFinal: (week) => week < 2,
+    });
+    const alpha = states[0]!;
+    expect(alpha.wins).toBe(1);
+    expect(alpha.losses).toBe(0);
+    expect(alpha.pointsFor).toBe(100);
+    expect(alpha.pointsAgainst).toBe(90);
+    expect(alpha.weeklyScores.has(2)).toBe(false);
+    // Raw live score preserved separately
+    expect(alpha.liveWeeklyScores.get(2)).toBe(55.5);
+    expect(states[1]!.liveWeeklyScores.get(2)).toBe(42.0);
   });
 
   it("accumulates pointsAgainst only through the historical week", () => {

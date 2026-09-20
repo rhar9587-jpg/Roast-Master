@@ -16,6 +16,7 @@ import {
   type RosterIdentity,
   type RawWeekMatchup,
 } from "./domain/teamStateThroughWeek";
+import { classifyMatchupGroup, scoresFromPlayedClassification } from "./domain/matchupStatus";
 
 // Sleeper API returns roster settings with fpts/fpts_decimal; type is extended here for the adapter
 interface RosterWithPoints {
@@ -93,7 +94,12 @@ function rosterDisplayName(
 /**
  * Pure builder: reconstruct power-ranking inputs from matchups through `throughWeek`.
  * Ignores roster.settings wins/losses/PA — historical Week N uses Week N standings only.
- * Exported for tests (including the 8–2 settings vs 2–1 through Week 3 regression).
+ * Exported for tests (including the settings-vs-through-week regression).
+ *
+ * @param finalThroughWeek — last week that may count toward W/L/PF/PA.
+ *   Weeks `finalThroughWeek + 1 .. throughWeek` are treated as not final (in-progress
+ *   raw scores only). Defaults to `throughWeek` (caller asserts all weeks are final).
+ *   Do not infer NFL finality from scores alone.
  */
 export function buildTeamsFromMatchupData(params: {
   leagueName: string;
@@ -101,6 +107,7 @@ export function buildTeamsFromMatchupData(params: {
   rosters: Array<{ roster_id: number; owner_id: string | null; settings?: RosterWithPoints["settings"] }>;
   users: Array<{ user_id: string; username?: string; display_name?: string }>;
   matchupsByWeek: Map<number, RawWeekMatchup[]> | Record<number, RawWeekMatchup[]>;
+  finalThroughWeek?: number;
 }): { leagueName: string; teams: PowerRankingsTeamInput[] } {
   const userById = new Map(params.users.map((u) => [u.user_id, u]));
   const identities: RosterIdentity[] = params.rosters.map((r) => ({
@@ -109,10 +116,14 @@ export function buildTeamsFromMatchupData(params: {
     displayName: rosterDisplayName(r.roster_id, params.rosters as RosterWithPoints[], userById),
   }));
 
+  const finalThrough =
+    params.finalThroughWeek != null ? params.finalThroughWeek : params.throughWeek;
+
   const states = buildTeamStatesThroughWeek({
     throughWeek: params.throughWeek,
     identities,
     matchupsByWeek: params.matchupsByWeek,
+    isWeekFinal: (week) => week <= finalThrough,
   });
 
   const teams: PowerRankingsTeamInput[] = states.map((s) => ({
@@ -136,10 +147,14 @@ export function buildTeamsFromMatchupData(params: {
 /**
  * Build teams array for power rankings from Sleeper league data (rosters + matchups 1..week).
  * Standings are reconstructed from matchups through `throughWeek` — not current roster.settings.
+ *
+ * @param finalThroughWeek — optional last final week for standings (see buildTeamsFromMatchupData).
+ *   Defaults to `throughWeek`. Live UIs should pass the last completed week explicitly.
  */
 export async function buildTeamsFromSleeper(
   leagueId: string,
   throughWeek: number,
+  options?: { finalThroughWeek?: number },
 ): Promise<{ leagueName: string; teams: PowerRankingsTeamInput[] }> {
   const [league, rostersRaw, users] = await Promise.all([
     getLeague(leagueId),
@@ -175,6 +190,7 @@ export async function buildTeamsFromSleeper(
     rosters,
     users,
     matchupsByWeek,
+    ...(options?.finalThroughWeek != null ? { finalThroughWeek: options.finalThroughWeek } : {}),
   });
 }
 
@@ -503,15 +519,39 @@ function buildRoastCalloutsFromNarrative(
   return out.length ? out.slice(0, 3) : undefined;
 }
 
+/**
+ * Collect points from final played matchups in a week (including legitimate zeros).
+ * Uses the canonical classifier — does not re-apply an independent score > 0 filter.
+ */
+export function playedScoresFromWeekMatchups(
+  weekMatchups: Array<{ matchup_id: number; roster_id: number; points: unknown }>,
+  options?: { weekIsFinal?: boolean },
+): number[] {
+  const weekIsFinal = options?.weekIsFinal !== false;
+  const byMatchup = new Map<number, Array<{ roster_id: number; points: unknown }>>();
+  for (const m of weekMatchups) {
+    if (m.matchup_id == null) continue;
+    const list = byMatchup.get(m.matchup_id) ?? [];
+    list.push(m);
+    byMatchup.set(m.matchup_id, list);
+  }
+  const scores: number[] = [];
+  for (const group of Array.from(byMatchup.values())) {
+    const classification = classifyMatchupGroup(group, { weekIsFinal });
+    scores.push(...scoresFromPlayedClassification(classification));
+  }
+  return scores;
+}
+
 function computeLeagueAverages(teams: PowerRankingsTeamInput[], weekMatchups: SleeperMatchup[]): WeeklyEmailData["leagueAverages"] {
-  const weekScores = weekMatchups.map((m) => safeNum(m.points)).filter((x) => x > 0);
-  const seasonScores = teams
-    .flatMap((t) => (t.weeklyScores || []).map((w) => w.score))
-    .filter((x) => x > 0);
+  // Week: canonical final played sides only (zeros kept if the game is final).
+  const weekScores = playedScoresFromWeekMatchups(weekMatchups, { weekIsFinal: true });
+  // Season: already-canonical weeklyScores on team state — do not drop zeros.
+  const seasonScores = teams.flatMap((t) => (t.weeklyScores || []).map((w) => w.score));
   if (!weekScores.length && !seasonScores.length) return undefined;
   return {
-    weekAverage: average(weekScores),
-    seasonAverage: average(seasonScores),
+    weekAverage: weekScores.length ? average(weekScores) : 0,
+    seasonAverage: seasonScores.length ? average(seasonScores) : 0,
   };
 }
 

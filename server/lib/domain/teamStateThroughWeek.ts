@@ -26,8 +26,13 @@ export type TeamStateThroughWeek = {
   ties: number;
   pointsFor: number;
   pointsAgainst: number;
-  /** Explicit week identity → points scored that week (played games only). */
+  /** Explicit week identity → points from final played games only. */
   weeklyScores: Map<number, number>;
+  /**
+   * Raw points for weeks the caller marked not final (in-progress).
+   * Never counted in W/L/PF/PA/weeklyScores — preserved for live UI if needed.
+   */
+  liveWeeklyScores: Map<number, number>;
 };
 
 export type RawWeekMatchup = {
@@ -54,6 +59,7 @@ function emptyState(identity: RosterIdentity, throughWeek: number): TeamStateThr
     pointsFor: 0,
     pointsAgainst: 0,
     weeklyScores: new Map(),
+    liveWeeklyScores: new Map(),
   };
 }
 
@@ -72,11 +78,28 @@ function applyPlayedGame(
   else state.ties += 1;
 }
 
+function applyInProgressScores(
+  byRoster: Map<number, TeamStateThroughWeek>,
+  week: number,
+  classification: Extract<MatchupClassification, { status: "in_progress" }>,
+): void {
+  const { a, b } = classification;
+  const stateA = byRoster.get(a.rosterId);
+  const stateB = byRoster.get(b.rosterId);
+  if (stateA) stateA.liveWeeklyScores.set(week, a.points);
+  if (stateB) stateB.liveWeeklyScores.set(week, b.points);
+}
+
 function applyClassification(
   byRoster: Map<number, TeamStateThroughWeek>,
   week: number,
   classification: MatchupClassification,
 ): void {
+  if (classification.status === "in_progress") {
+    applyInProgressScores(byRoster, week, classification);
+    return;
+  }
+
   if (!isPlayableClassification(classification)) return;
 
   if (classification.status === "tie") {
@@ -99,14 +122,21 @@ function applyClassification(
 /**
  * Reconstruct standings through `throughWeek` from matchup rows only.
  * Weeks absent from `matchupsByWeek` are skipped (no positional shift).
- * Scheduled 0–0 shells and malformed pairs do not affect W/L/PF/PA/scores.
+ * Scheduled 0–0 shells, malformed pairs, and non-final (in-progress) weeks
+ * do not affect W/L/PF/PA/weeklyScores.
+ *
+ * @param isWeekFinal — caller context: when false for a week, nonzero scores
+ *   are stored only on `liveWeeklyScores`. Defaults to all weeks final.
+ *   Do not infer NFL/Sleeper finality from points alone.
  */
 export function buildTeamStatesThroughWeek(params: {
   throughWeek: number;
   identities: RosterIdentity[];
   matchupsByWeek: Map<number, RawWeekMatchup[]> | Record<number, RawWeekMatchup[]>;
+  isWeekFinal?: (week: number) => boolean;
 }): TeamStateThroughWeek[] {
   const throughWeek = Math.max(0, Math.floor(params.throughWeek));
+  const isWeekFinal = params.isWeekFinal ?? (() => true);
   const byRoster = new Map<number, TeamStateThroughWeek>();
   for (const identity of params.identities) {
     byRoster.set(identity.rosterId, emptyState(identity, throughWeek));
@@ -123,6 +153,7 @@ export function buildTeamStatesThroughWeek(params: {
     const rows = asMap.get(week);
     if (!rows?.length) continue;
 
+    const weekFinal = isWeekFinal(week);
     const byMatchupId = new Map<number, RawWeekMatchup[]>();
     for (const row of rows) {
       if (row.matchup_id == null) continue;
@@ -132,7 +163,7 @@ export function buildTeamStatesThroughWeek(params: {
     }
 
     for (const group of Array.from(byMatchupId.values())) {
-      const classification = classifyMatchupGroup(group);
+      const classification = classifyMatchupGroup(group, { weekIsFinal: weekFinal });
       applyClassification(byRoster, week, classification);
     }
   }
