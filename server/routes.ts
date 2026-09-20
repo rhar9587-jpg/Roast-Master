@@ -25,6 +25,7 @@ import {
 
 // ✅ NEW: League History (Dominance Grid)
 import { handleLeagueHistoryDominance } from "./league-history";
+import { getNflWeekContext } from "./league-history/nflState";
 import { selectTagline } from "./lib/seasonTagline";
 import { getWeeklyCommissionerEmail, generateWeeklyCommissionerEmail, getRecapSubject } from "./lib/weeklyCommissioner";
 import { buildTeamsFromSleeper } from "./lib/weeklyCommissioner";
@@ -1058,26 +1059,16 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   // Current NFL season week (Sleeper state) — used for weekly roast / email defaults
   app.get("/api/nfl/state", async (_req: Request, res: Response) => {
     try {
-      const state = await fetchJson<{
-        week?: number;
-        display_week?: number;
-        leg?: number;
-        season?: string;
-        season_type?: string;
-      }>("https://api.sleeper.app/v1/state/nfl");
-
-      const previewWeekRaw = Number(state.display_week ?? state.week ?? state.leg ?? 0);
-      const previewWeek = Math.min(18, Math.max(1, previewWeekRaw || 1));
-      const recapWeek = Math.max(1, previewWeek - 1);
-
+      const ctx = await getNflWeekContext();
       return res.json({
-        season: state.season ?? null,
-        season_type: state.season_type ?? null,
-        week: state.week ?? null,
-        display_week: state.display_week ?? null,
-        leg: state.leg ?? null,
-        previewWeek,
-        recapWeek,
+        season: ctx.season,
+        season_type: ctx.season_type,
+        week: ctx.week,
+        display_week: ctx.display_week,
+        leg: ctx.leg,
+        previewWeek: ctx.previewWeek,
+        recapWeek: ctx.recapWeek,
+        latestFinalWeek: ctx.latestFinalWeek,
       });
     } catch (error: any) {
       console.error("NFL state fetch error:", error);

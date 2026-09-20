@@ -17,6 +17,7 @@ import {
   type RawWeekMatchup,
 } from "./domain/teamStateThroughWeek";
 import { classifyMatchupGroup, scoresFromPlayedClassification } from "./domain/matchupStatus";
+import { getNflWeekContext, resolveFinalThroughWeek } from "../league-history/nflState";
 
 // Sleeper API returns roster settings with fpts/fpts_decimal; type is extended here for the adapter
 interface RosterWithPoints {
@@ -148,8 +149,9 @@ export function buildTeamsFromMatchupData(params: {
  * Build teams array for power rankings from Sleeper league data (rosters + matchups 1..week).
  * Standings are reconstructed from matchups through `throughWeek` — not current roster.settings.
  *
- * @param finalThroughWeek — optional last final week for standings (see buildTeamsFromMatchupData).
- *   Defaults to `throughWeek`. Live UIs should pass the last completed week explicitly.
+ * `finalThroughWeek` defaults to min(throughWeek, latestFinalNflWeek) from Sleeper NFL state
+ * so a live current week with partial scores does not become W/L. Pass an explicit value
+ * only for tests or intentional overrides.
  */
 export async function buildTeamsFromSleeper(
   leagueId: string,
@@ -161,6 +163,18 @@ export async function buildTeamsFromSleeper(
     getRosters(leagueId),
     getUsers(leagueId),
   ]);
+
+  let finalThroughWeek = options?.finalThroughWeek;
+  if (finalThroughWeek === undefined) {
+    try {
+      const nfl = await getNflWeekContext();
+      finalThroughWeek = resolveFinalThroughWeek(throughWeek, nfl.latestFinalWeek);
+    } catch {
+      // If NFL state is unavailable, refuse to treat the requested through-week as final
+      // when it might still be live: only count prior weeks.
+      finalThroughWeek = resolveFinalThroughWeek(throughWeek, Math.max(0, throughWeek - 1));
+    }
+  }
 
   const rosters = rostersRaw as RosterWithPoints[];
   const matchupsByWeek = new Map<number, RawWeekMatchup[]>();
@@ -190,7 +204,7 @@ export async function buildTeamsFromSleeper(
     rosters,
     users,
     matchupsByWeek,
-    ...(options?.finalThroughWeek != null ? { finalThroughWeek: options.finalThroughWeek } : {}),
+    finalThroughWeek,
   });
 }
 
