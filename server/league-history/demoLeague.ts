@@ -24,6 +24,7 @@ import {
   DEMO_LEAGUE_ID,
   DEMO_LEAGUE_NAME,
   DEMO_SEASONS,
+  DEMO_SEASON_RANGE_LABEL,
   DEMO_MANAGERS,
   DEMO_H2H_SEED,
   DEMO_MANAGER_BY_KEY,
@@ -261,6 +262,8 @@ function getSeasonStatsWithOutcomes() {
 }
 
 export function getDemoLeagueData() {
+  // Expand weekly first so DEMO_H2H_SEED PF/PA are synced before the grid reads them.
+  const weeklyMatchups = getCanonicalWeeklyMatchups();
   const grid = buildGrid();
   const seasonStats = getSeasonStatsWithOutcomes();
 
@@ -268,7 +271,7 @@ export function getDemoLeagueData() {
     league: {
       league_id: DEMO_LEAGUE_ID,
       name: DEMO_LEAGUE_NAME,
-      season: "2019–2024",
+      season: DEMO_SEASON_RANGE_LABEL,
     },
     history: {
       league_ids: [DEMO_LEAGUE_ID],
@@ -279,7 +282,7 @@ export function getDemoLeagueData() {
     cells: buildCells(grid),
     totalsByManager: buildTotalsByManager(grid),
     seasonStats,
-    weeklyMatchups: getCanonicalWeeklyMatchups(),
+    weeklyMatchups,
     defaultRegularSeasonEnd: DEMO_REGULAR_SEASON_END,
     playoffStartBySeason: Object.fromEntries(
       DEMO_SEASONS.map((s) => [s, DEMO_PLAYOFF_START]),

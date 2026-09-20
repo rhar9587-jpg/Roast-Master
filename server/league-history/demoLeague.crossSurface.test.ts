@@ -10,12 +10,20 @@ import {
   DEMO_ICONIC_WEEK,
   DEMO_ICONIC_SEASON,
   DEMO_2024_WINNERS_BRACKET,
+  DEMO_H2H_SEED,
+  DEMO_MAX_WEEK,
+  DEMO_REGULAR_SEASON_END,
+  DEMO_SEASONS,
+  DEMO_SEASON_RANGE_LABEL,
+  DEMO_POINTS_TOLERANCE,
   getCanonicalWeeklyMatchups,
   getSleeperMatchupsForDemoWeek,
   managerRecordFromWeekly,
+  pairRecordFromWeekly,
   h2hTotalsForManager,
   isCanonicalDemoTeamName,
   getRegularSeasonWeeklyMatchups,
+  resetCanonicalWeeklyMatchupsCache,
 } from "./demo/canonicalDemoFixture";
 import {
   getDemoLeagueData,
@@ -60,6 +68,7 @@ function collectTeamNames(value: unknown, out: string[] = []): string[] {
 
 describe("canonical demo fixture", () => {
   it("Landlord H2H totals and expanded weekly all-time record agree (87–42)", () => {
+    resetCanonicalWeeklyMatchupsCache();
     const { fromH2h, fromWeekly } = getDemoLandlordAllTimeRecord();
     expect(fromH2h.wins).toBe(87);
     expect(fromH2h.losses).toBe(42);
@@ -69,16 +78,83 @@ describe("canonical demo fixture", () => {
     expect(fromWeekly.losses).toBe(fromH2h.losses);
   });
 
+  it("uses a coherent season span with no overflow/sentinel weeks", () => {
+    resetCanonicalWeeklyMatchupsCache();
+    const weekly = getCanonicalWeeklyMatchups();
+    expect(DEMO_SEASON_RANGE_LABEL).toBe("2010–2024");
+    expect(DEMO_SEASONS.length).toBeGreaterThanOrEqual(10);
+    expect(DEMO_SEASONS[0]).toBe("2010");
+    expect(DEMO_SEASONS[DEMO_SEASONS.length - 1]).toBe("2024");
+
+    for (const row of weekly) {
+      expect(row.week).toBeGreaterThanOrEqual(1);
+      expect(row.week).toBeLessThanOrEqual(DEMO_MAX_WEEK);
+      expect(row.week).toBeLessThanOrEqual(DEMO_REGULAR_SEASON_END);
+      expect(DEMO_SEASONS as readonly string[]).toContain(row.season);
+    }
+    expect(weekly.some((r) => r.week > DEMO_REGULAR_SEASON_END)).toBe(false);
+    expect(weekly.some((r) => r.week >= DEMO_REGULAR_SEASON_END + 100)).toBe(false);
+  });
+
+  it("never double-books a manager in the same season/week", () => {
+    const weekly = getCanonicalWeeklyMatchups();
+    const seen = new Set<string>();
+    for (const row of weekly) {
+      const key = `${row.season}|${row.week}|${row.managerKey}`;
+      expect(seen.has(key)).toBe(false);
+      seen.add(key);
+    }
+  });
+
+  it("every manager-opponent pair reconciles W/L and PF/PA to the H2H seed", () => {
+    const weekly = getCanonicalWeeklyMatchups();
+    for (const a of DEMO_MANAGERS) {
+      for (const b of DEMO_MANAGERS) {
+        if (a.key === b.key) continue;
+        const seed = DEMO_H2H_SEED[a.key]?.[b.key];
+        if (!seed) continue;
+        const [wins, losses, pf, pa] = seed;
+        const rec = pairRecordFromWeekly(a.key, b.key, weekly);
+        expect(rec.wins, `${a.key} vs ${b.key} wins`).toBe(wins);
+        expect(rec.losses, `${a.key} vs ${b.key} losses`).toBe(losses);
+        expect(Math.abs(rec.pointsFor - pf)).toBeLessThanOrEqual(DEMO_POINTS_TOLERANCE);
+        expect(Math.abs(rec.pointsAgainst - pa)).toBeLessThanOrEqual(DEMO_POINTS_TOLERANCE);
+      }
+    }
+  });
+
   it("League History grid totals match weekly-derived all-time record for Landlord", () => {
     const data = getDemoLeagueData();
     const row = data.totalsByManager.find((t) => t.key === LANDLORD_KEY);
     expect(row).toBeTruthy();
     expect(row!.totalWins).toBe(87);
     expect(row!.totalLosses).toBe(42);
+    expect(data.league.season).toBe(DEMO_SEASON_RANGE_LABEL);
 
     const fromWeekly = managerRecordFromWeekly(LANDLORD_KEY, data.weeklyMatchups);
     expect(fromWeekly.wins).toBe(row!.totalWins);
     expect(fromWeekly.losses).toBe(row!.totalLosses);
+    expect(Math.abs(fromWeekly.pointsFor - row!.totalPF)).toBeLessThanOrEqual(DEMO_POINTS_TOLERANCE);
+    expect(Math.abs(fromWeekly.pointsAgainst - row!.totalPA)).toBeLessThanOrEqual(DEMO_POINTS_TOLERANCE);
+  });
+
+  it("personal hook cannot surface an invalid week from canonical history", () => {
+    const data = getDemoLeagueData();
+    const expectedGames = data.totalsByManager.find((t) => t.key === LANDLORD_KEY)!.totalGames;
+    const card = computePersonalHookCard(
+      LANDLORD_KEY,
+      data.weeklyMatchups,
+      [],
+      data.league.season,
+      expectedGames,
+    );
+    if (card && "week" in card && card.week != null) {
+      expect(card.week).toBeGreaterThanOrEqual(1);
+      expect(card.week).toBeLessThanOrEqual(DEMO_MAX_WEEK);
+    }
+    for (const row of data.weeklyMatchups) {
+      expect(row.week).toBeLessThanOrEqual(DEMO_MAX_WEEK);
+    }
   });
 
   it("iconic week 8 has a complete 12-team slate", () => {

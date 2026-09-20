@@ -4,12 +4,42 @@
  * Shape mirrors Sleeper inputs enough for production engines (matchups, rosters,
  * users, brackets). Weekly history is expanded from H2H aggregates so League
  * History totals and personal/hero cards share one scope.
+ *
+ * Season span: 2010–2024 (15 seasons × 14 regular-season weeks = 210 slots/manager).
+ * Landlord’s canonical 87–42 needs 129 games (≥10 seasons); extra seasons provide
+ * matching slack so the multigraph schedule has no overflow/sentinel weeks.
  */
 
 export const DEMO_LEAGUE_ID = "demo-group-chat-dynasty";
 export const DEMO_LEAGUE_NAME = "Group Chat Dynasty";
-export const DEMO_SEASONS = ["2019", "2020", "2021", "2022", "2023", "2024"] as const;
+
+/** Fifteen seasons — 87–42 (129 games) fits in 10×14 slots, but multigraph
+ * week-matching needs slack so free weeks overlap across opponents. */
+export const DEMO_SEASONS = [
+  "2010",
+  "2011",
+  "2012",
+  "2013",
+  "2014",
+  "2015",
+  "2016",
+  "2017",
+  "2018",
+  "2019",
+  "2020",
+  "2021",
+  "2022",
+  "2023",
+  "2024",
+] as const;
+
+export const DEMO_SEASON_RANGE_LABEL = "2010–2024";
 export const DEMO_REGULAR_SEASON_END = 14;
+/** Absolute max week allowed on any user-facing weekly row (playoff end). */
+export const DEMO_MAX_WEEK = 17;
+
+/** PF/PA rollup tolerance (points are stored to 0.1). */
+export const DEMO_POINTS_TOLERANCE = 0.15;
 
 export type DemoManager = {
   key: string;
@@ -37,7 +67,11 @@ export const DEMO_MANAGERS: DemoManager[] = [
 export const DEMO_MANAGER_BY_KEY = new Map(DEMO_MANAGERS.map((m) => [m.key, m]));
 export const DEMO_MANAGER_BY_ROSTER = new Map(DEMO_MANAGERS.map((m) => [m.rosterId, m]));
 
-/** H2H seed: [wins, losses, pf, pa] for row manager vs column manager. */
+/** H2H seed: [wins, losses, pf, pa] for row manager vs column manager.
+ * W/L are authored. PF/PA are initial targets; after weekly expansion they are
+ * synced to weekly rollups (exact within DEMO_POINTS_TOLERANCE) so the dominance
+ * grid and weekly detail cannot drift.
+ */
 export const DEMO_H2H_SEED: Record<string, Record<string, [number, number, number, number]>> = {
   "mgr:landlord": {
     "mgr:choker": [7, 5, 1456.2, 1423.8],
@@ -237,7 +271,6 @@ function pushPair(
 ): void {
   const aWon = aPts > bPts;
   const bWon = bPts > aPts;
-  // Ties: neither won
   out.push({
     season,
     week,
@@ -260,14 +293,123 @@ function pushPair(
   });
 }
 
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+type PairRemaining = {
+  winsLeft: number;
+  lossesLeft: number;
+  pf: number; // points for low key
+  pa: number; // points against low key (= high key PF)
+  games: number;
+};
+
 /**
- * Expand H2H seed into weekly rows. Schedules without double-booking a manager
- * in the same season+week. Iconic week 8 2024 uses the fixed complete slate.
+ * Allocate decisive game scores targeting PF/PA with required W/L.
+ * Equal per-game shares + zero-sum margin offsets (sep grows until feasible).
+ * If PF/PA vs W/L is infeasible after iconic debit, uses decisive placeholders
+ * (weekly PF/PA then becomes the reconciled aggregate via syncH2HPointsFromWeekly).
+ */
+function allocateRemainingGameScores(rem: PairRemaining): Array<{
+  lowWins: boolean;
+  lowPts: number;
+  highPts: number;
+}> {
+  const outcomes: boolean[] = [
+    ...Array(rem.winsLeft).fill(true),
+    ...Array(rem.lossesLeft).fill(false),
+  ];
+  const n = outcomes.length;
+  if (n === 0) return [];
+
+  const pf = Math.max(0, rem.pf);
+  const pa = Math.max(0, rem.pa);
+  const threshold = (pa - pf) / (2 * n);
+
+  let chosen: Array<{ lowWins: boolean; lowPts: number; highPts: number }> | null = null;
+  for (let sep = 0.5; sep <= 80; sep += 0.5) {
+    const raw = outcomes.map((lowWins) => (lowWins ? threshold + sep : threshold - sep));
+    const mean = raw.reduce((s, x) => s + x, 0) / n;
+    const adj = raw.map((x) => x - mean);
+    const games: Array<{ lowWins: boolean; lowPts: number; highPts: number }> = [];
+    let ok = true;
+    for (let i = 0; i < n; i++) {
+      const lowPts = pf / n + adj[i]!;
+      const highPts = pa / n - adj[i]!;
+      if (lowPts < -1e-9 || highPts < -1e-9) {
+        ok = false;
+        break;
+      }
+      const lowWins = outcomes[i]!;
+      if (lowWins && lowPts <= highPts + 1e-9) {
+        ok = false;
+        break;
+      }
+      if (!lowWins && highPts <= lowPts + 1e-9) {
+        ok = false;
+        break;
+      }
+      games.push({ lowWins, lowPts, highPts });
+    }
+    if (ok) {
+      chosen = games;
+      break;
+    }
+  }
+
+  if (!chosen) {
+    const avgLow = n ? pf / n : 100;
+    const avgHigh = n ? pa / n : 100;
+    chosen = outcomes.map((lowWins) => {
+      if (lowWins) {
+        const lowPts = Math.max(avgLow, avgHigh + 5, 5);
+        const highPts = Math.max(0, Math.min(avgHigh, lowPts - 5));
+        return { lowWins, lowPts, highPts };
+      }
+      const highPts = Math.max(avgHigh, avgLow + 5, 5);
+      const lowPts = Math.max(0, Math.min(avgLow, highPts - 5));
+      return { lowWins, lowPts, highPts };
+    });
+  }
+
+  const out = chosen.map((g) => ({
+    lowWins: g.lowWins,
+    lowPts: round1(g.lowPts),
+    highPts: round1(g.highPts),
+  }));
+  const sumLow = out.reduce((s, g) => s + g.lowPts, 0);
+  const sumHigh = out.reduce((s, g) => s + g.highPts, 0);
+  const last = out[out.length - 1]!;
+  last.lowPts = round1(last.lowPts + (pf - sumLow));
+  last.highPts = round1(last.highPts + (pa - sumHigh));
+  if (last.lowPts < 0) last.lowPts = 0;
+  if (last.highPts < 0) last.highPts = 0;
+
+  for (const g of out) {
+    if (g.lowWins && g.lowPts <= g.highPts) {
+      g.lowPts = round1(g.highPts + 0.1);
+    } else if (!g.lowWins && g.highPts <= g.lowPts) {
+      g.highPts = round1(g.lowPts + 0.1);
+    }
+  }
+
+  rem.winsLeft = 0;
+  rem.lossesLeft = 0;
+  rem.pf = 0;
+  rem.pa = 0;
+  return out;
+}
+
+/**
+ * Expand H2H seed into weekly rows on a physically coherent schedule:
+ * seasons ∈ DEMO_SEASONS, weeks ∈ 1..DEMO_REGULAR_SEASON_END, no double-booking.
+ * Iconic week 8 2024 is placed first; its W/L and PF/PA are subtracted from the pair budget.
  */
 export function buildCanonicalWeeklyMatchups(): DemoWeeklyMatchupRow[] {
   const out: DemoWeeklyMatchupRow[] = [];
   const occupied = new Set<string>(); // `${season}|${week}|${managerKey}`
-  const remaining = new Map<string, { winsLeft: number; lossesLeft: number; pf: number; pa: number; games: number }>();
+  const remaining = new Map<string, PairRemaining>();
 
   const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
@@ -287,31 +429,58 @@ export function buildCanonicalWeeklyMatchups(): DemoWeeklyMatchupRow[] {
     }
   }
 
-  // Place iconic week first so those H2H results count toward quotas
+  // Place iconic week first; debit W/L and PF/PA from each pair's remaining budget.
   for (const pair of ICONIC_WEEK_PAIRS) {
-    pushPair(out, DEMO_ICONIC_SEASON, DEMO_ICONIC_WEEK, pair.a, pair.b, pair.aPts, pair.bPts);
+    if (
+      DEMO_ICONIC_WEEK < 1 ||
+      DEMO_ICONIC_WEEK > DEMO_REGULAR_SEASON_END
+    ) {
+      throw new Error("Iconic week outside regular season");
+    }
+    pushPair(
+      out,
+      DEMO_ICONIC_SEASON,
+      DEMO_ICONIC_WEEK,
+      pair.a,
+      pair.b,
+      pair.aPts,
+      pair.bPts,
+    );
     occupied.add(`${DEMO_ICONIC_SEASON}|${DEMO_ICONIC_WEEK}|${pair.a}`);
     occupied.add(`${DEMO_ICONIC_SEASON}|${DEMO_ICONIC_WEEK}|${pair.b}`);
+
     const pk = pairKey(pair.a, pair.b);
     const rem = remaining.get(pk);
-    if (rem) {
-      if (pair.aPts > pair.bPts) {
-        // a won — if a < b lexicographically, winsLeft is for lower key... 
-        // remaining is always stored with a.key < b.key from DEMO_MANAGERS order via pairKey
-        const low = pair.a < pair.b ? pair.a : pair.b;
-        const lowWon = (pair.a < pair.b ? pair.aPts : pair.bPts) > (pair.a < pair.b ? pair.bPts : pair.aPts);
-        if (lowWon) rem.winsLeft = Math.max(0, rem.winsLeft - 1);
-        else rem.lossesLeft = Math.max(0, rem.lossesLeft - 1);
-      } else if (pair.bPts > pair.aPts) {
-        const low = pair.a < pair.b ? pair.a : pair.b;
-        const lowWon = false; // higher score is not low when b wins and we need check
-        const lowIsA = pair.a < pair.b;
-        const lowPts = lowIsA ? pair.aPts : pair.bPts;
-        const highPts = lowIsA ? pair.bPts : pair.aPts;
-        if (lowPts > highPts) rem.winsLeft = Math.max(0, rem.winsLeft - 1);
-        else rem.lossesLeft = Math.max(0, rem.lossesLeft - 1);
-      }
+    if (!rem) continue;
+
+    const lowIsA = pair.a < pair.b;
+    const lowPts = lowIsA ? pair.aPts : pair.bPts;
+    const highPts = lowIsA ? pair.bPts : pair.aPts;
+    const lowWon = lowPts > highPts;
+
+    if (lowPts === highPts) {
+      throw new Error(`Iconic game is a tie; H2H seed has no ties (${pk})`);
     }
+    if (lowWon) {
+      if (rem.winsLeft <= 0) {
+        throw new Error(`Iconic win exceeds H2H wins for ${pk}`);
+      }
+      rem.winsLeft--;
+    } else {
+      if (rem.lossesLeft <= 0) {
+        throw new Error(`Iconic loss exceeds H2H losses for ${pk}`);
+      }
+      rem.lossesLeft--;
+    }
+    rem.pf = round1(rem.pf - lowPts);
+    rem.pa = round1(rem.pa - highPts);
+    if (rem.pf < -DEMO_POINTS_TOLERANCE || rem.pa < -DEMO_POINTS_TOLERANCE) {
+      throw new Error(
+        `Iconic scores exceed H2H PF/PA for ${pk} (rem pf=${rem.pf}, pa=${rem.pa})`,
+      );
+    }
+    rem.pf = Math.max(0, rem.pf);
+    rem.pa = Math.max(0, rem.pa);
   }
 
   function tryPlace(
@@ -319,10 +488,10 @@ export function buildCanonicalWeeklyMatchups(): DemoWeeklyMatchupRow[] {
     week: number,
     lowKey: string,
     highKey: string,
-    lowWins: boolean,
     lowPts: number,
     highPts: number,
   ): boolean {
+    if (week < 1 || week > DEMO_REGULAR_SEASON_END) return false;
     const o1 = `${season}|${week}|${lowKey}`;
     const o2 = `${season}|${week}|${highKey}`;
     if (occupied.has(o1) || occupied.has(o2)) return false;
@@ -332,46 +501,98 @@ export function buildCanonicalWeeklyMatchups(): DemoWeeklyMatchupRow[] {
     return true;
   }
 
-  // Schedule remaining games across seasons / regular-season weeks only.
-  // Overflow uses high week numbers so all-time W/L still matches H2H totals,
-  // while season-scoped views (weeks 1..DEMO_REGULAR_SEASON_END) stay clean.
-  for (const [pk, rem] of remaining) {
+  // Materialize remaining games, then fill season/week slots without double-booking.
+  type Pending = { lowKey: string; highKey: string; lowPts: number; highPts: number };
+  const pending: Pending[] = [];
+  const pairOrder = [...remaining.entries()].sort(
+    (a, b) => b[1].winsLeft + b[1].lossesLeft - (a[1].winsLeft + a[1].lossesLeft),
+  );
+  for (const [pk, rem] of pairOrder) {
     const [lowKey, highKey] = pk.split("|") as [string, string];
-    const games = rem.games || 1;
-    const avgLow = rem.pf / games;
-    const avgHigh = rem.pa / games;
-
-    while (rem.winsLeft > 0 || rem.lossesLeft > 0) {
-      const lowWins = rem.winsLeft > 0;
-      if (lowWins) rem.winsLeft--;
-      else rem.lossesLeft--;
-
-      const lowPts = round1(lowWins ? Math.max(avgLow, avgHigh + 5) : Math.min(avgLow, avgHigh - 5));
-      const highPts = round1(lowWins ? Math.min(avgHigh, avgLow - 5) : Math.max(avgHigh, avgLow + 5));
-
-      let placed = false;
-      for (const season of DEMO_SEASONS) {
-        for (let week = 1; week <= DEMO_REGULAR_SEASON_END; week++) {
-          if (tryPlace(season, week, lowKey, highKey, lowWins, lowPts, highPts)) {
-            placed = true;
-            break;
-          }
-        }
-        if (placed) break;
-      }
-      if (!placed) {
-        const season = DEMO_SEASONS[DEMO_SEASONS.length - 1]!;
-        let week = DEMO_REGULAR_SEASON_END + 100; // all-time overflow bucket
-        while (!tryPlace(season, week, lowKey, highKey, lowWins, lowPts, highPts)) week++;
-      }
+    for (const alloc of allocateRemainingGameScores(rem)) {
+      pending.push({
+        lowKey,
+        highKey,
+        lowPts: alloc.lowPts,
+        highPts: alloc.highPts,
+      });
     }
   }
+
+  // Fill week slots with a demand-ordered greedy matching (recompute each pick).
+  let guard = pending.length + 10;
+  while (pending.length > 0 && guard-- > 0) {
+    let placedAny = false;
+    for (const season of DEMO_SEASONS) {
+      for (let week = 1; week <= DEMO_REGULAR_SEASON_END; week++) {
+        let placedInWeek = true;
+        while (placedInWeek) {
+          placedInWeek = false;
+          const demand = new Map<string, number>();
+          for (const g of pending) {
+            demand.set(g.lowKey, (demand.get(g.lowKey) || 0) + 1);
+            demand.set(g.highKey, (demand.get(g.highKey) || 0) + 1);
+          }
+          pending.sort((a, b) => {
+            const da = (demand.get(a.lowKey) || 0) + (demand.get(a.highKey) || 0);
+            const db = (demand.get(b.lowKey) || 0) + (demand.get(b.highKey) || 0);
+            return db - da;
+          });
+          for (let i = 0; i < pending.length; i++) {
+            const g = pending[i]!;
+            if (tryPlace(season, week, g.lowKey, g.highKey, g.lowPts, g.highPts)) {
+              pending.splice(i, 1);
+              placedInWeek = true;
+              placedAny = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+    if (!placedAny) break;
+  }
+  if (pending.length > 0) {
+    throw new Error(
+      `Unable to place ${pending.length} H2H games within ${DEMO_SEASONS[0]}–${DEMO_SEASONS[DEMO_SEASONS.length - 1]} weeks 1–${DEMO_REGULAR_SEASON_END}. Extend DEMO_SEASONS.`,
+    );
+  }
+
+  // Sanity: no overflow weeks
+  for (const row of out) {
+    if (row.week < 1 || row.week > DEMO_MAX_WEEK) {
+      throw new Error(`Overflow/sentinel week ${row.week} in ${row.season}`);
+    }
+    if (!DEMO_SEASONS.includes(row.season as (typeof DEMO_SEASONS)[number])) {
+      throw new Error(`Unknown season ${row.season}`);
+    }
+  }
+
+  // Reconcile authored H2H PF/PA to weekly rollups (W/L already match by construction).
+  // When iconic debit made exact PF/PA vs remaining W/L infeasible, placeholders were
+  // used and the seed PF/PA is updated here so the dominance grid stays consistent.
+  syncH2HPointsFromWeekly(out);
 
   return out;
 }
 
-function round1(n: number): number {
-  return Math.round(n * 10) / 10;
+/** Write weekly-derived PF/PA back onto DEMO_H2H_SEED (W/L unchanged). */
+function syncH2HPointsFromWeekly(weekly: DemoWeeklyMatchupRow[]): void {
+  for (const a of DEMO_MANAGERS) {
+    for (const b of DEMO_MANAGERS) {
+      if (a.key === b.key) continue;
+      const seed = DEMO_H2H_SEED[a.key]?.[b.key];
+      if (!seed) continue;
+      const rec = pairRecordFromWeekly(a.key, b.key, weekly);
+      if (rec.wins !== seed[0] || rec.losses !== seed[1]) {
+        throw new Error(
+          `W/L mismatch after expand for ${a.key} vs ${b.key}: seed ${seed[0]}-${seed[1]} weekly ${rec.wins}-${rec.losses}`,
+        );
+      }
+      seed[2] = rec.pointsFor;
+      seed[3] = rec.pointsAgainst;
+    }
+  }
 }
 
 let _weeklyCache: DemoWeeklyMatchupRow[] | null = null;
@@ -397,7 +618,6 @@ export function getSleeperMatchupsForDemoWeek(season: string, week: number): Arr
   points: number;
 }> {
   const rows = getWeeklyMatchupsForSeasonWeek(season, week);
-  const seen = new Set<string>();
   const out: Array<{ matchup_id: number; roster_id: number; points: number }> = [];
   let matchupId = 1;
   const pairSeen = new Set<string>();
@@ -412,8 +632,6 @@ export function getSleeperMatchupsForDemoWeek(season: string, week: number): Arr
     out.push({ matchup_id: matchupId, roster_id: a.rosterId, points: row.points });
     out.push({ matchup_id: matchupId, roster_id: b.rosterId, points: row.opponentPoints });
     matchupId++;
-    seen.add(row.managerKey);
-    seen.add(row.opponentKey);
   }
   return out;
 }
@@ -437,21 +655,63 @@ export function isCanonicalDemoTeamName(name: string): boolean {
 export function managerRecordFromWeekly(
   managerKey: string,
   weekly: DemoWeeklyMatchupRow[] = getCanonicalWeeklyMatchups(),
-): { wins: number; losses: number; ties: number } {
+): { wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number } {
   let wins = 0;
   let losses = 0;
   let ties = 0;
+  let pointsFor = 0;
+  let pointsAgainst = 0;
   const seen = new Set<string>();
   for (const m of weekly) {
     if (m.managerKey !== managerKey) continue;
     const id = `${m.season}|${m.week}|${[m.managerKey, m.opponentKey].sort().join("|")}`;
     if (seen.has(id)) continue;
     seen.add(id);
+    pointsFor += m.points;
+    pointsAgainst += m.opponentPoints;
     if (m.won) wins++;
     else if (m.points === m.opponentPoints) ties++;
     else losses++;
   }
-  return { wins, losses, ties };
+  return {
+    wins,
+    losses,
+    ties,
+    pointsFor: round1(pointsFor),
+    pointsAgainst: round1(pointsAgainst),
+  };
+}
+
+/** Weekly-derived H2H aggregate for one directed pair (a vs b), matching DEMO_H2H_SEED shape. */
+export function pairRecordFromWeekly(
+  managerKey: string,
+  opponentKey: string,
+  weekly: DemoWeeklyMatchupRow[] = getCanonicalWeeklyMatchups(),
+): { wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number } {
+  let wins = 0;
+  let losses = 0;
+  let ties = 0;
+  let pointsFor = 0;
+  let pointsAgainst = 0;
+  const seen = new Set<string>();
+  for (const m of weekly) {
+    if (m.managerKey !== managerKey || m.opponentKey !== opponentKey) continue;
+    const id = `${m.season}|${m.week}|${[m.managerKey, m.opponentKey].sort().join("|")}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    pointsFor += m.points;
+    pointsAgainst += m.opponentPoints;
+    if (m.won) wins++;
+    else if (m.points === m.opponentPoints) ties++;
+    else losses++;
+  }
+  return {
+    wins,
+    losses,
+    ties,
+    pointsFor: round1(pointsFor),
+    pointsAgainst: round1(pointsAgainst),
+  };
 }
 
 /** 2024 winners bracket: #1 seed choker loses final to #4-ish landlord. */
@@ -471,7 +731,7 @@ export const DEMO_PLAYOFF_START = 15;
 export const DEMO_PLAYOFF_END = 17;
 export const DEMO_PLAYOFF_TEAMS = 6;
 
-/** Regular-season weekly rows only (excludes all-time overflow weeks). */
+/** Regular-season weekly rows (weeks 1..DEMO_REGULAR_SEASON_END). */
 export function getRegularSeasonWeeklyMatchups(
   season?: string,
   weekly: DemoWeeklyMatchupRow[] = getCanonicalWeeklyMatchups(),
