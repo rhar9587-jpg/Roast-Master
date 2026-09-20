@@ -1,14 +1,61 @@
 import { describe, expect, it } from "vitest";
+import { isNflFantasySeasonActive } from "@shared/nflSeasonStatus";
 import {
   clampWeek,
   navigateWeeklyWeek,
+  resolveDefaultLandingMode,
   resolveDefaultWeeklyContext,
+  resolveLandingModeUnlessOverridden,
   resolveWeekForMode,
+  resolveWeeklyContextUnlessOverridden,
   weeklyHeadline,
 } from "./weeklyContext";
 
+describe("resolveDefaultLandingMode", () => {
+  it("active regular season → default tab Weekly", () => {
+    expect(resolveDefaultLandingMode("regular")).toBe("weekly");
+  });
+
+  it("preseason → default tab Weekly (preview-capable)", () => {
+    expect(resolveDefaultLandingMode("pre")).toBe("weekly");
+  });
+
+  it("offseason → default tab Receipts/History", () => {
+    expect(resolveDefaultLandingMode("off")).toBe("history");
+  });
+
+  it("post-season → default tab Receipts/History", () => {
+    expect(resolveDefaultLandingMode("post")).toBe("history");
+  });
+
+  it("missing/unknown NFL season type fails closed to Receipts", () => {
+    expect(resolveDefaultLandingMode(null)).toBe("history");
+    expect(resolveDefaultLandingMode(undefined)).toBe("history");
+    expect(resolveDefaultLandingMode("")).toBe("history");
+    expect(resolveDefaultLandingMode("weird")).toBe("history");
+  });
+
+  it("respects Weekly feature flag off", () => {
+    expect(resolveDefaultLandingMode("regular", false)).toBe("history");
+  });
+});
+
+describe("isNflFantasySeasonActive (shared SoT)", () => {
+  it("treats pre + regular as active", () => {
+    expect(isNflFantasySeasonActive("pre")).toBe(true);
+    expect(isNflFantasySeasonActive("regular")).toBe(true);
+    expect(isNflFantasySeasonActive("PRE")).toBe(true);
+  });
+
+  it("treats post + off + unknown as inactive", () => {
+    expect(isNflFantasySeasonActive("post")).toBe(false);
+    expect(isNflFantasySeasonActive("off")).toBe(false);
+    expect(isNflFantasySeasonActive(null)).toBe(false);
+  });
+});
+
 describe("resolveDefaultWeeklyContext", () => {
-  it("defaults to Recap on the latest completed week when one exists", () => {
+  it("active season with completed Week 8 and live Week 9 → Week 8 Recap", () => {
     expect(
       resolveDefaultWeeklyContext({
         latestFinalWeek: 8,
@@ -18,7 +65,7 @@ describe("resolveDefaultWeeklyContext", () => {
     ).toEqual({ mode: "recap", week: 8 });
   });
 
-  it("defaults to Preview when no completed week exists", () => {
+  it("no completed week yet → Preview of current relevant week", () => {
     expect(
       resolveDefaultWeeklyContext({
         latestFinalWeek: 0,
@@ -26,6 +73,44 @@ describe("resolveDefaultWeeklyContext", () => {
         previewWeek: 1,
       }),
     ).toEqual({ mode: "preview", week: 1 });
+  });
+
+  it("future 0–0 shell (live preview week) is never selected as completed recap", () => {
+    const sel = resolveDefaultWeeklyContext({
+      latestFinalWeek: 8,
+      recapWeek: 8,
+      previewWeek: 9,
+    });
+    expect(sel.mode).toBe("recap");
+    expect(sel.week).toBe(8);
+    expect(sel.week).not.toBe(9);
+  });
+
+  it("week 1 in progress never invents a completed recap week", () => {
+    expect(
+      resolveDefaultWeeklyContext({
+        latestFinalWeek: 0,
+        recapWeek: 1,
+        previewWeek: 1,
+      }).mode,
+    ).toBe("preview");
+  });
+});
+
+describe("manual overrides are preserved", () => {
+  it("manual tab override is preserved (season default not reapplied)", () => {
+    expect(resolveLandingModeUnlessOverridden("regular", true)).toBeNull();
+    expect(resolveLandingModeUnlessOverridden("off", true)).toBeNull();
+    expect(resolveLandingModeUnlessOverridden("regular", false)).toBe("weekly");
+  });
+
+  it("manual week override is preserved (smart week not reapplied)", () => {
+    const nfl = { latestFinalWeek: 8, recapWeek: 8, previewWeek: 9 };
+    expect(resolveWeeklyContextUnlessOverridden(nfl, true)).toBeNull();
+    expect(resolveWeeklyContextUnlessOverridden(nfl, false)).toEqual({
+      mode: "recap",
+      week: 8,
+    });
   });
 });
 
