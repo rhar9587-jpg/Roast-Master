@@ -57,6 +57,19 @@ export type SleeperMatchup = {
   starters_points?: Record<string, number>;
 };
 
+/** Sleeper winners/losers bracket row (terse keys). */
+export type SleeperBracketMatchup = {
+  r?: number;
+  m?: number;
+  t1?: number | null;
+  t2?: number | null;
+  w?: number | null;
+  l?: number | null;
+  p?: number | null;
+  t1_from?: { w?: number; l?: number };
+  t2_from?: { w?: number; l?: number };
+};
+
 export async function getLeague(league_id: string) {
   return fetchJson<SleeperLeague>(`${SLEEPER_BASE}/league/${league_id}`);
 }
@@ -71,4 +84,16 @@ export async function getRosters(league_id: string) {
 
 export async function getMatchups(league_id: string, week: number) {
   return fetchJson<SleeperMatchup[]>(`${SLEEPER_BASE}/league/${league_id}/matchups/${week}`);
+}
+
+export async function getWinnersBracket(league_id: string) {
+  return fetchJson<SleeperBracketMatchup[]>(
+    `${SLEEPER_BASE}/league/${league_id}/winners_bracket`,
+  );
+}
+
+export async function getLosersBracket(league_id: string) {
+  return fetchJson<SleeperBracketMatchup[]>(
+    `${SLEEPER_BASE}/league/${league_id}/losers_bracket`,
+  );
 }

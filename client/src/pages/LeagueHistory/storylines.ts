@@ -980,14 +980,16 @@ function computeGiantSlayer(
 ): MiniCard | null {
   if (weeklyMatchups.length === 0 || seasonStats.length === 0) return null;
 
-  // Find #1 seed per season
+  // Find #1 regular-season seed per season (not champion)
   const topSeedsBySeason = new Map<string, string>();
   for (const stat of seasonStats) {
-    if (stat.rank === 1) {
-      const existing = topSeedsBySeason.get(stat.season);
-      if (!existing || stat.totalPF > (seasonStats.find((s) => s.season === stat.season && s.managerKey === existing)?.totalPF || 0)) {
-        topSeedsBySeason.set(stat.season, stat.managerKey);
-      }
+    const seed = typeof stat.regularSeasonRank === "number" && stat.regularSeasonRank >= 1
+      ? stat.regularSeasonRank
+      : (typeof stat.rank === "number" && stat.rank >= 1 && stat.championshipWon == null ? stat.rank : undefined);
+    if (seed !== 1) continue;
+    const existing = topSeedsBySeason.get(stat.season);
+    if (!existing || stat.totalPF > (seasonStats.find((s) => s.season === stat.season && s.managerKey === existing)?.totalPF || 0)) {
+      topSeedsBySeason.set(stat.season, stat.managerKey);
     }
   }
 

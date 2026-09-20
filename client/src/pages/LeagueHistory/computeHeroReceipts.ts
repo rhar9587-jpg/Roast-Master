@@ -18,6 +18,33 @@ function logHeroReceiptSkip(label: string, reason: string) {
   console.log(`[HeroReceipts] ${label} skipped: ${reason}`);
 }
 
+/** Prefer explicit regularSeasonRank; ignore legacy sentinel / missing. */
+function regularSeasonRankOf(stat: SeasonStat): number | undefined {
+  if (typeof stat.regularSeasonRank === "number" && stat.regularSeasonRank >= 1) {
+    return stat.regularSeasonRank;
+  }
+  if (typeof stat.rank === "number" && stat.rank >= 1) {
+    // Legacy demo / older payloads: rank was used as standing only when no outcome fields exist.
+    if (stat.championshipWon != null || stat.runnerUp != null || stat.lastPlace != null || stat.finalFinish != null) {
+      return undefined;
+    }
+    return stat.rank;
+  }
+  return undefined;
+}
+
+function isKnownChampion(stat: SeasonStat): boolean {
+  return stat.championshipWon === true;
+}
+
+function isKnownRunnerUp(stat: SeasonStat): boolean {
+  return stat.runnerUp === true;
+}
+
+function isKnownLastPlace(stat: SeasonStat): boolean {
+  return stat.lastPlace === true;
+}
+
 /**
  * Generate canonical matchup key for deduplication.
  * Format: `${season}-${week}-${minKey}-${maxKey}`
@@ -217,13 +244,8 @@ function computePlayoffDrought(
 }
 
 /**
- * "Always the Bridesmaid" card - finds managers who:
- * - Have 2+ second-place (runner-up) finishes
- * - Have NEVER won a championship (rank === 1)
- * 
- * This is more targeted than the old "championship drought" which
- * counted any non-1st finish. A 2nd place finish is emotionally
- * different from a 10th place finish.
+ * "Always the Bridesmaid" — 2+ known runner-up finishes, never a known championship.
+ * Does not infer runner-up from rank === 2.
  */
 function computeBridesmaid(
   seasonStats: SeasonStat[],
@@ -234,7 +256,6 @@ function computeBridesmaid(
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
-  // Group stats by manager
   const statsByManager = new Map<string, SeasonStat[]>();
   for (const stat of seasonStats) {
     const list = statsByManager.get(stat.managerKey) || [];
@@ -242,42 +263,36 @@ function computeBridesmaid(
     statsByManager.set(stat.managerKey, list);
   }
 
-  // Find the biggest bridesmaid (most 2nd place finishes, never won)
   let best: { managerKey: string; runnerUpCount: number; seasons: string[] } | null = null;
 
   for (const [managerKey, stats] of statsByManager) {
-    // Skip anyone who's ever won a championship
-    const hasEverWon = stats.some(s => s.rank === 1);
-    if (hasEverWon) continue;
+    if (stats.some((s) => isKnownChampion(s))) continue;
 
-    // Count runner-up (2nd place) finishes
-    const runnerUps = stats.filter(s => s.rank === 2);
-    if (runnerUps.length < 2) continue; // Need at least 2 runner-up finishes
+    const runnerUps = stats.filter((s) => isKnownRunnerUp(s));
+    if (runnerUps.length < 2) continue;
 
-    // Find the best (most runner-ups, or most recent if tied)
     if (
-      !best || 
+      !best ||
       runnerUps.length > best.runnerUpCount ||
-      (runnerUps.length === best.runnerUpCount && 
-        Math.max(...runnerUps.map(s => seasonToNumber(s.season))) > 
-        Math.max(...best.seasons.map(s => seasonToNumber(s))))
+      (runnerUps.length === best.runnerUpCount &&
+        Math.max(...runnerUps.map((s) => seasonToNumber(s.season))) >
+          Math.max(...best.seasons.map((s) => seasonToNumber(s))))
     ) {
       best = {
         managerKey,
         runnerUpCount: runnerUps.length,
-        seasons: runnerUps.map(s => s.season).sort((a, b) => seasonToNumber(a) - seasonToNumber(b)),
+        seasons: runnerUps.map((s) => s.season).sort((a, b) => seasonToNumber(a) - seasonToNumber(b)),
       };
     }
   }
 
   if (!best) return null;
 
-  const manager = managers.find(m => m.key === best.managerKey);
+  const manager = managers.find((m) => m.key === best.managerKey);
   if (!manager) return null;
 
-  // Use copy variants system
   const copy = getBridesmaidCopy(leagueId, best.runnerUpCount);
-  if (!copy) return null; // Below threshold
+  if (!copy) return null;
 
   return {
     id: "bridesmaid",
@@ -295,9 +310,10 @@ function computeBridesmaid(
       { label: "Titles", value: "0" },
       { label: "Finals", value: best.seasons.join(", ") },
     ],
-    season: best.seasons.length > 1 
-      ? `${best.seasons[best.seasons.length - 1]}–${best.seasons[0]}` 
-      : best.seasons[0],
+    season:
+      best.seasons.length > 1
+        ? `${best.seasons[best.seasons.length - 1]}–${best.seasons[0]}`
+        : best.seasons[0],
   };
 }
 
@@ -310,30 +326,19 @@ function computeWoodenSpoonMerchant(
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
-  // Count last-place finishes per manager
+  // Only award when lastPlace is explicitly known — never infer from rank === leagueSize.
   const lastPlaceCounts = new Map<string, { count: number; seasons: string[] }>();
-  const leagueSizes = new Map<string, number>();
 
-  // First pass: determine league size per season
   for (const stat of seasonStats) {
-    const current = leagueSizes.get(stat.season) || 0;
-    leagueSizes.set(stat.season, current + 1);
-  }
-
-  // Second pass: count last-place finishes
-  for (const stat of seasonStats) {
-    const leagueSize = leagueSizes.get(stat.season) || 0;
-    if (stat.rank === leagueSize) {
-      const existing = lastPlaceCounts.get(stat.managerKey) || { count: 0, seasons: [] };
-      existing.count++;
-      existing.seasons.push(stat.season);
-      lastPlaceCounts.set(stat.managerKey, existing);
-    }
+    if (!isKnownLastPlace(stat)) continue;
+    const existing = lastPlaceCounts.get(stat.managerKey) || { count: 0, seasons: [] };
+    existing.count++;
+    existing.seasons.push(stat.season);
+    lastPlaceCounts.set(stat.managerKey, existing);
   }
 
   if (lastPlaceCounts.size === 0) return null;
 
-  // Find manager with most last-place finishes
   let maxCount = 0;
   let winner: { key: string; count: number; seasons: string[] } | null = null;
 
@@ -349,7 +354,6 @@ function computeWoodenSpoonMerchant(
   const manager = managers.find((m) => m.key === winner.key);
   if (!manager) return null;
 
-  // Use copy variants system
   const copy = getWoodenSpoonCopy(leagueId, maxCount);
 
   return {
@@ -364,10 +368,11 @@ function computeWoodenSpoonMerchant(
       label: maxCount === 1 ? "WOODEN SPOON" : "WOODEN SPOONS",
     },
     punchline: copy.punchline,
-    lines: [
-      { label: "Seasons", value: winner.seasons.join(", ") },
-    ],
-    season: winner.seasons.length > 1 ? `${winner.seasons[winner.seasons.length - 1]}–${winner.seasons[0]}` : winner.seasons[0],
+    lines: [{ label: "Seasons", value: winner.seasons.join(", ") }],
+    season:
+      winner.seasons.length > 1
+        ? `${winner.seasons[winner.seasons.length - 1]}–${winner.seasons[0]}`
+        : winner.seasons[0],
   };
 }
 
@@ -408,7 +413,10 @@ function computeMissedItByThatMuch(
     },
     punchline: `Scored ${Math.round(winner.totalPF).toLocaleString()} points and still didn't make playoffs.`,
     lines: [
-      { label: "Rank", value: `${winner.rank}${getOrdinalSuffix(winner.rank)}` },
+      { label: "Rank", value: (() => {
+        const r = regularSeasonRankOf(winner);
+        return r != null ? `${r}${getOrdinalSuffix(r)}` : "—";
+      })() },
       { label: "Record", value: `${winner.wins}-${winner.losses}` },
       { label: "Playoff Cutoff", value: String(winner.playoffTeams) },
     ],
@@ -542,18 +550,20 @@ function computeBiggestFallOff(
       return bYear - aYear;
     });
 
-    // Compare consecutive seasons (older to newer to find fall offs)
     for (let i = 1; i < stats.length; i++) {
-      const from = stats[i]; // Older season (better rank)
-      const to = stats[i - 1]; // Newer season (worse rank)
-      const drop = to.rank - from.rank; // Positive = dropped in rank (went from better to worse)
+      const from = stats[i]; // Older season
+      const to = stats[i - 1]; // Newer season
+      const fromRank = regularSeasonRankOf(from);
+      const toRank = regularSeasonRankOf(to);
+      if (fromRank == null || toRank == null) continue;
+      const drop = toRank - fromRank;
 
       if (drop > maxDrop || (drop === maxDrop && (!winner || to.season > winner.toSeason))) {
         maxDrop = drop;
         winner = {
           managerKey,
-          fromRank: from.rank,
-          toRank: to.rank,
+          fromRank,
+          toRank,
           fromSeason: from.season,
           toSeason: to.season,
         };
@@ -624,7 +634,10 @@ function computeAllGasNoPlayoffs(
     },
     punchline: `Scored ${Math.round(winner.totalPF).toLocaleString()} points and still missed the playoffs.`,
     lines: [
-      { label: "Rank", value: `${winner.rank}${getOrdinalSuffix(winner.rank)}` },
+      { label: "Rank", value: (() => {
+        const r = regularSeasonRankOf(winner);
+        return r != null ? `${r}${getOrdinalSuffix(r)}` : "—";
+      })() },
       { label: "Record", value: `${winner.wins}-${winner.losses}` },
       { label: "Playoff Cutoff", value: String(winner.playoffTeams) },
     ],
@@ -643,7 +656,7 @@ function getOrdinalSuffix(n: number): string {
 
 function getRankLabel(rank: number): string {
   if (rank == null || !Number.isFinite(rank) || rank < 1) return "—";
-  if (rank === 1) return "Champion";
+  if (rank === 1) return "1st seed";
   if (rank === 2) return "2nd";
   if (rank === 3) return "3rd";
   return `${rank}${getOrdinalSuffix(rank)}`;
@@ -695,10 +708,12 @@ function computePlayoffChoker(
         if (!playoffGamesSeen.has(gameKey)) {
           playoffGamesSeen.add(gameKey);
           
+          const seed = regularSeasonRankOf(stat);
+          if (seed == null) continue;
           const current = playoffLossesByManager.get(matchup.managerKey) || { 
             losses: 0, 
             season: matchup.season, 
-            rank: stat.rank,
+            rank: seed,
             countedWeeks: []
           };
           current.losses++;
@@ -833,53 +848,17 @@ function computePaperChampion(
 ): HeroReceiptCard | null {
   if (seasonStats.length === 0) return null;
 
-  // Find manager with rank 1 (best regular season) but check if they actually won
-  // If there are multiple rank 1s or if rank 1 doesn't guarantee championship,
-  // we'll look for rank 1 with highest totalPF who might have lost in playoffs
-  
-  // Group by season and find rank 1s
-  const rank1BySeason = new Map<string, SeasonStat[]>();
-  for (const stat of seasonStats) {
-    if (stat.rank === 1) {
-      const existing = rank1BySeason.get(stat.season) || [];
-      existing.push(stat);
-      rank1BySeason.set(stat.season, existing);
-    }
-  }
-
-  // Find season with multiple rank 1s (tie) or rank 1 with most totalPF who might have choked
+  // #1 regular-season seed who did not win — requires known championshipWon === false
   let best: SeasonStat | null = null;
   let bestSeason: string | null = null;
 
-  for (const [season, rank1s] of rank1BySeason) {
-    if (rank1s.length > 1) {
-      // Multiple rank 1s - pick the one with highest totalPF
-      const top = rank1s.reduce((a, b) => a.totalPF > b.totalPF ? a : b);
-      if (!best || top.totalPF > best.totalPF) {
-        best = top;
-        bestSeason = season;
-      }
-    } else if (rank1s.length === 1) {
-      // Single rank 1 - check if they had high totalPF (might have choked in playoffs)
-      const stat = rank1s[0];
-      // Look for rank 1 who didn't win (heuristic: if there's a rank 2 with similar PF, they might have lost)
-      const rank2 = seasonStats.find(s => s.season === season && s.rank === 2);
-      if (rank2 && rank2.totalPF >= stat.totalPF * 0.95) {
-        // Rank 2 was close, rank 1 might have choked
-        if (!best || stat.totalPF > best.totalPF) {
-          best = stat;
-          bestSeason = season;
-        }
-      }
-    }
-  }
-
-  // Fallback: rank 1 with highest totalPF across all seasons
-  if (!best) {
-    const allRank1s = seasonStats.filter(s => s.rank === 1);
-    if (allRank1s.length > 0) {
-      best = allRank1s.reduce((a, b) => a.totalPF > b.totalPF ? a : b);
-      bestSeason = best.season;
+  for (const stat of seasonStats) {
+    const seed = regularSeasonRankOf(stat);
+    if (seed !== 1) continue;
+    if (stat.championshipWon !== false) continue;
+    if (!best || stat.totalPF > best.totalPF) {
+      best = stat;
+      bestSeason = stat.season;
     }
   }
 
@@ -899,7 +878,7 @@ function computePaperChampion(
       value: Math.round(best.totalPF).toLocaleString(),
       label: "PTS, NO TITLE",
     },
-    punchline: `Best regular season (${getRankLabel(best.rank)} seed) but couldn't seal the deal.`,
+    punchline: `Best regular season (${getRankLabel(regularSeasonRankOf(best) ?? 1)}) but couldn't seal the deal.`,
     lines: [
       { label: "Record", value: `${best.wins}-${best.losses}` },
       { label: "Season", value: bestSeason },

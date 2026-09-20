@@ -1,8 +1,12 @@
 // server/league-history/index.ts
-import { getLeague, getRosters, getUsers, getMatchups } from "./sleeper";
+import { getLeague, getRosters, getUsers, getMatchups, getWinnersBracket, getLosersBracket } from "./sleeper";
+import type { SleeperBracketMatchup } from "./sleeper";
 import { computeSeasonWeekRange, getPlayoffStartWeek } from "./weekFilter";
 import { DEMO_LEAGUE_ID, getDemoLeagueData } from "./demoLeague";
 import { isCompletedMatchupPoints } from "../lib/domain/matchupStatus";
+import { buildTeamStatesThroughWeek } from "../lib/domain/teamStateThroughWeek";
+import { buildSeasonOutcomes } from "../lib/domain/seasonOutcome";
+import type { SeasonOutcome } from "../lib/domain/seasonOutcome";
 
 function nameForRoster(
   roster_id: number,
@@ -23,6 +27,7 @@ interface Manager {
 
 interface MatchupEntry {
   managerKey: string;
+  rosterId: number;
   points: number;
   matchup_id: number | null;
 }
@@ -439,6 +444,7 @@ export async function handleLeagueHistoryDominance(params: {
           return {
             matchup_id: m.matchup_id ?? null,
             managerKey: mk.key,
+            rosterId: m.roster_id,
             points: Number(m.points ?? 0),
           };
         })
@@ -466,6 +472,7 @@ export async function handleLeagueHistoryDominance(params: {
   const seasonStats: Array<{
     season: string;
     managerKey: string;
+    /** @deprecated Prefer regularSeasonRank — kept for older clients as regular-season rank. */
     rank: number;
     wins: number;
     losses: number;
@@ -475,6 +482,13 @@ export async function handleLeagueHistoryDominance(params: {
     playoffQualifiedInferred?: boolean;
     playoffStartWeek?: number;
     playoffWeekEnd?: number;
+    regularSeasonRank?: number;
+    playoffSeed?: number;
+    finalFinish?: number;
+    championshipWon?: boolean;
+    runnerUp?: boolean;
+    lastPlace?: boolean;
+    outcomeSource?: SeasonOutcome["source"];
   }> = [];
   const weeklyMatchups: Array<{
     season: string;
@@ -488,19 +502,68 @@ export async function handleLeagueHistoryDominance(params: {
   }> = [];
 
   for (const [season, seasonData] of seasonDataMap) {
-    const { league, rosters, rosterToManagerKey, weekMatchups, playoffStartWeek } = seasonData;
+    const { league, rosters, rosterToManagerKey, weekMatchups, playoffStartWeek, regularSeasonEnd, league_id: seasonLeagueId } =
+      seasonData;
 
-    // Get playoff_teams from league settings
     const playoffTeams = league?.settings?.playoff_teams;
-    const playoffQualifiedInferred = playoffTeams === undefined;
-    if (playoffQualifiedInferred) {
-      console.warn(`[LeagueHistory] playoff_teams missing for season ${season}; using inferred playoff qualification`);
-    }
-
-    // Get playoff week end from league settings
     const playoffWeekEnd = league?.settings?.playoff_week_end;
 
-    // Compute totalPF per manager from matchups for this season
+    // Fetch brackets — never invent playoff outcomes without them
+    let winnersBracket: SleeperBracketMatchup[] | null = null;
+    let losersBracket: SleeperBracketMatchup[] | null = null;
+    try {
+      winnersBracket = await getWinnersBracket(seasonLeagueId);
+    } catch {
+      winnersBracket = null;
+    }
+    try {
+      losersBracket = await getLosersBracket(seasonLeagueId);
+    } catch {
+      losersBracket = null;
+    }
+
+    // Rebuild regular-season standings from matchups through regularSeasonEnd only
+    const matchupsByWeek = new Map<
+      number,
+      Array<{ matchup_id: number; roster_id: number; points: unknown }>
+    >();
+    for (const weekData of weekMatchups) {
+      if (weekData.week > regularSeasonEnd) continue;
+      const rows = weekData.matchups
+        .filter((m) => m.matchup_id != null)
+        .map((m) => ({
+          matchup_id: m.matchup_id as number,
+          roster_id: m.rosterId,
+          points: m.points,
+        }));
+      if (rows.length) matchupsByWeek.set(weekData.week, rows);
+    }
+
+    const identities = rosters.map((r) => {
+      const mk = rosterToManagerKey.get(r.roster_id);
+      return {
+        rosterId: r.roster_id,
+        ownerId: r.owner_id,
+        displayName: mk?.name ?? `Roster ${r.roster_id}`,
+      };
+    });
+
+    const teamStates = buildTeamStatesThroughWeek({
+      throughWeek: regularSeasonEnd,
+      identities,
+      matchupsByWeek,
+    });
+    const teamStateByRoster = new Map(teamStates.map((t) => [t.rosterId, t]));
+
+    const regularSeasonStandings = teamStates.map((t) => ({
+      rosterId: t.rosterId,
+      wins: t.wins,
+      losses: t.losses,
+      ties: t.ties,
+      pointsFor: t.pointsFor,
+    }));
+
+    // Total PF across fetched weeks (existing behaviour for hero cards)
     const totalPFByManager = new Map<string, number>();
     for (const weekData of weekMatchups) {
       for (const m of weekData.matchups) {
@@ -509,87 +572,103 @@ export async function handleLeagueHistoryDominance(params: {
       }
     }
 
-    // Build seasonStats from rosters
+    const outcomes = buildSeasonOutcomes({
+      season,
+      rosterIds: rosters.map((r) => r.roster_id),
+      regularSeasonStandings,
+      playoffTeams,
+      winnersBracket,
+      losersBracket,
+      leagueSize: rosters.length,
+    });
+    const outcomeByRoster = new Map(outcomes.map((o) => [o.rosterId, o]));
+
+    const playoffQualifiedInferred =
+      playoffTeams === undefined && !(Array.isArray(winnersBracket) && winnersBracket.length > 0);
+    if (playoffQualifiedInferred) {
+      console.warn(
+        `[LeagueHistory] playoff qualification unknown for season ${season} (no playoff_teams, no winners bracket)`,
+      );
+    }
+
     for (const r of rosters) {
       const managerKeyData = rosterToManagerKey.get(r.roster_id);
       if (!managerKeyData) continue;
 
-      const rank = r.settings?.rank ?? 0;
-      const wins = r.settings?.wins ?? 0;
-      const losses = r.settings?.losses ?? 0;
+      const outcome = outcomeByRoster.get(r.roster_id);
+      const state = teamStateByRoster.get(r.roster_id);
+      const wins = state?.wins ?? 0;
+      const losses = state?.losses ?? 0;
       const totalPF = totalPFByManager.get(managerKeyData.key) || 0;
 
-      // Determine playoff qualification
-      let playoffQualified = false;
-      if (playoffTeams !== undefined) {
-        playoffQualified = rank <= playoffTeams;
-      } else {
-        // Heuristic: top 50% or top 6, whichever is smaller
-        const leagueSize = rosters.length;
-        const top50Percent = Math.ceil(leagueSize / 2);
-        const top6 = 6;
-        playoffQualified = rank <= Math.min(top50Percent, top6);
-      }
+      // Never coerce missing rank to 0. Legacy `rank` mirrors regularSeasonRank when known; else -1.
+      const regularSeasonRank = outcome?.regularSeasonRank;
+      const legacyRank = regularSeasonRank ?? -1;
 
       seasonStats.push({
         season,
         managerKey: managerKeyData.key,
-        rank,
+        rank: legacyRank,
         wins,
         losses,
         totalPF,
-        playoffQualified,
+        playoffQualified: outcome?.playoffQualified === true,
         playoffTeams: playoffTeams ?? 0,
         playoffQualifiedInferred,
         playoffStartWeek,
         playoffWeekEnd,
+        ...(regularSeasonRank != null ? { regularSeasonRank } : {}),
+        ...(outcome?.playoffSeed != null ? { playoffSeed: outcome.playoffSeed } : {}),
+        ...(outcome?.finalFinish != null ? { finalFinish: outcome.finalFinish } : {}),
+        ...(outcome?.championshipWon != null ? { championshipWon: outcome.championshipWon } : {}),
+        ...(outcome?.runnerUp != null ? { runnerUp: outcome.runnerUp } : {}),
+        ...(outcome?.lastPlace != null ? { lastPlace: outcome.lastPlace } : {}),
+        ...(outcome?.source ? { outcomeSource: outcome.source } : {}),
       });
     }
 
     // Build weeklyMatchups by pairing matchups by matchup_id for this season
     for (const weekData of weekMatchups) {
-      // Group by matchup_id
-        const matchupGroups = new Map<number | null, typeof weekData.matchups>();
-        for (const m of weekData.matchups) {
-          const group = matchupGroups.get(m.matchup_id) || [];
-          group.push(m);
-          matchupGroups.set(m.matchup_id, group);
-        }
+      const matchupGroups = new Map<number | null, typeof weekData.matchups>();
+      for (const m of weekData.matchups) {
+        const group = matchupGroups.get(m.matchup_id) || [];
+        group.push(m);
+        matchupGroups.set(m.matchup_id, group);
+      }
 
-        // Create matchup pairs (completed games with a winner only — ties omitted from W/L feed)
-        for (const [, entries] of matchupGroups) {
-          if (entries.length !== 2) continue;
-          const [a, b] = entries;
-          if (!isCompletedMatchupPair(a.points, b.points)) continue;
-          if (a.points === b.points) continue; // completed tie: exclude from doppelganger W–L
+      for (const [, entries] of matchupGroups) {
+        if (entries.length !== 2) continue;
+        const [a, b] = entries;
+        if (!isCompletedMatchupPair(a.points, b.points)) continue;
+        if (a.points === b.points) continue;
 
-          const margin = Math.abs(a.points - b.points);
-          const aWon = a.points > b.points;
+        const margin = Math.abs(a.points - b.points);
+        const aWon = a.points > b.points;
 
-          weeklyMatchups.push({
-            season,
-            week: weekData.week,
-            managerKey: a.managerKey,
-            opponentKey: b.managerKey,
-            points: a.points,
-            opponentPoints: b.points,
-            margin: aWon ? margin : -margin,
-            won: aWon,
-          });
+        weeklyMatchups.push({
+          season,
+          week: weekData.week,
+          managerKey: a.managerKey,
+          opponentKey: b.managerKey,
+          points: a.points,
+          opponentPoints: b.points,
+          margin: aWon ? margin : -margin,
+          won: aWon,
+        });
 
-          weeklyMatchups.push({
-            season,
-            week: weekData.week,
-            managerKey: b.managerKey,
-            opponentKey: a.managerKey,
-            points: b.points,
-            opponentPoints: a.points,
-            margin: aWon ? -margin : margin,
-            won: !aWon,
-          });
-        }
+        weeklyMatchups.push({
+          season,
+          week: weekData.week,
+          managerKey: b.managerKey,
+          opponentKey: a.managerKey,
+          points: b.points,
+          opponentPoints: a.points,
+          margin: aWon ? -margin : margin,
+          won: !aWon,
+        });
       }
     }
+  }
 
   const managers = Array.from(managerByKey.values());
   const grid = buildDominanceGrid(managers, allWeekMatchups);

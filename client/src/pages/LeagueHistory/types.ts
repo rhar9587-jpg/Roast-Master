@@ -89,6 +89,10 @@ export type GrandTotal = { w: number; l: number; t: number; games: number; score
 export type SeasonStat = {
   season: string;
   managerKey: string;
+  /**
+   * Legacy field: mirrors regularSeasonRank when known; may be -1 when unknown.
+   * Prefer regularSeasonRank / championshipWon / runnerUp / lastPlace / finalFinish.
+   */
   rank: number;
   wins: number;
   losses: number;
@@ -98,6 +102,21 @@ export type SeasonStat = {
   playoffQualifiedInferred?: boolean;
   playoffStartWeek?: number;
   playoffWeekEnd?: number;
+  /** Explicit regular-season standing (1 = best). Distinct from finalFinish. */
+  regularSeasonRank?: number;
+  playoffSeed?: number;
+  finalFinish?: number;
+  championshipWon?: boolean;
+  runnerUp?: boolean;
+  lastPlace?: boolean;
+  outcomeSource?: {
+    regularSeasonRank?: string;
+    playoffQualified?: string;
+    finalFinish?: string;
+    championship?: string;
+    lastPlace?: string;
+    confidence?: string;
+  };
 };
 
 export type WeeklyMatchupDetail = {
