@@ -12,6 +12,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type { Card, RoastResponse } from "@shared/schema";
+import { weeklyPublicShareUrl } from "@shared/weeklyShareUrl";
 import { track } from "@/lib/track";
 import { getYoursLine, SHARE_FOOTER } from "@/lib/brand";
 import { WrappedCard } from "@/components/WrappedCard";
@@ -135,7 +136,7 @@ function parseWeeklySignals(data: RoastResponse) {
   return { medianScore, closestMargin, blowoutMargin, closestGame };
 }
 
-function buildWeeklyRoastClipboardText(data: RoastResponse): string {
+function buildWeeklyRoastClipboardText(data: RoastResponse, shareUrl?: string): string {
   const lines: string[] = ["🔥 Fantasy Roast 🔥", ""];
 
   lines.push(data.headline.trim());
@@ -150,8 +151,18 @@ function buildWeeklyRoastClipboardText(data: RoastResponse): string {
     lines.push(`🔥 Rivalry: ${data.matchup.you.username} vs ${data.matchup.opponent.username}`);
   }
 
+  if (shareUrl) {
+    lines.push("", shareUrl);
+  }
   lines.push("", getYoursLine());
   return lines.join("\n");
+}
+
+/** Public share URL for a weekly roast payload (canonical social link). */
+export function buildWeeklyPublicShareUrlFromRoast(data: RoastResponse): string {
+  const leagueId = String(data.league?.league_id || "").trim();
+  const week = Number(data.week) || 1;
+  return weeklyPublicShareUrl(leagueId, week);
 }
 
 function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremium: boolean }) {
@@ -187,7 +198,11 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
   const goNext = () =>
     setCardIndex((i) => (slideCount > 0 ? (i + 1) % slideCount : 0));
 
-  const roastClipboardText = useMemo(() => buildWeeklyRoastClipboardText(data), [data]);
+  const publicShareUrl = useMemo(() => buildWeeklyPublicShareUrlFromRoast(data), [data]);
+  const roastClipboardText = useMemo(
+    () => buildWeeklyRoastClipboardText(data, publicShareUrl),
+    [data, publicShareUrl],
+  );
 
   const shareWeek = async () => {
     setShareBusy(true);
@@ -197,11 +212,15 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
         league_id: data.league.league_id,
       });
       const shareText = roastClipboardText;
+      const title = data.league?.name
+        ? `${data.league.name} — Week ${data.week} Recap`
+        : `Week ${data.week} Roast`;
       if (typeof navigator !== "undefined" && "share" in navigator) {
         try {
           await navigator.share({
-            title: `Week ${data.week} Roast`,
+            title,
             text: shareText,
+            url: publicShareUrl,
           });
           return;
         } catch {

@@ -7,9 +7,9 @@ export function serveStatic(app: Express) {
   // Static assets
   app.use(express.static(distPath));
 
-  // IMPORTANT: never serve index.html for API routes
+  // IMPORTANT: never serve index.html for API or public share routes
   app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api")) return next();
+    if (req.path.startsWith("/api") || req.path.startsWith("/share")) return next();
     res.sendFile(path.join(distPath, "index.html"));
   });
 }

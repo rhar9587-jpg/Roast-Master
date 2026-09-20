@@ -10,6 +10,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/track";
+import { weeklyPublicShareUrl } from "@shared/weeklyShareUrl";
 import { markFreeSendUsed } from "./premium";
 import { setCommissionerEmail } from "./utils";
 import { weeklyHeadline, type WeeklyEmailMode } from "./weeklyContext";
@@ -98,6 +99,7 @@ export function WeeklyCommissionerEmailSection({
 
   const trimmedId = leagueId.trim();
   const headline = weeklyHeadline(leagueWeek, weeklyCommissionerEmailMode);
+  const publicRecapUrl = weeklyPublicShareUrl(trimmedId, leagueWeek);
 
   function openPreview() {
     track("weekly_email_preview", {
@@ -113,6 +115,34 @@ export function WeeklyCommissionerEmailSection({
     if (weeklyCommissionerSignoff.trim()) params.set("signoff", weeklyCommissionerSignoff.trim());
     const url = `/api/leagues/${encodeURIComponent(trimmedId)}/weekly-email/preview?${params.toString()}`;
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function copyRecapLink() {
+    try {
+      track("weekly_recap_link_copied", {
+        league_id: trimmedId,
+        week: leagueWeek,
+      });
+      const shareTitle = `Week ${leagueWeek} Recap`;
+      const shareText = `${headline} — Fantasy Roast`;
+      if (typeof navigator !== "undefined" && "share" in navigator) {
+        try {
+          await navigator.share({
+            title: shareTitle,
+            text: shareText,
+            url: publicRecapUrl,
+          });
+          toast({ title: "Shared", description: "Public recap link ready for the group chat." });
+          return;
+        } catch {
+          /* fall through to clipboard */
+        }
+      }
+      await navigator.clipboard.writeText(publicRecapUrl);
+      toast({ title: "Recap link copied", description: publicRecapUrl });
+    } catch {
+      toast({ title: "Could not copy link", variant: "destructive" });
+    }
   }
 
   async function sendEmail() {
@@ -218,6 +248,14 @@ export function WeeklyCommissionerEmailSection({
           }}
         >
           Preview
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!trimmedId || leagueWeek < 1}
+          onClick={() => void copyRecapLink()}
+        >
+          Copy recap link
         </Button>
         <Button
           size="sm"
