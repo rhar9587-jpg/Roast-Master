@@ -208,7 +208,12 @@ function computeFraudWatch(
       subtitle: `${wName} won at ${formatPts(best.winnerPoints)}; league median was ${formatPts(medianScore)}.`,
       stat: "Won light",
       tagline: `${lName} couldn't cash in anyway.`,
-      meta: { kind: best.kind, medianScore },
+      meta: {
+        kind: best.kind,
+        medianScore,
+        manager_name: wName,
+        score: best.winnerPoints,
+      },
     };
   }
   return {
@@ -217,7 +222,12 @@ function computeFraudWatch(
     subtitle: `${lName} put up ${formatPts(best.loserPoints)} and still lost to ${wName}.`,
     stat: "Robbed",
     tagline: "Good week, bad result.",
-    meta: { kind: best.kind, medianScore },
+    meta: {
+      kind: best.kind,
+      medianScore,
+      manager_name: lName,
+      score: best.loserPoints,
+    },
   };
 }
 
@@ -262,7 +272,11 @@ async function computeWorstCoaching(
     subtitle: worst.sitStartMiss ?? `${team} left ${formatPts(worst.benchPoints)} pts on the bench.`,
     stat: `${formatPts(worst.benchPoints)} bench pts`,
     tagline: "Bench points, not a full coaching grade.",
-    meta: { roster_id: worst.roster_id, benchPoints: worst.benchPoints },
+    meta: {
+      roster_id: worst.roster_id,
+      team_name: team,
+      benchPoints: worst.benchPoints,
+    },
   };
 }
 

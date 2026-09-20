@@ -41,14 +41,42 @@ export function clampPosterText(text: string | undefined | null, max: number): s
 }
 
 /**
- * Format a manager/team name for a large poster headline.
- * Long names shrink via CSS; this only hard-truncates extreme length.
+ * Format a manager/team name for poster layouts.
+ * Prefers wrapping via CSS; only hard-truncates extreme length.
+ * Returns display string + suggested size tier for callers.
  */
 export function formatPosterName(name: string | undefined | null, max = 28): string {
   const t = (name ?? "").trim().replace(/\s+/g, " ");
   if (!t) return "UNKNOWN";
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** Size tier for supporting names so they never rival the hero score. */
+export function posterNameSizeTier(name: string): "short" | "medium" | "long" {
+  const len = name.trim().length;
+  if (len <= 14) return "short";
+  if (len <= 22) return "medium";
+  return "long";
+}
+
+/** Extract a clean numeric hero string from mixed stat labels like "34.2 bench pts". */
+export function extractHeroNumber(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const m = String(raw).match(/[+-]?\d+(?:\.\d+)?/);
+  return m ? m[0] : null;
+}
+
+/** True when footer text is just brand/URL and should not duplicate the mark. */
+export function isBrandFooterText(text: string | undefined | null): boolean {
+  if (!text) return true;
+  const t = text.trim().toLowerCase().replace(/^https?:\/\//, "");
+  return (
+    t === "fantasy roast" ||
+    t === "fantasyroast.net" ||
+    t === "www.fantasyroast.net" ||
+    t === "made with fantasy roast"
+  );
 }
 
 export function formatScore(n: number, digits = 1): string {

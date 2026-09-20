@@ -128,30 +128,51 @@ export function mapEngineCardToVisual(
 
   if (type.includes("fraud")) {
     const kind = metaStr(meta, "kind");
-    const headline =
+    const manager = metaStr(meta, "manager_name");
+    const score = metaNum(meta, "score");
+    const verdict =
       kind === "lucky_win"
         ? "WON LIGHT"
         : kind === "strong_loss"
           ? "ROBBED"
-          : shortPunchline(card.title, "FRAUD WATCH", 24).toUpperCase();
+          : shortPunchline(card.stat || card.title, "FRAUD", 18).toUpperCase();
     return {
       kicker: "FRAUD WATCH",
-      title: headline,
-      subtitle: shortPunchline(card.subtitle, "Results don't match the vibes.", 100),
-      bigValue: undefined,
-      tagline: shortPunchline(card.tagline, "Receipts attached."),
+      title: manager ? manager.toUpperCase() : verdict,
+      subtitle: shortPunchline(
+        manager
+          ? kind === "lucky_win"
+            ? `Won below the league median.`
+            : `Lost despite a strong week.`
+          : card.subtitle,
+        "Results don't match the vibes.",
+        56,
+      ),
+      bigValue: score != null ? `${safeNum(score).toFixed(1)}` : verdict,
+      statLabel: score != null ? verdict : "Verdict",
+      tagline: shortPunchline(card.tagline, "Receipts attached.", 48),
       accent: "orange",
     };
   }
 
   if (type.includes("worst_coach") || type.includes("bench") || type.includes("coaching")) {
+    const team = metaStr(meta, "team_name");
+    const bench = metaNum(meta, "benchPoints");
+    const pts =
+      bench != null
+        ? `${safeNum(bench).toFixed(1)}`
+        : (card.stat ? String(card.stat).replace(/[^\d.-]/g, "") : "") || "0";
     return {
       kicker: "BENCH CRIMES",
-      title: shortPunchline(card.title, "LEFT ON BENCH", 48).toUpperCase(),
-      subtitle: shortPunchline(card.subtitle, `Points left on the bench in Week ${week}.`, 110),
-      bigValue: card.stat,
-      statLabel: "Bench",
-      tagline: shortPunchline(card.tagline, "Start your studs."),
+      title: (team || shortPunchline(card.title, "BENCH", 28)).toUpperCase(),
+      subtitle: shortPunchline(
+        `Points left on the bench · Week ${week}`,
+        `Points left on the bench in Week ${week}.`,
+        56,
+      ),
+      bigValue: pts,
+      statLabel: "Points left on bench",
+      tagline: shortPunchline(card.tagline, "Roster management was optional.", 52),
       accent: "blue",
     };
   }

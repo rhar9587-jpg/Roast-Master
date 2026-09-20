@@ -102,4 +102,53 @@ describe("mapEngineCardToVisual", () => {
     expect(visual.bigValue).toBe("62.1");
     expect(resolveWrappedVariant(visual)).toBe("hero");
   });
+
+  it("maps Fraud Watch to manager + score + short verdict label", () => {
+    const visual = mapEngineCardToVisual(
+      {
+        type: "fraud_watch",
+        title: "Fraud Watch",
+        subtitle: "Commissioner Chaos won at 78.2; league median was 112.4.",
+        stat: "Won light",
+        tagline: "Couldn't cash in anyway.",
+        meta: {
+          kind: "lucky_win",
+          manager_name: "Commissioner Chaos",
+          score: 78.2,
+          medianScore: 112.4,
+        },
+      },
+      8,
+      { stats },
+    );
+    expect(visual.kicker).toBe("FRAUD WATCH");
+    expect(visual.title).toBe("COMMISSIONER CHAOS");
+    expect(visual.bigValue).toBe("78.2");
+    expect(visual.statLabel).toBe("WON LIGHT");
+    expect((visual.subtitle ?? "").length).toBeLessThanOrEqual(56);
+    expect(resolveWrappedVariant(visual)).toBe("hero");
+  });
+
+  it("maps Bench Crimes to manager + numeric hero", () => {
+    const visual = mapEngineCardToVisual(
+      {
+        type: "worst_coaching",
+        title: "Most Points Left on Bench",
+        subtitle: "FourthAndTwentyDynasty left 84.2 pts on the bench.",
+        stat: "84.2 bench pts",
+        tagline: "Start your studs.",
+        meta: {
+          team_name: "FourthAndTwentyDynasty",
+          benchPoints: 84.2,
+        },
+      },
+      8,
+      { stats },
+    );
+    expect(visual.kicker).toBe("BENCH CRIMES");
+    expect(visual.title).toBe("FOURTHANDTWENTYDYNASTY");
+    expect(visual.bigValue).toBe("84.2");
+    expect(visual.statLabel?.toLowerCase()).toContain("bench");
+    expect(resolveWrappedVariant(visual)).toBe("hero");
+  });
 });

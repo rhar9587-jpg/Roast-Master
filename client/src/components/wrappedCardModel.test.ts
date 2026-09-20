@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   clampPosterText,
   computeMatchupMargin,
+  extractHeroNumber,
   formatMargin,
   formatPosterName,
   formatScore,
   getAccentTheme,
+  isBrandFooterText,
+  posterNameSizeTier,
   resolveWrappedVariant,
   SHARE_CARD_ASPECT,
   SHARE_CARD_HEIGHT,
@@ -45,11 +48,30 @@ describe("poster formatting", () => {
     expect(clampPosterText(undefined, 40)).toBe("");
   });
 
-  it("formats long team names without blowing up", () => {
-    const long = "The Extremely Long Fantasy Manager Name That Never Ends";
-    const formatted = formatPosterName(long, 28);
-    expect(formatted.length).toBeLessThanOrEqual(28);
-    expect(formatted.endsWith("…")).toBe(true);
+  it("handles realistic difficult team names", () => {
+    for (const name of [
+      "Rebuild Forever",
+      "Commissioner Chaos",
+      "The Unnecessarily Long Fantasy Team Name",
+      "FourthAndTwentyDynasty",
+    ]) {
+      const formatted = formatPosterName(name, 36);
+      expect(formatted.length).toBeGreaterThan(0);
+      expect(formatted.length).toBeLessThanOrEqual(36);
+      expect(posterNameSizeTier(formatted)).toMatch(/short|medium|long/);
+    }
+  });
+
+  it("extracts clean hero numbers from mixed stat labels", () => {
+    expect(extractHeroNumber("34.2 bench pts")).toBe("34.2");
+    expect(extractHeroNumber("+105.3")).toBe("+105.3");
+    expect(extractHeroNumber("Won light")).toBeNull();
+  });
+
+  it("detects redundant brand footer text", () => {
+    expect(isBrandFooterText("fantasyroast.net")).toBe(true);
+    expect(isBrandFooterText("Fantasy Roast")).toBe(true);
+    expect(isBrandFooterText("My League Name")).toBe(false);
   });
 
   it("formats Week 8 Murder Scene margin from structured scores", () => {

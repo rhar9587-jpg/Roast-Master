@@ -6,7 +6,7 @@ import { WrappedCard } from "@/components/WrappedCard";
  */
 export default function ShareCardPreviewPage() {
   return (
-    <div className="min-h-screen bg-zinc-950 px-4 py-8 text-white">
+    <div className="min-h-screen bg-zinc-950 px-4 py-8 text-white sm:px-6">
       <div className="mx-auto max-w-6xl space-y-8">
         <header className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">
@@ -14,7 +14,7 @@ export default function ShareCardPreviewPage() {
           </p>
           <h1 className="text-3xl font-black tracking-tight">Week 8 visual QA</h1>
           <p className="text-sm text-zinc-400">
-            Real WrappedCard renders — Top Dog, Murder Scene, Jail, Fraud, Matchup.
+            Polish pass — hierarchy, footer, Murder Scene, long names, mobile.
           </p>
         </header>
 
@@ -60,8 +60,10 @@ export default function ShareCardPreviewPage() {
 
           <WrappedCard
             kicker="FRAUD WATCH"
-            title="WON LIGHT"
-            subtitle="Won at 78.2; league median was 112.4."
+            title="COMMISSIONER CHAOS"
+            subtitle="Won below the league median."
+            bigValue="78.2"
+            statLabel="WON LIGHT"
             tagline="Receipts attached."
             accent="orange"
             isPremium
@@ -86,12 +88,23 @@ export default function ShareCardPreviewPage() {
 
           <WrappedCard
             kicker="BENCH CRIMES"
-            title="MOST POINTS LEFT ON BENCH"
-            subtitle="Left 34.2 pts on the bench in Week 8."
-            bigValue="34.2 bench pts"
-            statLabel="Bench"
-            tagline="Start your studs."
+            title="FOURTHANDTWENTYDYNASTY"
+            subtitle="Points left on the bench · Week 8"
+            bigValue="84.2"
+            statLabel="Points left on bench"
+            tagline="Roster management was optional."
             accent="blue"
+            isPremium
+          />
+
+          <WrappedCard
+            kicker="TOP DOG"
+            title="THE UNNECESSARILY LONG FANTASY TEAM NAME"
+            subtitle="Highest score of Week 8"
+            bigValue="167.4"
+            statLabel="Points"
+            tagline="Still readable."
+            accent="green"
             isPremium
           />
         </div>

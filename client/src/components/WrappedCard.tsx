@@ -3,13 +3,16 @@ import { motion } from "framer-motion";
 import { Download, Share2 } from "lucide-react";
 import { exportCardPng, dataUrlToFile, downloadDataUrl } from "@/lib/exportCardImage";
 import { WatermarkOverlay } from "@/components/ui/WatermarkOverlay";
-import { BRAND_NAME, PRICE_LABEL, SHARE_FOOTER, SITE_HOST } from "@/lib/brand";
+import { BRAND_NAME, PRICE_LABEL, SITE_HOST } from "@/lib/brand";
 import {
   clampPosterText,
+  extractHeroNumber,
   formatMargin,
   formatPosterName,
   formatScore,
   getAccentTheme,
+  isBrandFooterText,
+  posterNameSizeTier,
   resolveWrappedVariant,
   SHARE_CARD_ASPECT,
   SHARE_CARD_HEIGHT,
@@ -49,11 +52,11 @@ function PosterShell({
   return (
     <div
       className="relative h-full w-full overflow-hidden text-white"
+      data-share-artwork="true"
       style={{
         background: `radial-gradient(120% 80% at 10% 0%, ${theme.bgAlt} 0%, ${theme.bg} 55%, #050505 100%)`,
       }}
     >
-      {/* Accent shapes — export-safe, no animation */}
       <div
         aria-hidden
         className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full blur-3xl"
@@ -74,10 +77,10 @@ function PosterShell({
       {ghost ? (
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-4 top-24 select-none font-black leading-none opacity-[0.07]"
+          className="pointer-events-none absolute -right-2 top-28 select-none font-black leading-none opacity-[0.06]"
           style={{
-            fontFamily: "var(--font-display), Impact, sans-serif",
-            fontSize: "11rem",
+            fontFamily: "var(--font-sans), system-ui, sans-serif",
+            fontSize: "10rem",
             letterSpacing: "-0.06em",
           }}
         >
@@ -89,17 +92,52 @@ function PosterShell({
   );
 }
 
-function BrandFooter({ left }: { left?: string }) {
+/** Subtle brand line: wordmark + URL only — never duplicate. */
+function BrandFooter({ context }: { context?: string }) {
+  const showContext = Boolean(context && !isBrandFooterText(context));
   return (
-    <div className="mt-auto flex items-end justify-between gap-3 pt-6">
-      <div className="min-w-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
-        <span className="block truncate">{left || BRAND_NAME}</span>
-      </div>
-      <div className="shrink-0 text-right text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
-        <span className="block">{SHARE_FOOTER || SITE_HOST}</span>
+    <div className="mt-auto pt-5">
+      {showContext ? (
+        <p className="mb-2 truncate text-[10px] font-medium uppercase tracking-[0.14em] text-white/30">
+          {context}
+        </p>
+      ) : null}
+      <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
+        <span className="text-[10px] font-semibold tracking-[0.12em] text-white/40">
+          {BRAND_NAME}
+        </span>
+        <span className="text-[10px] font-medium tracking-[0.08em] text-white/35">
+          {SITE_HOST}
+        </span>
       </div>
     </div>
   );
+}
+
+function supportingNameStyle(name: string): React.CSSProperties {
+  const tier = posterNameSizeTier(name);
+  if (tier === "short") {
+    return {
+      fontFamily: "var(--font-sans), system-ui, sans-serif",
+      fontSize: "1.35rem",
+      lineHeight: 1.15,
+      letterSpacing: "0.02em",
+    };
+  }
+  if (tier === "medium") {
+    return {
+      fontFamily: "var(--font-sans), system-ui, sans-serif",
+      fontSize: "1.15rem",
+      lineHeight: 1.2,
+      letterSpacing: "0.01em",
+    };
+  }
+  return {
+    fontFamily: "var(--font-sans), system-ui, sans-serif",
+    fontSize: "1rem",
+    lineHeight: 1.25,
+    letterSpacing: "0",
+  };
 }
 
 function HeroPoster({
@@ -124,15 +162,19 @@ function HeroPoster({
   accent: WrappedAccent;
 }) {
   const theme = getAccentTheme(accent);
-  const name = formatPosterName(title, 32);
-  const support = clampPosterText(subtitle, 72);
-  const punch = clampPosterText(tagline, 64);
-  const value = clampPosterText(bigValue, 18);
+  const name = formatPosterName(title, 36);
+  const support = clampPosterText(subtitle, 64);
+  const punch = clampPosterText(tagline, 56);
+  const rawValue = clampPosterText(bigValue, 18);
+  const numericHero = extractHeroNumber(rawValue);
+  // Prefer clean number as the focal point when the stat is mixed ("34.2 bench pts").
+  const value = numericHero ?? rawValue;
   const ghost = value?.replace(/[^\d.+-]/g, "").slice(0, 6) || undefined;
+  const valueLen = value.length;
 
   return (
     <PosterShell accent={accent} ghost={ghost}>
-      <div className="relative z-[1] flex h-full flex-col px-8 pb-7 pt-8">
+      <div className="relative z-[1] flex h-full flex-col px-7 pb-6 pt-7 sm:px-8 sm:pb-7 sm:pt-8">
         {kicker ? (
           <p
             className="text-[11px] font-bold uppercase tracking-[0.28em]"
@@ -142,56 +184,55 @@ function HeroPoster({
           </p>
         ) : null}
 
-        <h3
-          className="mt-5 break-words font-black uppercase leading-[0.88] tracking-tight"
-          style={{
-            fontFamily: "var(--font-display), Impact, sans-serif",
-            fontSize: name.length > 18 ? "2.35rem" : "3.1rem",
-          }}
+        {/* Supporting name — never rivals the score */}
+        <p
+          className="mt-5 max-w-full break-words font-bold uppercase text-white/85"
+          style={supportingNameStyle(name)}
         >
           {name}
-        </h3>
+        </p>
 
-        <div className="mt-8">
-          {statLabel ? (
-            <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/40">
-              {statLabel}
-            </p>
-          ) : null}
+        <div className="mt-6">
           <p
-            className="mt-1 font-black tabular-nums leading-none tracking-tight"
+            className="font-black tabular-nums leading-none tracking-tight"
             style={{
+              fontFamily: "var(--font-sans), system-ui, sans-serif",
               color: theme.highlight,
-              fontSize: "5.5rem",
-              letterSpacing: "-0.04em",
+              fontSize: valueLen > 8 ? "3.75rem" : valueLen > 5 ? "5rem" : "6rem",
+              letterSpacing: "-0.045em",
             }}
           >
             {value}
           </p>
+          {statLabel ? (
+            <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.24em] text-white/45">
+              {statLabel}
+            </p>
+          ) : null}
         </div>
 
         {support ? (
-          <p className="mt-6 max-w-[18rem] text-[15px] font-medium leading-snug text-white/65">
+          <p className="mt-5 max-w-[17rem] text-[14px] font-medium leading-snug text-white/55">
             {support}
           </p>
         ) : null}
 
         {extraLine ? (
-          <p className="mt-3 text-xs font-medium text-white/45">
-            {clampPosterText(extraLine, 80)}
+          <p className="mt-2 text-xs font-medium text-white/40">
+            {clampPosterText(extraLine, 72)}
           </p>
         ) : null}
 
         {punch ? (
           <p
-            className="mt-8 text-lg font-semibold italic leading-snug text-white/80"
+            className="mt-6 text-[1.05rem] font-medium italic leading-snug text-white/75"
             style={{ fontFamily: "var(--font-sans), system-ui, sans-serif" }}
           >
             “{punch}”
           </p>
         ) : null}
 
-        <BrandFooter left={footer} />
+        <BrandFooter context={footer} />
       </div>
     </PosterShell>
   );
@@ -216,15 +257,15 @@ function MatchupPoster({
 }) {
   const theme = getAccentTheme(accent);
   const headline = formatPosterName(title, 24);
-  const teamA = formatPosterName(matchupData.teamA, 22);
-  const teamB = formatPosterName(matchupData.teamB, 22);
+  const teamA = formatPosterName(matchupData.teamA, 24);
+  const teamB = formatPosterName(matchupData.teamB, 24);
   const margin = bigValue?.trim() || formatMargin(matchupData);
-  const punch = clampPosterText(tagline, 56);
+  const punch = clampPosterText(tagline, 52);
   const ghost = margin.replace(/[^\d.+-]/g, "").slice(0, 6);
 
   return (
     <PosterShell accent={accent} ghost={ghost}>
-      <div className="relative z-[1] flex h-full flex-col px-7 pb-7 pt-8">
+      <div className="relative z-[1] flex h-full flex-col px-7 pb-6 pt-7 sm:px-8 sm:pb-7 sm:pt-8">
         {kicker ? (
           <p
             className="text-[11px] font-bold uppercase tracking-[0.28em]"
@@ -235,10 +276,10 @@ function MatchupPoster({
         ) : null}
 
         <h3
-          className="mt-4 whitespace-pre-line font-black uppercase leading-[0.85] tracking-tight"
+          className="mt-4 whitespace-pre-line font-black uppercase leading-[0.88] tracking-tight text-white"
           style={{
             fontFamily: "var(--font-display), Impact, sans-serif",
-            fontSize: headline.length > 14 ? "2.6rem" : "3.4rem",
+            fontSize: headline.length > 14 ? "2.45rem" : "3.1rem",
           }}
         >
           {headline.includes(" ") && headline.length <= 16
@@ -246,55 +287,69 @@ function MatchupPoster({
             : headline}
         </h3>
 
-        <div className="mt-8 space-y-5">
-          <div className="flex items-end justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-semibold uppercase tracking-wide text-white/70">
-                {teamA}
-              </p>
-              <p
-                className="mt-1 font-black tabular-nums leading-none"
-                style={{ fontSize: "2.75rem", color: theme.highlight }}
-              >
-                {formatScore(matchupData.scoreA)}
-              </p>
-            </div>
-            <p className="pb-2 text-[11px] font-black uppercase tracking-[0.3em] text-white/35">
-              vs
-            </p>
-            <div className="min-w-0 flex-1 text-right">
-              <p className="truncate text-[13px] font-semibold uppercase tracking-wide text-white/70">
-                {teamB}
-              </p>
-              <p className="mt-1 font-black tabular-nums leading-none text-white/85" style={{ fontSize: "2.75rem" }}>
-                {formatScore(matchupData.scoreB)}
-              </p>
-            </div>
-          </div>
-
-          <div
-            className="rounded-2xl px-4 py-3"
-            style={{ background: "rgba(255,255,255,0.06)", border: `1px solid ${theme.glow}33` }}
+        {/* Margin is the primary hero */}
+        <div className="mt-7">
+          <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/40">
+            Margin
+          </p>
+          <p
+            className="mt-1 font-black tabular-nums leading-none tracking-tight"
+            style={{
+              fontFamily: "var(--font-sans), system-ui, sans-serif",
+              color: theme.highlight,
+              fontSize: "5.75rem",
+              letterSpacing: "-0.05em",
+            }}
           >
-            <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/40">
-              Margin
+            {margin}
+          </p>
+        </div>
+
+        {/* Matchup scores — supporting, not competing */}
+        <div className="mt-7 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-white/10 pt-5">
+          <div className="min-w-0">
+            <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-white/55">
+              {teamA}
             </p>
             <p
-              className="mt-1 font-black tabular-nums leading-none tracking-tight"
-              style={{ color: theme.highlight, fontSize: "4.25rem", letterSpacing: "-0.04em" }}
+              className="mt-1 font-bold tabular-nums leading-none text-white/90"
+              style={{
+                fontFamily: "var(--font-sans), system-ui, sans-serif",
+                fontSize: "1.65rem",
+              }}
             >
-              {margin}
+              {formatScore(matchupData.scoreA)}
+            </p>
+          </div>
+          <p className="px-1 text-[10px] font-black uppercase tracking-[0.28em] text-white/30">
+            vs
+          </p>
+          <div className="min-w-0 text-right">
+            <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-white/55">
+              {teamB}
+            </p>
+            <p
+              className="mt-1 font-bold tabular-nums leading-none text-white/70"
+              style={{
+                fontFamily: "var(--font-sans), system-ui, sans-serif",
+                fontSize: "1.65rem",
+              }}
+            >
+              {formatScore(matchupData.scoreB)}
             </p>
           </div>
         </div>
 
         {punch ? (
-          <p className="mt-7 text-lg font-semibold italic leading-snug text-white/80">
+          <p
+            className="mt-6 text-[1.05rem] font-medium italic leading-snug text-white/75"
+            style={{ fontFamily: "var(--font-sans), system-ui, sans-serif" }}
+          >
             “{punch}”
           </p>
         ) : null}
 
-        <BrandFooter left={footer} />
+        <BrandFooter context={footer} />
       </div>
     </PosterShell>
   );
@@ -318,13 +373,14 @@ function VerdictPoster({
   bigValue?: string;
 }) {
   const theme = getAccentTheme(accent);
-  const headline = formatPosterName(title, 36);
-  const support = clampPosterText(subtitle, 90);
-  const punch = clampPosterText(tagline, 70);
+  const headline = formatPosterName(title, 28);
+  const support = clampPosterText(subtitle, 64);
+  const punch = clampPosterText(tagline, 52);
+  const hero = clampPosterText(bigValue, 16);
 
   return (
-    <PosterShell accent={accent}>
-      <div className="relative z-[1] flex h-full flex-col px-8 pb-7 pt-8">
+    <PosterShell accent={accent} ghost={hero?.replace(/[^\dA-Z+-]/gi, "").slice(0, 8)}>
+      <div className="relative z-[1] flex h-full flex-col px-7 pb-6 pt-7 sm:px-8 sm:pb-7 sm:pt-8">
         {kicker ? (
           <p
             className="text-[11px] font-bold uppercase tracking-[0.28em]"
@@ -335,34 +391,41 @@ function VerdictPoster({
         ) : null}
 
         <h3
-          className="mt-8 break-words font-black uppercase leading-[0.9] tracking-tight"
+          className="mt-6 break-words font-black uppercase leading-[0.9] tracking-tight"
           style={{
             fontFamily: "var(--font-display), Impact, sans-serif",
-            fontSize: headline.length > 22 ? "2.2rem" : "3rem",
+            fontSize: headline.length > 18 ? "2.4rem" : "3.2rem",
+            color: theme.highlight,
           }}
         >
           {headline}
         </h3>
 
-        {bigValue && bigValue !== "—" && bigValue !== "-" ? (
-          <p className="mt-6 text-4xl font-black tabular-nums" style={{ color: theme.highlight }}>
-            {clampPosterText(bigValue, 24)}
+        {hero && hero !== "—" && hero !== "-" ? (
+          <p
+            className="mt-5 text-3xl font-black tabular-nums text-white/90"
+            style={{ fontFamily: "var(--font-sans), system-ui, sans-serif" }}
+          >
+            {hero}
           </p>
         ) : null}
 
         {support ? (
-          <p className="mt-6 max-w-[20rem] text-base font-medium leading-snug text-white/65">
+          <p className="mt-5 max-w-[17rem] text-[14px] font-medium leading-snug text-white/55">
             {support}
           </p>
         ) : null}
 
         {punch ? (
-          <p className="mt-8 text-lg font-semibold italic leading-snug text-white/80">
+          <p
+            className="mt-6 text-[1.05rem] font-medium italic leading-snug text-white/75"
+            style={{ fontFamily: "var(--font-sans), system-ui, sans-serif" }}
+          >
             “{punch}”
           </p>
         ) : null}
 
-        <BrandFooter left={footer} />
+        <BrandFooter context={footer} />
       </div>
     </PosterShell>
   );
@@ -383,8 +446,9 @@ export function WrappedCard({
   matchupData,
   isPremium = false,
 }: WrappedCardProps) {
-  const ref = useRef<HTMLDivElement>(null);
+  const artworkRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const theme = getAccentTheme(accent);
 
   const variant = resolveWrappedVariant({ isMatchup, matchupData, bigValue });
 
@@ -397,13 +461,14 @@ export function WrappedCard({
   }, [title]);
 
   const downloadPng = async () => {
-    if (!ref.current) return;
+    if (!artworkRef.current) return;
     setIsExporting(true);
     try {
       const { dataUrl } = await exportCardPng({
-        element: ref.current,
+        element: artworkRef.current,
         filename,
         isPremium,
+        backgroundColor: theme.bg,
       });
       downloadDataUrl(dataUrl, filename);
     } finally {
@@ -412,7 +477,7 @@ export function WrappedCard({
   };
 
   const smartShare = async () => {
-    if (!ref.current) return;
+    if (!artworkRef.current) return;
     setIsExporting(true);
 
     try {
@@ -420,10 +485,11 @@ export function WrappedCard({
       const shareUrl = window.location.href;
 
       const { dataUrl } = await exportCardPng({
-        element: ref.current,
+        element: artworkRef.current,
         filename,
         caption: shareText,
         isPremium,
+        backgroundColor: theme.bg,
       });
 
       const file = await dataUrlToFile(dataUrl, filename);
@@ -451,25 +517,26 @@ export function WrappedCard({
   };
 
   return (
-    <div className="mx-auto w-full max-w-[540px]">
+    <div className="mx-auto w-full max-w-[min(100%,540px)] px-1 sm:px-0">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="overflow-hidden rounded-2xl shadow-2xl"
+        className="overflow-hidden rounded-2xl shadow-xl ring-1 ring-white/5"
       >
-        {/* Fixed share canvas — export target */}
+        {/* Export target: artwork only — buttons live outside this ref */}
         <div
-          ref={ref}
+          ref={artworkRef}
           className="relative mx-auto w-full overflow-hidden"
           style={{
             width: "100%",
             maxWidth: SHARE_CARD_WIDTH,
             aspectRatio: SHARE_CARD_ASPECT,
-            minHeight: SHARE_CARD_HEIGHT * 0.55,
+            minHeight: SHARE_CARD_HEIGHT * 0.5,
           }}
           data-variant={variant}
           data-accent={accent}
+          data-export-root="share-card"
         >
           <WatermarkOverlay show={!isPremium} theme="dark" />
 
@@ -508,14 +575,14 @@ export function WrappedCard({
           )}
         </div>
 
-        {/* Share controls (not exported) */}
-        <div className="flex flex-col gap-2 bg-white p-4">
-          <div className="flex justify-end gap-2">
+        {/* Share controls — never inside export ref */}
+        <div className="flex flex-col gap-2 border-t border-border/60 bg-white px-3 py-3 sm:px-4 sm:py-4">
+          <div className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
               onClick={() => void downloadPng()}
               disabled={isExporting}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 font-semibold text-primary-foreground disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60 sm:px-4"
             >
               <Download className="h-4 w-4" />
               {isExporting ? "Preparing…" : "Download PNG"}
@@ -526,7 +593,7 @@ export function WrappedCard({
                 type="button"
                 onClick={() => void smartShare()}
                 disabled={isExporting}
-                className="inline-flex items-center gap-2 rounded-xl bg-muted px-4 py-2 font-semibold text-foreground disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm font-semibold text-foreground disabled:opacity-60 sm:px-4"
               >
                 <Share2 className="h-4 w-4" />
                 Post the Roast

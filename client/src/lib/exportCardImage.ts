@@ -5,6 +5,8 @@ export type ExportOptions = {
   filename: string;
   caption?: string;
   isPremium: boolean;
+  /** Solid fallback so gradients still composite cleanly in html-to-image. */
+  backgroundColor?: string;
 };
 
 export type ExportResult = {
@@ -17,12 +19,14 @@ export type ExportResult = {
  * Export a card element to PNG.
  * Watermark is now rendered directly in the UI via WatermarkOverlay component,
  * so it's captured automatically in the PNG export.
+ * Pass only the artwork container — never the Download/Share chrome.
  */
 export async function exportCardPng(options: ExportOptions): Promise<ExportResult> {
   const {
     element,
     filename,
     caption = "",
+    backgroundColor,
   } = options;
 
   // Wait for fonts to settle
@@ -32,7 +36,7 @@ export async function exportCardPng(options: ExportOptions): Promise<ExportResul
   const dataUrl = await toPng(element, {
     pixelRatio: 2,
     cacheBust: true,
-    backgroundColor: undefined, // preserve transparency or existing bg
+    backgroundColor: backgroundColor ?? "#050505",
   });
 
   return {
