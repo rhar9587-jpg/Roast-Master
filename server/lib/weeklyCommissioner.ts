@@ -10,6 +10,12 @@ import { generatePowerRankings } from "./powerRankings";
 import { generateWeeklyEmail, generateWeeklyEmailPlainText, type WeeklyEmailData, type WeeklyEmailRankingRow } from "./weeklyEmail";
 import { getLeagueHistoryNarratives } from "./weeklyEmailNarratives";
 import { buildWeeklyRoastNarrative } from "./weeklyRoastEngine";
+import {
+  buildTeamStatesThroughWeek,
+  weekKeyedScoresFromState,
+  type RosterIdentity,
+  type RawWeekMatchup,
+} from "./domain/teamStateThroughWeek";
 
 // Sleeper API returns roster settings with fpts/fpts_decimal; type is extended here for the adapter
 interface RosterWithPoints {
@@ -74,12 +80,6 @@ function average(values: number[]): number {
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
-function pointsFromRoster(r: RosterWithPoints): number {
-  const base = r?.settings?.fpts ?? 0;
-  const dec = r?.settings?.fpts_decimal ?? 0;
-  return base + dec / 100;
-}
-
 function rosterDisplayName(
   rosterId: number,
   rosters: RosterWithPoints[],
@@ -91,7 +91,51 @@ function rosterDisplayName(
 }
 
 /**
+ * Pure builder: reconstruct power-ranking inputs from matchups through `throughWeek`.
+ * Ignores roster.settings wins/losses/PA — historical Week N uses Week N standings only.
+ * Exported for tests (including the 8–2 settings vs 2–1 through Week 3 regression).
+ */
+export function buildTeamsFromMatchupData(params: {
+  leagueName: string;
+  throughWeek: number;
+  rosters: Array<{ roster_id: number; owner_id: string | null; settings?: RosterWithPoints["settings"] }>;
+  users: Array<{ user_id: string; username?: string; display_name?: string }>;
+  matchupsByWeek: Map<number, RawWeekMatchup[]> | Record<number, RawWeekMatchup[]>;
+}): { leagueName: string; teams: PowerRankingsTeamInput[] } {
+  const userById = new Map(params.users.map((u) => [u.user_id, u]));
+  const identities: RosterIdentity[] = params.rosters.map((r) => ({
+    rosterId: r.roster_id,
+    ownerId: r.owner_id,
+    displayName: rosterDisplayName(r.roster_id, params.rosters as RosterWithPoints[], userById),
+  }));
+
+  const states = buildTeamStatesThroughWeek({
+    throughWeek: params.throughWeek,
+    identities,
+    matchupsByWeek: params.matchupsByWeek,
+  });
+
+  const teams: PowerRankingsTeamInput[] = states.map((s) => ({
+    teamId: s.teamId,
+    teamName: s.displayName,
+    ownerKey: s.ownerKey,
+    wins: s.wins,
+    losses: s.losses,
+    ties: s.ties,
+    pointsFor: s.pointsFor,
+    pointsAgainst: s.pointsAgainst,
+    weeklyScores: weekKeyedScoresFromState(s),
+  }));
+
+  return {
+    leagueName: params.leagueName || "Fantasy League",
+    teams,
+  };
+}
+
+/**
  * Build teams array for power rankings from Sleeper league data (rosters + matchups 1..week).
+ * Standings are reconstructed from matchups through `throughWeek` — not current roster.settings.
  */
 export async function buildTeamsFromSleeper(
   leagueId: string,
@@ -104,49 +148,34 @@ export async function buildTeamsFromSleeper(
   ]);
 
   const rosters = rostersRaw as RosterWithPoints[];
-  const userById = new Map(users.map((u) => [u.user_id, u]));
-
-  // Weekly scores per roster: roster_id -> number[] (weeks 1..throughWeek)
-  const weeklyScoresByRoster = new Map<number, number[]>();
+  const matchupsByWeek = new Map<number, RawWeekMatchup[]>();
 
   for (let w = 1; w <= throughWeek; w++) {
     let matchups;
     try {
       matchups = await getMatchups(leagueId, w);
     } catch {
+      // Missing week: omit entirely (do not insert placeholders that shift week identity).
       continue;
     }
     if (!matchups?.length) continue;
-    for (const m of matchups) {
-      const pts = safeNum(m.points);
-      const list = weeklyScoresByRoster.get(m.roster_id) ?? [];
-      list.push(pts);
-      weeklyScoresByRoster.set(m.roster_id, list);
-    }
+    matchupsByWeek.set(
+      w,
+      matchups.map((m) => ({
+        matchup_id: m.matchup_id,
+        roster_id: m.roster_id,
+        points: m.points,
+      })),
+    );
   }
 
-  const teams: PowerRankingsTeamInput[] = rosters.map((r) => {
-    const weeklyScores = weeklyScoresByRoster.get(r.roster_id) ?? [];
-    const wins = r.settings?.wins ?? 0;
-    const losses = r.settings?.losses ?? 0;
-    const pointsFor =
-      weeklyScores.length > 0
-        ? weeklyScores.reduce((a, b) => a + b, 0)
-        : pointsFromRoster(r);
-    return {
-      teamId: String(r.roster_id),
-      teamName: rosterDisplayName(r.roster_id, rosters, userById),
-      wins,
-      losses,
-      pointsFor,
-      weeklyScores,
-    };
-  });
-
-  return {
+  return buildTeamsFromMatchupData({
     leagueName: league.name || "Fantasy League",
-    teams,
-  };
+    throughWeek,
+    rosters,
+    users,
+    matchupsByWeek,
+  });
 }
 
 /**
@@ -476,7 +505,9 @@ function buildRoastCalloutsFromNarrative(
 
 function computeLeagueAverages(teams: PowerRankingsTeamInput[], weekMatchups: SleeperMatchup[]): WeeklyEmailData["leagueAverages"] {
   const weekScores = weekMatchups.map((m) => safeNum(m.points)).filter((x) => x > 0);
-  const seasonScores = teams.flatMap((t) => t.weeklyScores || []).filter((x) => x > 0);
+  const seasonScores = teams
+    .flatMap((t) => (t.weeklyScores || []).map((w) => w.score))
+    .filter((x) => x > 0);
   if (!weekScores.length && !seasonScores.length) return undefined;
   return {
     weekAverage: average(weekScores),
@@ -486,17 +517,25 @@ function computeLeagueAverages(teams: PowerRankingsTeamInput[], weekMatchups: Sl
 
 function computeSeasonRaces(
   teams: PowerRankingsTeamInput[],
-  rosters: RosterWithPoints[],
 ): WeeklyEmailData["seasonRaces"] {
   if (!teams.length) return undefined;
-  const withGames = teams.map((t) => ({ ...t, games: Math.max(1, t.weeklyScores?.length || t.wins + t.losses || 1) }));
+  const withGames = teams.map((t) => ({
+    ...t,
+    games: Math.max(
+      1,
+      t.weeklyScores?.length || (t.wins + t.losses + (t.ties ?? 0)) || 1,
+    ),
+  }));
   const topScoring = [...withGames].sort((a, b) => b.pointsFor - a.pointsFor)[0];
   const lowestScoring = [...withGames].sort((a, b) => a.pointsFor - b.pointsFor)[0];
-  const pointsAgainstRows = withGames.map((t) => {
-    const r = rosters.find((x) => String(x.roster_id) === t.teamId);
-    const totalPA = safeNum(r?.settings?.fpts_against) + safeNum(r?.settings?.fpts_against_decimal) / 100;
-    return { teamName: t.teamName, totalPA, games: t.games };
-  }).filter((x) => x.totalPA > 0);
+  // PA comes from reconstructed through-week state on the team input — not roster.settings.
+  const pointsAgainstRows = withGames
+    .map((t) => ({
+      teamName: t.teamName,
+      totalPA: t.pointsAgainst ?? 0,
+      games: t.games,
+    }))
+    .filter((x) => x.totalPA > 0);
   const luckiest = [...pointsAgainstRows].sort((a, b) => a.totalPA - b.totalPA)[0];
   const unluckiest = [...pointsAgainstRows].sort((a, b) => b.totalPA - a.totalPA)[0];
   return {
@@ -661,7 +700,6 @@ export async function getWeeklyCommissionerEmail(
   }
   const biggestMovers = computeBiggestMovers(rankings, previousRankings);
   const weekMatchups = buildWeekMatchups(weekMatchupsRaw, rosterNameByTeamId);
-  const rosters = (await getRosters(leagueId)) as RosterWithPoints[];
   let playersById: Record<string, SleeperPlayerLite> | null = null;
   try {
     playersById = await getNflPlayers();
@@ -670,7 +708,7 @@ export async function getWeeklyCommissionerEmail(
   }
   const weeklySuperlatives = includeV2 ? computeWeeklySuperlatives(weekMatchupsRaw, rosterNameByTeamId, playersById) : undefined;
   const leagueAverages = includeV2 ? computeLeagueAverages(teams, weekMatchupsRaw) : undefined;
-  const seasonRaces = includeV2 ? computeSeasonRaces(teams, rosters) : undefined;
+  const seasonRaces = includeV2 ? computeSeasonRaces(teams) : undefined;
   let positionLeaders: WeeklyEmailData["positionLeaders"] | undefined;
   if (includeV2) {
     try {

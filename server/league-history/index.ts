@@ -2,6 +2,7 @@
 import { getLeague, getRosters, getUsers, getMatchups } from "./sleeper";
 import { computeSeasonWeekRange, getPlayoffStartWeek } from "./weekFilter";
 import { DEMO_LEAGUE_ID, getDemoLeagueData } from "./demoLeague";
+import { isCompletedMatchupPoints } from "../lib/domain/matchupStatus";
 
 function nameForRoster(
   roster_id: number,
@@ -70,9 +71,9 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-/** Unplayed Sleeper shells are 0–0; do not count them as games or W/L. */
+/** Unplayed Sleeper shells are 0–0; do not count them as games or W/L. Shared domain heuristic. */
 function isCompletedMatchupPair(aPoints: number, bPoints: number): boolean {
-  return aPoints > 0 || bPoints > 0;
+  return isCompletedMatchupPoints(aPoints, bPoints);
 }
 
 /**
