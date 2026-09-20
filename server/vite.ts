@@ -33,6 +33,10 @@ export async function setupVite(server: Server, app: Express) {
 
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
+    // Public share + API routes are handled by Express handlers registered earlier.
+    if (url.startsWith("/api") || url.startsWith("/share")) {
+      return next();
+    }
 
     try {
       const clientTemplate = path.resolve(

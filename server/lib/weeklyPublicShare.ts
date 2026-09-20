@@ -13,6 +13,7 @@ import {
   weeklyPublicShareOgImageUrl,
   weeklyPublicShareUrl,
 } from "@shared/weeklyShareUrl";
+import { getWeeklyShareOgFallbackPngBytes } from "../assets/weeklyShareOgFallbackPng";
 import { getNflWeekContext, resolveLeagueWeekFinality } from "../league-history/nflState";
 import {
   DEMO_LEAGUE_ID,
@@ -21,6 +22,10 @@ import {
 import { DEMO_LEAGUE_NAME } from "../league-history/demo/canonicalDemoFixture";
 import { fetchJson, type SleeperLeague, type SleeperMatchup, type SleeperRoster, type SleeperUser } from "../league-history/sleeper";
 import { buildWeeklyRoastNarrative } from "./weeklyRoastEngine";
+
+/** Official OG image size for weekly share cards. */
+export const WEEKLY_SHARE_OG_WIDTH = 1200;
+export const WEEKLY_SHARE_OG_HEIGHT = 630;
 
 export type WeeklyPublicShareBeat = {
   title: string;
@@ -302,6 +307,8 @@ export function buildWeeklySharePageHtml(
   <meta property="og:title" content="${escapeHtml(title)}" />
   <meta property="og:description" content="${escapeHtml(description)}" />
   <meta property="og:image" content="${escapeHtml(imageUrl)}" />
+  <meta property="og:image:secure_url" content="${escapeHtml(imageUrl)}" />
+  <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:url" content="${escapeHtml(pageUrl)}" />
@@ -436,9 +443,76 @@ export function buildWeeklyShareOgSvg(data: WeeklyPublicShareData): string {
 export function renderWeeklyShareOgPng(data: WeeklyPublicShareData): Buffer {
   const svg = buildWeeklyShareOgSvg(data);
   const resvg = new Resvg(svg, {
-    fitTo: { mode: "width", value: 1200 },
+    fitTo: { mode: "width", value: WEEKLY_SHARE_OG_WIDTH },
   });
-  return Buffer.from(resvg.render().asPng());
+  const png = Buffer.from(resvg.render().asPng());
+  assertPngSignature(png);
+  return png;
+}
+
+/** Static branded 1200×630 PNG — no native deps, always available in the bundle. */
+export function getFallbackWeeklyShareOgPng(): Buffer {
+  const png = getWeeklyShareOgFallbackPngBytes();
+  assertPngSignature(png);
+  return png;
+}
+
+/**
+ * Always returns a valid PNG buffer.
+ * Prefers dynamic league recap art; on any failure serves the branded fallback.
+ */
+export function renderWeeklyShareOgPngSafe(
+  data: WeeklyPublicShareData | null | undefined,
+  options?: { forceFallback?: boolean },
+): { png: Buffer; usedFallback: boolean } {
+  if (options?.forceFallback || !data) {
+    return { png: getFallbackWeeklyShareOgPng(), usedFallback: true };
+  }
+  try {
+    return { png: renderWeeklyShareOgPng(data), usedFallback: false };
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        event: "weekly_share_og_png_fallback",
+        leagueId: data.leagueId,
+        week: data.week,
+        err: String(err),
+      }),
+    );
+    return { png: getFallbackWeeklyShareOgPng(), usedFallback: true };
+  }
+}
+
+/** Read PNG IHDR width/height (no deps). */
+export function readPngDimensions(png: Buffer): { width: number; height: number } {
+  if (!Buffer.isBuffer(png) || png.length < 24 || !isPngBuffer(png)) {
+    throw new Error("Not a PNG buffer");
+  }
+  return {
+    width: png.readUInt32BE(16),
+    height: png.readUInt32BE(20),
+  };
+}
+
+export function isPngBuffer(buf: Buffer): boolean {
+  return (
+    Buffer.isBuffer(buf) &&
+    buf.length >= 8 &&
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47 &&
+    buf[4] === 0x0d &&
+    buf[5] === 0x0a &&
+    buf[6] === 0x1a &&
+    buf[7] === 0x0a
+  );
+}
+
+function assertPngSignature(png: Buffer): void {
+  if (!isPngBuffer(png)) {
+    throw new Error("Renderer produced non-PNG output");
+  }
 }
 
 /** Cache completed weeks longer; keep live/incomplete weeks shorter. */
@@ -447,4 +521,29 @@ export function weeklyShareCacheControl(weekIsFinal: boolean): string {
     return "public, max-age=300, s-maxage=1800, stale-while-revalidate=86400";
   }
   return "public, max-age=60, s-maxage=120, stale-while-revalidate=600";
+}
+
+/**
+ * Build the OG PNG response payload for a share URL.
+ * Never throws for crawler-facing output — always returns image bytes.
+ */
+export async function buildWeeklyShareOgPngResponse(
+  leagueId: string,
+  week: number,
+): Promise<{ png: Buffer; weekIsFinal: boolean; usedFallback: boolean }> {
+  try {
+    const data = await loadWeeklyPublicShare(leagueId, week);
+    const rendered = renderWeeklyShareOgPngSafe(data);
+    return {
+      png: rendered.png,
+      weekIsFinal: data.weekIsFinal,
+      usedFallback: rendered.usedFallback,
+    };
+  } catch {
+    return {
+      png: getFallbackWeeklyShareOgPng(),
+      weekIsFinal: true,
+      usedFallback: true,
+    };
+  }
 }

@@ -61,9 +61,9 @@ import { generateWeeklyEmail } from "./lib/weeklyEmail";
 import { getWeeklyPreviewEmail, generateWeeklyPreviewEmail } from "./lib/weeklyPreview";
 import {
   buildWeeklyShareErrorHtml,
+  buildWeeklyShareOgPngResponse,
   buildWeeklySharePageHtml,
   loadWeeklyPublicShare,
-  renderWeeklyShareOgPng,
   WeeklyPublicShareError,
   weeklyShareCacheControl,
 } from "./lib/weeklyPublicShare";
@@ -1072,6 +1072,20 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true });
   });
 
+  // OG image MUST be registered before the HTML share page so `/week/:week/og.png`
+  // is never ambiguous with static/SPA fallbacks. Always returns image/png bytes.
+  app.get("/share/league/:leagueId/week/:week/og.png", async (req: Request, res: Response) => {
+    const leagueId = String(req.params.leagueId || "").trim();
+    const week = Number(req.params.week);
+    const { png, weekIsFinal } = await buildWeeklyShareOgPngResponse(leagueId, week);
+    res.status(200);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Content-Length", String(png.length));
+    res.setHeader("Cache-Control", weeklyShareCacheControl(weekIsFinal));
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.send(png);
+  });
+
   // Public weekly social-share page (SSR HTML + OG tags). No auth, no notes/emails.
   app.get("/share/league/:leagueId/week/:week", async (req: Request, res: Response) => {
     const leagueId = String(req.params.leagueId || "").trim();
@@ -1090,23 +1104,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=60");
       return res.status(shareErr.status).send(buildWeeklyShareErrorHtml(shareErr.message, SITE_URL, shareErr.status));
-    }
-  });
-
-  // OG preview image for weekly share pages (1200×630 PNG).
-  app.get("/share/league/:leagueId/week/:week/og.png", async (req: Request, res: Response) => {
-    const leagueId = String(req.params.leagueId || "").trim();
-    const week = Number(req.params.week);
-    try {
-      const data = await loadWeeklyPublicShare(leagueId, week);
-      const png = renderWeeklyShareOgPng(data);
-      res.setHeader("Content-Type", "image/png");
-      res.setHeader("Cache-Control", weeklyShareCacheControl(data.weekIsFinal));
-      return res.status(200).send(png);
-    } catch (err: any) {
-      const status = err instanceof WeeklyPublicShareError ? err.status : 502;
-      res.setHeader("Cache-Control", "public, max-age=60");
-      return res.status(status).type("text/plain").send("OG image unavailable");
     }
   });
 

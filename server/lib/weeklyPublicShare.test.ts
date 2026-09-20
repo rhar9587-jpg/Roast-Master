@@ -10,10 +10,17 @@ import {
   buildShareOgDescription,
   buildShareOgTitle,
   buildWeeklyShareErrorHtml,
+  buildWeeklyShareOgPngResponse,
   buildWeeklyShareOgSvg,
   buildWeeklySharePageHtml,
+  getFallbackWeeklyShareOgPng,
+  isPngBuffer,
   loadWeeklyPublicShare,
+  readPngDimensions,
   renderWeeklyShareOgPng,
+  renderWeeklyShareOgPngSafe,
+  WEEKLY_SHARE_OG_HEIGHT,
+  WEEKLY_SHARE_OG_WIDTH,
   WeeklyPublicShareError,
   type WeeklyPublicShareData,
 } from "./weeklyPublicShare";
@@ -50,6 +57,23 @@ describe("weeklyPublicShareUrl helpers", () => {
 });
 
 describe("weekly share SSR HTML + OG metadata", () => {
+  it("share page includes absolute HTTPS og:image", () => {
+    const html = buildWeeklySharePageHtml(sample, SITE_URL);
+    const match = html.match(/property="og:image" content="([^"]+)"/);
+    expect(match?.[1]).toMatch(/^https:\/\//);
+    expect(match?.[1]).toBe(
+      `${SITE_URL}/share/league/1389437091309432832/week/1/og.png`,
+    );
+  });
+
+  it("og:image:type is image/png", () => {
+    const html = buildWeeklySharePageHtml(sample, SITE_URL);
+    expect(html).toContain('property="og:image:type" content="image/png"');
+    expect(html).toContain('property="og:image:width" content="1200"');
+    expect(html).toContain('property="og:image:height" content="630"');
+    expect(html).toContain('property="og:image:secure_url"');
+  });
+
   it("valid weekly share HTML includes required OG/Twitter tags without client JS", () => {
     const html = buildWeeklySharePageHtml(sample, SITE_URL);
     expect(html).toContain("<!DOCTYPE html>");
@@ -64,7 +88,7 @@ describe("weekly share SSR HTML + OG metadata", () => {
     expect(html).toContain('name="twitter:title"');
     expect(html).toContain('name="twitter:description"');
     expect(html).toContain('name="twitter:image"');
-    // No client bundle required for crawlers
+    // Metadata is in initial HTML — no client bundle required for crawlers
     expect(html).not.toMatch(/<script[^>]+src=/i);
   });
 
@@ -83,15 +107,6 @@ describe("weekly share SSR HTML + OG metadata", () => {
     const html = buildWeeklySharePageHtml(sample, SITE_URL);
     expect(html).toContain('property="og:description"');
     expect(html).toContain(description.slice(0, 24));
-  });
-
-  it("og:image is an absolute HTTPS URL", () => {
-    const html = buildWeeklySharePageHtml(sample, SITE_URL);
-    const match = html.match(/property="og:image" content="([^"]+)"/);
-    expect(match?.[1]).toMatch(/^https:\/\//);
-    expect(match?.[1]).toBe(
-      `${SITE_URL}/share/league/1389437091309432832/week/1/og.png`,
-    );
   });
 
   it("og:url is the canonical public share URL", () => {
@@ -121,6 +136,58 @@ describe("weekly share SSR HTML + OG metadata", () => {
   });
 });
 
+describe("OG image endpoint payload", () => {
+  it("OG image endpoint returns PNG bytes with valid signature and 1200x630", async () => {
+    const { png, usedFallback } = await buildWeeklyShareOgPngResponse(
+      DEMO_LEAGUE_ID,
+      DEMO_ICONIC_WEEK,
+    );
+    expect(usedFallback).toBe(false);
+    expect(isPngBuffer(png)).toBe(true);
+    expect(png.subarray(0, 8).toString("binary")).toBe("\x89PNG\r\n\x1a\n");
+    const dims = readPngDimensions(png);
+    expect(dims).toEqual({
+      width: WEEKLY_SHARE_OG_WIDTH,
+      height: WEEKLY_SHARE_OG_HEIGHT,
+    });
+    // Must not be HTML/text
+    expect(png.toString("utf8", 0, 64).toLowerCase()).not.toContain("<!doctype");
+    expect(png.toString("utf8", 0, 64).toLowerCase()).not.toContain("<html");
+  });
+
+  it("forced image-generation failure returns fallback PNG", () => {
+    const { png, usedFallback } = renderWeeklyShareOgPngSafe(sample, {
+      forceFallback: true,
+    });
+    expect(usedFallback).toBe(true);
+    expect(isPngBuffer(png)).toBe(true);
+    expect(readPngDimensions(png)).toEqual({
+      width: WEEKLY_SHARE_OG_WIDTH,
+      height: WEEKLY_SHARE_OG_HEIGHT,
+    });
+    expect(png.equals(getFallbackWeeklyShareOgPng())).toBe(true);
+  });
+
+  it("data-load failure still returns fallback PNG (never text/HTML)", async () => {
+    const { png, usedFallback } = await buildWeeklyShareOgPngResponse(
+      DEMO_LEAGUE_ID,
+      0, // invalid week → load throws → fallback
+    );
+    expect(usedFallback).toBe(true);
+    expect(isPngBuffer(png)).toBe(true);
+    expect(readPngDimensions(png).width).toBe(1200);
+    expect(png.toString("utf8", 0, 32)).not.toMatch(/OG image unavailable/i);
+  });
+
+  it("/share/.../og.png path is distinct from HTML share page path", () => {
+    const page = weeklyPublicSharePath(DEMO_LEAGUE_ID, 8);
+    const image = weeklyPublicShareOgImageUrl(DEMO_LEAGUE_ID, 8).replace(SITE_URL, "");
+    expect(image).toBe(`${page}/og.png`);
+    expect(image.startsWith("/share/")).toBe(true);
+    expect(image.endsWith("/og.png")).toBe(true);
+  });
+});
+
 describe("weekly share data loading (demo)", () => {
   it("demo route data loads and renders HTML", async () => {
     const data = await loadWeeklyPublicShare(DEMO_LEAGUE_ID, DEMO_ICONIC_WEEK);
@@ -131,6 +198,7 @@ describe("weekly share data loading (demo)", () => {
     expect(html).toContain(DEMO_LEAGUE_NAME);
     expect(html).toContain(`Week ${DEMO_ICONIC_WEEK}`);
     expect(html).toContain("og:image");
+    expect(html).toContain('property="og:image:type" content="image/png"');
   });
 
   it("rejects invalid week with WeeklyPublicShareError", async () => {
@@ -151,7 +219,7 @@ describe("weekly share data loading (demo)", () => {
     expect(svg).toContain(DEMO_LEAGUE_NAME);
     const png = renderWeeklyShareOgPng(data);
     expect(Buffer.isBuffer(png)).toBe(true);
-    expect(png.subarray(0, 8).toString("binary")).toBe("\x89PNG\r\n\x1a\n");
-    expect(png.length).toBeGreaterThan(1000);
+    expect(isPngBuffer(png)).toBe(true);
+    expect(readPngDimensions(png)).toEqual({ width: 1200, height: 630 });
   });
 });
