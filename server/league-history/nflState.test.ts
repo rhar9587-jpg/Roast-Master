@@ -3,8 +3,15 @@ import {
   nflWeekContextFromState,
   resolveFinalThroughWeek,
   isLeagueWeekFinal,
+  resolveLeagueWeekFinality,
 } from "./nflState";
-import { buildTeamsFromMatchupData } from "../lib/weeklyCommissioner";
+import { buildTeamsFromMatchupData, buildIntroSummary } from "../lib/weeklyCommissioner";
+import {
+  matchupFinalityTruth,
+  pickLargestMarginWinner,
+  pickStoleOneAndGotRobbed,
+} from "../lib/domain/matchupOutcomes";
+import type { PowerRankingRow } from "../lib/powerRankings";
 
 describe("nflWeekContextFromState", () => {
   it("treats display_week as preview and previous week as latest final", () => {
@@ -52,6 +59,84 @@ describe("isLeagueWeekFinal", () => {
   it("uses latestFinalWeek for the current season", () => {
     expect(isLeagueWeekFinal(4, "2026", nfl)).toBe(true);
     expect(isLeagueWeekFinal(5, "2026", nfl)).toBe(false);
+  });
+});
+
+describe("resolveLeagueWeekFinality", () => {
+  const livePartial = [
+    { matchup_id: 1, roster_id: 1, points: 48.5 },
+    { matchup_id: 1, roster_id: 2, points: 32.0 },
+  ];
+  const historicalCompleted = [
+    { matchup_id: 1, roster_id: 1, points: 120.5 },
+    { matchup_id: 1, roster_id: 2, points: 99.0 },
+  ];
+
+  it("returns false when NFL state is unavailable (never invent current-season W/L)", () => {
+    expect(resolveLeagueWeekFinality(5, "2026", null)).toBe(false);
+    expect(resolveLeagueWeekFinality(5, "2026", undefined)).toBe(false);
+  });
+
+  it("keeps historical past seasons final when NFL context is present", () => {
+    const nfl = { season: "2026", latestFinalWeek: 4 };
+    expect(resolveLeagueWeekFinality(12, "2024", nfl)).toBe(true);
+  });
+
+  it("Wrapped/Autopsy: unavailable NFL + live partial scores do not assign winners", () => {
+    // Same path wrapped/autopsy use: resolveLeagueWeekFinality → classifier consumers
+    const weekIsFinal = resolveLeagueWeekFinality(5, "2026", null);
+    expect(weekIsFinal).toBe(false);
+
+    const truth = matchupFinalityTruth(livePartial[0]!, livePartial[1]!, { weekIsFinal });
+    expect(truth.hasWinner).toBe(false);
+    expect(truth.hasNoFinalResult).toBe(true);
+
+    // Autopsy blowout / wrapped W-L both key off completed winners
+    expect(pickLargestMarginWinner(livePartial, { weekIsFinal })).toBeNull();
+    expect(pickStoleOneAndGotRobbed(livePartial, { weekIsFinal })).toBeNull();
+  });
+
+  it("historical completed season behaviour remains intact with NFL context", () => {
+    const nfl = { season: "2026", latestFinalWeek: 4 };
+    const weekIsFinal = resolveLeagueWeekFinality(8, "2024", nfl);
+    expect(weekIsFinal).toBe(true);
+
+    const truth = matchupFinalityTruth(
+      historicalCompleted[0]!,
+      historicalCompleted[1]!,
+      { weekIsFinal },
+    );
+    expect(truth).toMatchObject({
+      hasWinner: true,
+      isTie: false,
+      hasNoFinalResult: false,
+      winnerRosterId: 1,
+    });
+    expect(pickLargestMarginWinner(historicalCompleted, { weekIsFinal })?.winnerRosterId).toBe(1);
+  });
+});
+
+describe("buildIntroSummary finality wording", () => {
+  const rankings = [
+    {
+      teamId: "1",
+      teamName: "Alpha",
+      rank: 1,
+      previousRank: 1,
+      powerScore: 90,
+      expectedWins: 3,
+      luckDelta: 0,
+      commentary: "Solid.",
+    },
+  ] as PowerRankingRow[];
+
+  it("says the week is in the books when final", () => {
+    expect(buildIntroSummary(4, rankings, true)).toMatch(/^Week 4 is in the books\./);
+  });
+
+  it("says the week is underway when not final", () => {
+    expect(buildIntroSummary(5, rankings, false)).toMatch(/^Week 5 is underway\./);
+    expect(buildIntroSummary(5, rankings, false)).not.toMatch(/in the books/);
   });
 });
 

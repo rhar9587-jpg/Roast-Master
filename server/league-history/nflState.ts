@@ -90,3 +90,19 @@ export function isLeagueWeekFinal(
   if (leagueYear && nflYear && leagueYear > nflYear) return false;
   return w <= nfl.latestFinalWeek;
 }
+
+/**
+ * Shared finality resolution for roast / commissioner / wrapped / autopsy.
+ *
+ * When NFL state is unavailable, never invent winners — a current-season
+ * live week with partial scores must stay non-final. Past seasons remain
+ * final only when NFL context proves `leagueSeason < nfl.season`.
+ */
+export function resolveLeagueWeekFinality(
+  week: number,
+  leagueSeason: string | number | null | undefined,
+  nfl: Pick<NflWeekContext, "season" | "latestFinalWeek"> | null | undefined,
+): boolean {
+  if (!nfl || nfl.season == null) return false;
+  return isLeagueWeekFinal(week, leagueSeason, nfl);
+}

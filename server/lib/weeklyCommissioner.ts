@@ -19,7 +19,7 @@ import {
 import { classifyMatchupGroup, scoresFromPlayedClassification } from "./domain/matchupStatus";
 import { classifyWeekMatchupPairs } from "./domain/classifyWeekMatchups";
 import { pickSmallestMarginWinner, pickStoleOneAndGotRobbed, matchupFinalityTruth } from "./domain/matchupOutcomes";
-import { getNflWeekContext, resolveFinalThroughWeek, isLeagueWeekFinal } from "../league-history/nflState";
+import { getNflWeekContext, resolveFinalThroughWeek, resolveLeagueWeekFinality } from "../league-history/nflState";
 
 // Sleeper API returns roster settings with fpts/fpts_decimal; type is extended here for the adapter
 interface RosterWithPoints {
@@ -695,15 +695,21 @@ async function computePositionLeaders(
 
 /**
  * One-line intro summary for the week (deterministic).
+ * Non-final weeks must not imply the slate is complete.
  */
-function buildIntroSummary(week: number, rankings: PowerRankingRow[]): string {
+export function buildIntroSummary(
+  week: number,
+  rankings: PowerRankingRow[],
+  weekIsFinal = true,
+): string {
   const top = rankings[0];
   const fraud = rankings.find((r) => r.commentary === "Winning games, but the numbers suggest danger ahead.");
+  const opener = weekIsFinal ? `Week ${week} is in the books.` : `Week ${week} is underway.`;
   if (top && fraud)
-    return `Week ${week} is in the books. ${top.teamName} leads the power rankings, but ${fraud.teamName} is winning games the numbers don't love.`;
+    return `${opener} ${top.teamName} leads the power rankings, but ${fraud.teamName} is winning games the numbers don't love.`;
   if (top)
-    return `Week ${week} is in the books. Here's where everyone stands—${top.teamName} sits at the top of the power rankings.`;
-  return `Week ${week} is in the books. Time for the weekly power rankings.`;
+    return `${opener} Here's where everyone stands—${top.teamName} sits at the top of the power rankings.`;
+  return `${opener} Time for the weekly power rankings.`;
 }
 
 export interface WeeklyCommissionerResult {
@@ -741,7 +747,7 @@ export async function getWeeklyCommissionerEmail(
   try {
     const [nfl, league] = await Promise.all([getNflWeekContext(), getLeague(leagueId)]);
     leagueSeason = league.season;
-    weekIsFinal = isLeagueWeekFinal(week, league.season, nfl);
+    weekIsFinal = resolveLeagueWeekFinality(week, league.season, nfl);
   } catch {
     // Unknown NFL/league state: do not invent winners for this week.
     weekIsFinal = false;
@@ -765,7 +771,7 @@ export async function getWeeklyCommissionerEmail(
     Promise.resolve(pickFraud(rankings)),
   ]);
 
-  let introSummary = buildIntroSummary(week, rankings);
+  let introSummary = buildIntroSummary(week, rankings, weekIsFinal);
   let roastCallouts: WeeklyEmailData["roastCallouts"];
   if (weekMatchupsRaw.length > 0 && includeV2) {
     try {

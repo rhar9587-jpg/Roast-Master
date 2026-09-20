@@ -25,7 +25,7 @@ import {
 
 // ✅ NEW: League History (Dominance Grid)
 import { handleLeagueHistoryDominance } from "./league-history";
-import { getNflWeekContext, isLeagueWeekFinal } from "./league-history/nflState";
+import { getNflWeekContext, resolveLeagueWeekFinality } from "./league-history/nflState";
 import { selectTagline } from "./lib/seasonTagline";
 import { getWeeklyCommissionerEmail, generateWeeklyCommissionerEmail, getRecapSubject } from "./lib/weeklyCommissioner";
 import { buildTeamsFromSleeper } from "./lib/weeklyCommissioner";
@@ -378,9 +378,7 @@ async function handleRoast(params: RoastRequest): Promise<RoastResponse> {
     throw new Error(`No matchup data found for week ${week}.`);
   }
 
-  const weekIsFinal = nfl
-    ? isLeagueWeekFinal(week, league.season, nfl)
-    : false;
+  const weekIsFinal = resolveLeagueWeekFinality(week, league.season, nfl);
 
   const userById = buildUserMap(users);
   const rosterName = (rid: number) => rosterDisplayName(rosters, userById, rid);
@@ -568,9 +566,7 @@ async function handleWrapped(params: RoastRequest) {
     }
     if (!weekMatchups?.length) continue;
 
-    const weekIsFinal = nfl
-      ? isLeagueWeekFinal(w, league.season, nfl)
-      : true; // historical walk without NFL state: treat as final (past seasons)
+    const weekIsFinal = resolveLeagueWeekFinality(w, league.season, nfl);
 
     // Collect scores from final played pairs only when the week is final
     const pairs = classifyWeekMatchupPairs(weekMatchups, { weekIsFinal });
@@ -864,9 +860,7 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
     }
     if (!weekMatchups?.length) continue;
 
-    const weekIsFinal = nfl
-      ? isLeagueWeekFinal(w, league.season, nfl)
-      : true;
+    const weekIsFinal = resolveLeagueWeekFinality(w, league.season, nfl);
 
     const pairs = classifyWeekMatchupPairs(weekMatchups, { weekIsFinal });
 
