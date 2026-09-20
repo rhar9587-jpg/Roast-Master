@@ -249,6 +249,7 @@ async function computeWorstCoaching(
       const lowStarter = (row.starters || [])
         .map((pid) => ({ pid, pts: safeNumber(pts[pid]) }))
         .sort((a, b) => a.pts - b.pts)[0];
+      const hasMiss = Boolean(topBench && lowStarter && topBench.pts > lowStarter.pts + 0.05);
       const benchName = topBench
         ? playersById[topBench.pid]?.full_name ||
           [playersById[topBench.pid]?.first_name, playersById[topBench.pid]?.last_name].filter(Boolean).join(" ") ||
@@ -257,9 +258,9 @@ async function computeWorstCoaching(
       worst = {
         roster_id: row.roster_id,
         benchPoints,
-        // Soft wording only — no legal sit/start swap claim without positional eligibility.
-        ...(benchName && topBench
-          ? { sitStartMiss: `Left ${benchName} (${formatPts(topBench.pts)} pts) on the bench.` }
+        // Soft wording only when bench outscored a starter — still no legal swap claim.
+        ...(hasMiss && benchName
+          ? { sitStartMiss: `Left ${benchName} (${formatPts(topBench!.pts)} pts) on the bench.` }
           : {}),
       };
     }
