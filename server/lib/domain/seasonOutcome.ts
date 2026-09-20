@@ -80,7 +80,18 @@ export type BuildSeasonOutcomesInput = {
   regularSeasonStandings?: RegularSeasonStandingRow[];
   playoffTeams?: number;
   winnersBracket?: SleeperBracketRow[] | null;
+  /**
+   * Losers/consolation bracket.
+   * - `[]` = known empty (no consolation configured) → regular-season cellar fallback allowed
+   * - non-empty = use consolation placements
+   * - `null` / omitted = fetch unavailable → do not guess lastPlace
+   */
   losersBracket?: SleeperBracketRow[] | null;
+  /**
+   * Explicit availability when callers need to distinguish failed fetch from empty.
+   * Defaults: array → available; null/undefined → unavailable.
+   */
+  losersBracketStatus?: "available" | "unavailable";
   leagueSize?: number;
 };
 
@@ -91,7 +102,8 @@ export type BuildSeasonOutcomesInput = {
  * - regularSeasonRank: standings rebuild only (never settings.rank)
  * - playoffQualified: winners-bracket participation, else playoff_teams cutoff on known ranks
  * - champion / runner-up / finalFinish: bracket placements only
- * - lastPlace: consolation bracket when present; else regular-season last only when no losers bracket
+ * - lastPlace: consolation when present; regular-season cellar only when losers bracket is
+ *   known empty — never when the losers-bracket fetch was unavailable
  */
 export function buildSeasonOutcomes(input: BuildSeasonOutcomesInput): SeasonOutcome[] {
   const {
@@ -109,9 +121,14 @@ export function buildSeasonOutcomes(input: BuildSeasonOutcomesInput): SeasonOutc
       ? rankRegularSeasonStandings(regularSeasonStandings)
       : new Map<number, number>();
 
-  const bracket: BracketResolution = resolvePlayoffBrackets(winnersBracket, losersBracket);
+  const losersBracketStatus: "available" | "unavailable" =
+    input.losersBracketStatus ??
+    (Array.isArray(losersBracket) ? "available" : "unavailable");
+
+  const losersRows = losersBracketStatus === "available" && Array.isArray(losersBracket) ? losersBracket : [];
+  const bracket: BracketResolution = resolvePlayoffBrackets(winnersBracket, losersRows);
   const hasWinnersBracket = Array.isArray(winnersBracket) && winnersBracket.length > 0;
-  const hasLosersBracket = Array.isArray(losersBracket) && losersBracket.length > 0;
+  const hasLosersBracketRows = losersBracketStatus === "available" && losersRows.length > 0;
 
   const outcomes: SeasonOutcome[] = [];
 
@@ -136,7 +153,6 @@ export function buildSeasonOutcomes(input: BuildSeasonOutcomesInput): SeasonOutc
 
     let playoffSeed: number | undefined;
     if (playoffQualified === true && regularSeasonRank != null) {
-      // Seed equals regular-season rank among the league when top-N qualify.
       playoffSeed = regularSeasonRank;
     }
 
@@ -163,11 +179,16 @@ export function buildSeasonOutcomes(input: BuildSeasonOutcomesInput): SeasonOutc
     let lastPlace: boolean | undefined;
     let lastPlaceSource: SeasonOutcomeSourceField = "absent";
 
-    if (hasLosersBracket && bracket.lastPlaceFromConsolation && bracket.lastPlaceRosterId != null) {
+    if (hasLosersBracketRows && bracket.lastPlaceFromConsolation && bracket.lastPlaceRosterId != null) {
       lastPlace = rosterId === bracket.lastPlaceRosterId;
       lastPlaceSource = "consolation_bracket";
-    } else if (!hasLosersBracket && regularSeasonRank != null && leagueSize > 0) {
-      // No consolation bracket configured — regular-season cellar is final last place.
+    } else if (
+      losersBracketStatus === "available" &&
+      losersRows.length === 0 &&
+      regularSeasonRank != null &&
+      leagueSize > 0
+    ) {
+      // Known empty consolation bracket — regular-season cellar is final last place.
       lastPlace = regularSeasonRank === leagueSize;
       lastPlaceSource = lastPlace ? "regular_season_standings" : "absent";
       if (lastPlace && finalFinish == null) {
@@ -175,9 +196,10 @@ export function buildSeasonOutcomes(input: BuildSeasonOutcomesInput): SeasonOutc
         finalFinishSource = "regular_season_standings";
       }
     }
+    // losersBracketStatus === "unavailable" → leave lastPlace unset (do not guess)
 
     const confidence: SeasonOutcome["source"]["confidence"] = (() => {
-      if (bracket.championshipResolved && (hasWinnersBracket || hasLosersBracket)) return "high";
+      if (bracket.championshipResolved && (hasWinnersBracket || hasLosersBracketRows)) return "high";
       if (hasWinnersBracket || regularRanks.size > 0) return "medium";
       if (playoffQualified != null) return "low";
       return "none";
@@ -212,4 +234,33 @@ export function seasonOutcomesByRosterId(outcomes: SeasonOutcome[]): Map<number,
   const map = new Map<number, SeasonOutcome>();
   for (const o of outcomes) map.set(o.rosterId, o);
   return map;
+}
+
+/**
+ * Build the matchup map used for season-outcome standings.
+ * Always covers weeks 1..regularSeasonEnd from `regularSeasonWeekMatchups`.
+ * Display/filter matchups are ignored — outcomes must not depend on History filters.
+ */
+export function matchupsByWeekForSeasonOutcomes(params: {
+  regularSeasonEnd: number;
+  /** Full regular-season weeks (1..regularSeasonEnd). */
+  regularSeasonWeekMatchups: Array<{
+    week: number;
+    matchups: Array<{ matchup_id: number | null; rosterId: number; points: number }>;
+  }>;
+}): Map<number, Array<{ matchup_id: number; roster_id: number; points: unknown }>> {
+  const end = Math.max(1, Math.floor(params.regularSeasonEnd));
+  const byWeek = new Map<number, Array<{ matchup_id: number; roster_id: number; points: unknown }>>();
+  for (const weekData of params.regularSeasonWeekMatchups) {
+    if (weekData.week < 1 || weekData.week > end) continue;
+    const rows = weekData.matchups
+      .filter((m) => m.matchup_id != null)
+      .map((m) => ({
+        matchup_id: m.matchup_id as number,
+        roster_id: m.rosterId,
+        points: m.points,
+      }));
+    if (rows.length) byWeek.set(weekData.week, rows);
+  }
+  return byWeek;
 }

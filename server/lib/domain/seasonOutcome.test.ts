@@ -4,7 +4,12 @@ import {
   resolvePlayoffBrackets,
   type SleeperBracketRow,
 } from "./playoffBracket";
-import { buildSeasonOutcomes, rankRegularSeasonStandings } from "./seasonOutcome";
+import {
+  buildSeasonOutcomes,
+  matchupsByWeekForSeasonOutcomes,
+  rankRegularSeasonStandings,
+} from "./seasonOutcome";
+import { buildTeamStatesThroughWeek } from "./teamStateThroughWeek";
 
 /** Classic 6-team winners bracket (Sleeper docs shape), fully resolved. */
 function sixTeamCompletedBracket(opts?: {
@@ -290,5 +295,196 @@ describe("rankRegularSeasonStandings", () => {
     expect(ranks.get(20)).toBe(1);
     expect(ranks.get(30)).toBe(2);
     expect(ranks.get(10)).toBe(3);
+  });
+});
+
+describe("losers bracket availability vs empty", () => {
+  const standings = [
+    { rosterId: 1, wins: 10, losses: 4, pointsFor: 100 },
+    { rosterId: 2, wins: 2, losses: 12, pointsFor: 50 },
+  ];
+
+  it("known empty losers bracket → regular-season last-place fallback", () => {
+    const outcomes = buildSeasonOutcomes({
+      season: "2024",
+      rosterIds: [1, 2],
+      regularSeasonStandings: standings,
+      winnersBracket: [],
+      losersBracket: [],
+      losersBracketStatus: "available",
+      leagueSize: 2,
+    });
+    const byId = new Map(outcomes.map((o) => [o.rosterId, o]));
+    expect(byId.get(2)?.lastPlace).toBe(true);
+    expect(byId.get(1)?.lastPlace).toBe(false);
+    expect(byId.get(2)?.source.lastPlace).toBe("regular_season_standings");
+  });
+
+  it("unavailable losers bracket → no lastPlace guess", () => {
+    const outcomes = buildSeasonOutcomes({
+      season: "2024",
+      rosterIds: [1, 2],
+      regularSeasonStandings: standings,
+      winnersBracket: [],
+      losersBracket: null,
+      losersBracketStatus: "unavailable",
+      leagueSize: 2,
+    });
+    for (const o of outcomes) {
+      expect(o.lastPlace).toBeUndefined();
+      expect(o.source.lastPlace).toBe("absent");
+    }
+  });
+
+  it("known toilet-bowl bracket → bracket-derived last place", () => {
+    const outcomes = buildSeasonOutcomes({
+      season: "2024",
+      rosterIds: regularStandings12.map((r) => r.rosterId),
+      regularSeasonStandings: regularStandings12,
+      playoffTeams: 6,
+      winnersBracket: sixTeamCompletedBracket(),
+      losersBracket: consolationToiletBowl(),
+      losersBracketStatus: "available",
+      leagueSize: 12,
+    });
+    const byId = new Map(outcomes.map((o) => [o.rosterId, o]));
+    expect(byId.get(12)?.lastPlace).toBe(true);
+    expect(byId.get(12)?.source.lastPlace).toBe("consolation_bracket");
+  });
+});
+
+describe("season outcomes independent of History display filters", () => {
+  /**
+   * Construct weekly H2H rows so weeks 1–7 flip the eventual #1 seed:
+   * roster 1 dominates early; roster 2 dominates late (8–14).
+   * Full 1–14 → roster 1 finishes ahead on PF/wins.
+   * Weeks 8–14 only → roster 2 would incorrectly rank #1 under the old bug.
+   */
+  function weekPair(
+    week: number,
+    a: { rosterId: number; points: number },
+    b: { rosterId: number; points: number },
+  ) {
+    return {
+      week,
+      matchups: [
+        { matchup_id: week, rosterId: a.rosterId, points: a.points },
+        { matchup_id: week, rosterId: b.rosterId, points: b.points },
+      ],
+    };
+  }
+
+  const identities = [
+    { rosterId: 1, ownerId: "a", displayName: "A" },
+    { rosterId: 2, ownerId: "b", displayName: "B" },
+  ];
+
+  const earlyWeeks = Array.from({ length: 7 }, (_, i) => {
+    const w = i + 1;
+    return weekPair(w, { rosterId: 1, points: 120 }, { rosterId: 2, points: 80 });
+  });
+  const lateWeeks = Array.from({ length: 7 }, (_, i) => {
+    const w = i + 8;
+    return weekPair(w, { rosterId: 1, points: 90 }, { rosterId: 2, points: 110 });
+  });
+  const fullRegularSeason = [...earlyWeeks, ...lateWeeks];
+  // 2-team championship for this mini league
+  const miniWinners = [
+    { r: 1, m: 1, t1: 1, t2: 2, w: 2, l: 1, p: 1 },
+  ];
+
+  function outcomesFromWeeks(
+    weeks: typeof fullRegularSeason,
+    label: string,
+  ) {
+    const matchupsByWeek = matchupsByWeekForSeasonOutcomes({
+      regularSeasonEnd: 14,
+      regularSeasonWeekMatchups: weeks,
+    });
+    const states = buildTeamStatesThroughWeek({
+      throughWeek: 14,
+      identities,
+      matchupsByWeek,
+    });
+    const standings = states.map((t) => ({
+      rosterId: t.rosterId,
+      wins: t.wins,
+      losses: t.losses,
+      ties: t.ties,
+      pointsFor: t.pointsFor,
+    }));
+    return {
+      label,
+      standings,
+      outcomes: buildSeasonOutcomes({
+        season: "2024",
+        rosterIds: [1, 2],
+        regularSeasonStandings: standings,
+        playoffTeams: 2,
+        winnersBracket: miniWinners,
+        losersBracket: [],
+        losersBracketStatus: "available",
+        leagueSize: 2,
+      }),
+    };
+  }
+
+  it("weeks 8–14 alone would flip standings vs full 1–14 (proves early weeks matter)", () => {
+    const full = outcomesFromWeeks(fullRegularSeason, "1-14");
+    const lateOnly = outcomesFromWeeks(lateWeeks, "8-14");
+    const fullRanks = rankRegularSeasonStandings(full.standings);
+    const lateRanks = rankRegularSeasonStandings(lateOnly.standings);
+    expect(fullRanks.get(1)).toBe(1);
+    expect(fullRanks.get(2)).toBe(2);
+    // Late-only incorrectly elevates roster 2
+    expect(lateRanks.get(2)).toBe(1);
+    expect(lateRanks.get(1)).toBe(2);
+    expect(fullRanks.get(1)).not.toBe(lateRanks.get(1));
+  });
+
+  it("display filter 8–14 vs 1–14 yields identical outcomes when full regular season is supplied", () => {
+    // Production path: always pass full regularSeasonWeekMatchups regardless of display filter.
+    const fromDisplayFilter814 = matchupsByWeekForSeasonOutcomes({
+      regularSeasonEnd: 14,
+      regularSeasonWeekMatchups: fullRegularSeason, // full season, not the filter
+    });
+    const fromDisplayFilter114 = matchupsByWeekForSeasonOutcomes({
+      regularSeasonEnd: 14,
+      regularSeasonWeekMatchups: fullRegularSeason,
+    });
+    expect([...fromDisplayFilter814.keys()].sort((a, b) => a - b)).toEqual(
+      [...fromDisplayFilter114.keys()].sort((a, b) => a - b),
+    );
+
+    const build = (map: typeof fromDisplayFilter814) => {
+      const states = buildTeamStatesThroughWeek({
+        throughWeek: 14,
+        identities,
+        matchupsByWeek: map,
+      });
+      return buildSeasonOutcomes({
+        season: "2024",
+        rosterIds: [1, 2],
+        regularSeasonStandings: states.map((t) => ({
+          rosterId: t.rosterId,
+          wins: t.wins,
+          losses: t.losses,
+          ties: t.ties,
+          pointsFor: t.pointsFor,
+        })),
+        playoffTeams: 2,
+        winnersBracket: miniWinners,
+        losersBracket: [],
+        losersBracketStatus: "available",
+        leagueSize: 2,
+      });
+    };
+
+    const a = build(fromDisplayFilter814);
+    const b = build(fromDisplayFilter114);
+    expect(a).toEqual(b);
+    expect(a.find((o) => o.rosterId === 1)?.regularSeasonRank).toBe(1);
+    expect(a.find((o) => o.rosterId === 2)?.championshipWon).toBe(true);
+    expect(a.find((o) => o.rosterId === 1)?.championshipWon).toBe(false);
   });
 });

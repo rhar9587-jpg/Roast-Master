@@ -5,7 +5,7 @@ import { computeSeasonWeekRange, getPlayoffStartWeek } from "./weekFilter";
 import { DEMO_LEAGUE_ID, getDemoLeagueData } from "./demoLeague";
 import { isCompletedMatchupPoints } from "../lib/domain/matchupStatus";
 import { buildTeamStatesThroughWeek } from "../lib/domain/teamStateThroughWeek";
-import { buildSeasonOutcomes } from "../lib/domain/seasonOutcome";
+import { buildSeasonOutcomes, matchupsByWeekForSeasonOutcomes } from "../lib/domain/seasonOutcome";
 import type { SeasonOutcome } from "../lib/domain/seasonOutcome";
 
 function nameForRoster(
@@ -508,9 +508,10 @@ export async function handleLeagueHistoryDominance(params: {
     const playoffTeams = league?.settings?.playoff_teams;
     const playoffWeekEnd = league?.settings?.playoff_week_end;
 
-    // Fetch brackets — never invent playoff outcomes without them
+    // Fetch brackets — distinguish failed fetch (unavailable) from known empty [].
     let winnersBracket: SleeperBracketMatchup[] | null = null;
     let losersBracket: SleeperBracketMatchup[] | null = null;
+    let losersBracketStatus: "available" | "unavailable" = "unavailable";
     try {
       winnersBracket = await getWinnersBracket(seasonLeagueId);
     } catch {
@@ -518,26 +519,49 @@ export async function handleLeagueHistoryDominance(params: {
     }
     try {
       losersBracket = await getLosersBracket(seasonLeagueId);
+      losersBracketStatus = "available";
     } catch {
       losersBracket = null;
+      losersBracketStatus = "unavailable";
     }
 
-    // Rebuild regular-season standings from matchups through regularSeasonEnd only
-    const matchupsByWeek = new Map<
-      number,
-      Array<{ matchup_id: number; roster_id: number; points: unknown }>
-    >();
-    for (const weekData of weekMatchups) {
-      if (weekData.week > regularSeasonEnd) continue;
-      const rows = weekData.matchups
-        .filter((m) => m.matchup_id != null)
-        .map((m) => ({
-          matchup_id: m.matchup_id as number,
-          roster_id: m.rosterId,
-          points: m.points,
-        }));
-      if (rows.length) matchupsByWeek.set(weekData.week, rows);
+    // Season outcomes always use the FULL regular season (1..regularSeasonEnd),
+    // independent of the History display filter stored on seasonData.weekMatchups.
+    const regularSeasonWeekMatchups: WeekMatchups[] = [];
+    const displayByWeek = new Map(weekMatchups.map((w) => [w.week, w]));
+    for (let w = 1; w <= regularSeasonEnd; w++) {
+      const cached = displayByWeek.get(w);
+      if (cached) {
+        regularSeasonWeekMatchups.push(cached);
+        continue;
+      }
+      let raw: Array<{ matchup_id: number; roster_id: number; points: number }> = [];
+      try {
+        raw = await getMatchups(seasonLeagueId, w);
+      } catch {
+        raw = [];
+      }
+      if (!raw?.length) continue;
+      const mapped: MatchupEntry[] = raw
+        .map((m) => {
+          const mk = rosterToManagerKey.get(m.roster_id);
+          if (!mk) return null;
+          return {
+            matchup_id: m.matchup_id ?? null,
+            managerKey: mk.key,
+            rosterId: m.roster_id,
+            points: Number(m.points ?? 0),
+          };
+        })
+        .filter(Boolean) as MatchupEntry[];
+      if (!mapped.length) continue;
+      regularSeasonWeekMatchups.push({ week: w, matchups: mapped });
     }
+
+    const matchupsByWeek = matchupsByWeekForSeasonOutcomes({
+      regularSeasonEnd,
+      regularSeasonWeekMatchups,
+    });
 
     const identities = rosters.map((r) => {
       const mk = rosterToManagerKey.get(r.roster_id);
@@ -563,9 +587,9 @@ export async function handleLeagueHistoryDominance(params: {
       pointsFor: t.pointsFor,
     }));
 
-    // Total PF across fetched weeks (existing behaviour for hero cards)
+    // Total PF for hero cards: prefer full regular-season weeks when available
     const totalPFByManager = new Map<string, number>();
-    for (const weekData of weekMatchups) {
+    for (const weekData of regularSeasonWeekMatchups) {
       for (const m of weekData.matchups) {
         const current = totalPFByManager.get(m.managerKey) || 0;
         totalPFByManager.set(m.managerKey, current + m.points);
@@ -579,6 +603,7 @@ export async function handleLeagueHistoryDominance(params: {
       playoffTeams,
       winnersBracket,
       losersBracket,
+      losersBracketStatus,
       leagueSize: rosters.length,
     });
     const outcomeByRoster = new Map(outcomes.map((o) => [o.rosterId, o]));
