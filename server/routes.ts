@@ -25,6 +25,7 @@ import {
 
 // ✅ NEW: League History (Dominance Grid)
 import { handleLeagueHistoryDominance } from "./league-history";
+import { getNflWeekContext, resolveLeagueWeekFinality } from "./league-history/nflState";
 import { selectTagline } from "./lib/seasonTagline";
 import { getWeeklyCommissionerEmail, generateWeeklyCommissionerEmail, getRecapSubject } from "./lib/weeklyCommissioner";
 import { buildTeamsFromSleeper } from "./lib/weeklyCommissioner";
@@ -35,6 +36,13 @@ import { recordSent, getSentRecord } from "./lib/weeklyReportStore";
 import { generateWeeklyEmailPlainText } from "./lib/weeklyEmail";
 import { selectCardCopy, interpolateTagline } from "./lib/cardCopy";
 import { buildWeeklyRoastNarrative } from "./lib/weeklyRoastEngine";
+import { classifyWeekMatchupPairs } from "./lib/domain/classifyWeekMatchups";
+import {
+  matchupFinalityTruth,
+  personalMatchupResult,
+  pickLargestMarginWinner,
+} from "./lib/domain/matchupOutcomes";
+import { scoresFromPlayedClassification } from "./lib/domain/matchupStatus";
 import {
   DEMO_LEAGUE_ID as STATIC_DEMO_LEAGUE_ID,
   getDemoLeagueTeams,
@@ -43,6 +51,7 @@ import {
   getDemoAutopsy,
   getDemoWeeklyEmailPayload,
   getDemoWeeklyPreviewPayload,
+  getDemoPowerRankingInputs,
 } from "./league-history/demoLeague";
 import { generateWeeklyEmail } from "./lib/weeklyEmail";
 import { getWeeklyPreviewEmail, generateWeeklyPreviewEmail } from "./lib/weeklyPreview";
@@ -361,16 +370,19 @@ async function handleLeagueTeams(league_id: string) {
 async function handleRoast(params: RoastRequest): Promise<RoastResponse> {
   const { league_id, week, roster_id } = params;
 
-  const [league, rosters, users, matchups] = await Promise.all([
+  const [league, rosters, users, matchups, nfl] = await Promise.all([
     fetchJson<SleeperLeague>(`https://api.sleeper.app/v1/league/${league_id}`),
     fetchJson<SleeperRoster[]>(`https://api.sleeper.app/v1/league/${league_id}/rosters`),
     fetchJson<SleeperUser[]>(`https://api.sleeper.app/v1/league/${league_id}/users`),
     fetchJson<SleeperMatchup[]>(`https://api.sleeper.app/v1/league/${league_id}/matchups/${week}`),
+    getNflWeekContext().catch(() => null),
   ]);
 
   if (!matchups?.length) {
     throw new Error(`No matchup data found for week ${week}.`);
   }
+
+  const weekIsFinal = resolveLeagueWeekFinality(week, league.season, nfl);
 
   const userById = buildUserMap(users);
   const rosterName = (rid: number) => rosterDisplayName(rosters, userById, rid);
@@ -380,6 +392,7 @@ async function handleRoast(params: RoastRequest): Promise<RoastResponse> {
     week,
     matchups,
     rosterName,
+    weekIsFinal,
   });
 
   const payload: RoastResponse = {
@@ -408,9 +421,7 @@ async function handleRoast(params: RoastRequest): Promise<RoastResponse> {
       if (opponentRow) {
         const youScore = safeNumber(yourRow.points);
         const oppScore = safeNumber(opponentRow.points);
-
-        const result: "WIN" | "LOSS" | "TIE" =
-          youScore > oppScore ? "WIN" : youScore < oppScore ? "LOSS" : "TIE";
+        const result = personalMatchupResult(roster_id, yourRow, opponentRow, { weekIsFinal });
 
         payload.matchup = {
           roster_id,
@@ -497,10 +508,11 @@ async function handleWrapped(params: RoastRequest) {
 
   const rid = roster_id;
 
-  const [league, rosters, users] = await Promise.all([
+  const [league, rosters, users, nfl] = await Promise.all([
     fetchJson<SleeperLeague>(`https://api.sleeper.app/v1/league/${league_id}`),
     fetchJson<SleeperRoster[]>(`https://api.sleeper.app/v1/league/${league_id}/rosters`),
     fetchJson<SleeperUser[]>(`https://api.sleeper.app/v1/league/${league_id}/users`),
+    getNflWeekContext().catch(() => null),
   ]);
 
   const userById = buildUserMap(users);
@@ -525,6 +537,7 @@ async function handleWrapped(params: RoastRequest) {
   // Walk season matchups and compute:
   // - season MVP player (top total points for roster)
   // - best win margin, worst loss margin for roster
+  // Winner attribution uses canonical classification + week finality only.
   const playerTotals = new Map<string, number>();
   let bestWin: { week: number; margin: number; oppRid: number; you: number; opp: number } | null =
     null;
@@ -557,11 +570,13 @@ async function handleWrapped(params: RoastRequest) {
     }
     if (!weekMatchups?.length) continue;
 
-    // Collect all scores for this week to calculate median
+    const weekIsFinal = resolveLeagueWeekFinality(w, league.season, nfl);
+
+    // Collect scores from final played pairs only when the week is final
+    const pairs = classifyWeekMatchupPairs(weekMatchups, { weekIsFinal });
     const allScores: number[] = [];
-    for (const m of weekMatchups) {
-      const pts = safeNumber(m.points);
-      if (pts > 0) allScores.push(pts);
+    for (const pair of pairs) {
+      allScores.push(...scoresFromPlayedClassification(pair.classification));
     }
     if (allScores.length > 0) {
       weeklyScores.set(w, allScores);
@@ -578,31 +593,31 @@ async function handleWrapped(params: RoastRequest) {
       playerTotals.set(pid, (playerTotals.get(pid) || 0) + pts);
     }
 
-    // compute win/loss margin for the roster that week
+    // compute win/loss margin for the roster that week — completed classification only
     const oppRow = weekMatchups.find(
       (m) => m.matchup_id === yourRow.matchup_id && m.roster_id !== rid,
     );
     if (!oppRow) continue;
 
+    const truth = matchupFinalityTruth(yourRow, oppRow, { weekIsFinal });
+    if (!truth.hasWinner || truth.winnerRosterId == null) continue;
+
     const you = safeNumber(yourRow.points);
     const opp = safeNumber(oppRow.points);
     const margin = you - opp;
-
-    // Track record vs each opponent
     const oppRid = oppRow.roster_id;
     const rec = recordVsOpponent.get(oppRid) || { wins: 0, losses: 0 };
 
-    if (margin > 0) {
+    if (truth.winnerRosterId === rid) {
       rec.wins++;
       if (!bestWin || margin > bestWin.margin) {
         bestWin = { week: w, margin, oppRid, you, opp };
       }
-    } else if (margin < 0) {
+    } else {
       rec.losses++;
       if (!worstLoss || margin < worstLoss.margin) {
         worstLoss = { week: w, margin, oppRid, you, opp };
       }
-      // Track loss for choke job analysis
       userLosses.push({ week: w, you, opp, oppRid });
     }
     recordVsOpponent.set(oppRid, rec);
@@ -808,10 +823,11 @@ function bestLossAbs(margin: number) {
 async function handleLeagueAutopsy(params: { league_id: string }): Promise<LeagueAutopsyResponse> {
   const { league_id } = params;
 
-  const [league, rosters, users] = await Promise.all([
+  const [league, rosters, users, nfl] = await Promise.all([
     fetchJson<SleeperLeague>(`https://api.sleeper.app/v1/league/${league_id}`),
     fetchJson<SleeperRoster[]>(`https://api.sleeper.app/v1/league/${league_id}/rosters`),
     fetchJson<SleeperUser[]>(`https://api.sleeper.app/v1/league/${league_id}/users`),
+    getNflWeekContext().catch(() => null),
   ]);
 
   const userById = buildUserMap(users);
@@ -848,54 +864,47 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
     }
     if (!weekMatchups?.length) continue;
 
-    const byMatchup = new Map<number, SleeperMatchup[]>();
-    for (const m of weekMatchups) {
-      if (!byMatchup.has(m.matchup_id)) byMatchup.set(m.matchup_id, []);
-      byMatchup.get(m.matchup_id)!.push(m);
+    const weekIsFinal = resolveLeagueWeekFinality(w, league.season, nfl);
+
+    const pairs = classifyWeekMatchupPairs(weekMatchups, { weekIsFinal });
+
+    for (const pair of pairs) {
+      const played = scoresFromPlayedClassification(pair.classification);
+      if (!played.length) continue;
+      for (const row of pair.rows) {
+        const pts = safeNumber(row.points);
+        if (!seasonHighScore || pts > seasonHighScore.points) {
+          seasonHighScore = { roster_id: row.roster_id, week: w, points: pts };
+        }
+        if (!seasonLowScore || pts < seasonLowScore.points) {
+          seasonLowScore = { roster_id: row.roster_id, week: w, points: pts };
+        }
+      }
     }
 
-    for (const m of weekMatchups) {
-      const pts = safeNumber(m.points);
-
-      if (!seasonHighScore || pts > seasonHighScore.points) {
-        seasonHighScore = { roster_id: m.roster_id, week: w, points: pts };
-      }
-
-      if (!seasonLowScore || pts < seasonLowScore.points) {
-        seasonLowScore = { roster_id: m.roster_id, week: w, points: pts };
-      }
+    // Winner-dependent autopsy metrics: completed classifications only
+    const blowout = pickLargestMarginWinner(weekMatchups, { weekIsFinal });
+    if (blowout && (!biggestBlowout || blowout.margin > biggestBlowout.margin)) {
+      biggestBlowout = {
+        winner_rid: blowout.winnerRosterId,
+        loser_rid: blowout.loserRosterId,
+        week: w,
+        winner_score: blowout.winnerPoints,
+        loser_score: blowout.loserPoints,
+        margin: blowout.margin,
+      };
     }
 
-    for (const [, rows] of Array.from(byMatchup.entries())) {
-      if (rows.length < 2) continue;
-      const a = rows[0]!;
-      const b = rows[1]!;
-      const aPts = safeNumber(a.points);
-      const bPts = safeNumber(b.points);
-      const winner = aPts >= bPts ? a : b;
-      const loser = aPts >= bPts ? b : a;
-      const winnerPts = Math.max(aPts, bPts);
-      const loserPts = Math.min(aPts, bPts);
-      const margin = winnerPts - loserPts;
-
-      if (!biggestBlowout || margin > biggestBlowout.margin) {
-        biggestBlowout = {
-          winner_rid: winner.roster_id,
-          loser_rid: loser.roster_id,
-          week: w,
-          winner_score: winnerPts,
-          loser_score: loserPts,
-          margin,
-        };
-      }
-
-      if (loserPts > 0 && (!highestScoreInLoss || loserPts > highestScoreInLoss.points)) {
+    for (const pair of pairs) {
+      if (pair.classification.status !== "completed") continue;
+      const { winner, loser } = pair.classification;
+      if (loser.points > 0 && (!highestScoreInLoss || loser.points > highestScoreInLoss.points)) {
         highestScoreInLoss = {
-          roster_id: loser.roster_id,
+          roster_id: loser.rosterId,
           week: w,
-          points: loserPts,
-          opp_rid: winner.roster_id,
-          opp_points: winnerPts,
+          points: loser.points,
+          opp_rid: winner.rosterId,
+          opp_points: winner.points,
         };
       }
     }
@@ -1061,26 +1070,16 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   // Current NFL season week (Sleeper state) — used for weekly roast / email defaults
   app.get("/api/nfl/state", async (_req: Request, res: Response) => {
     try {
-      const state = await fetchJson<{
-        week?: number;
-        display_week?: number;
-        leg?: number;
-        season?: string;
-        season_type?: string;
-      }>("https://api.sleeper.app/v1/state/nfl");
-
-      const previewWeekRaw = Number(state.display_week ?? state.week ?? state.leg ?? 0);
-      const previewWeek = Math.min(18, Math.max(1, previewWeekRaw || 1));
-      const recapWeek = Math.max(1, previewWeek - 1);
-
+      const ctx = await getNflWeekContext();
       return res.json({
-        season: state.season ?? null,
-        season_type: state.season_type ?? null,
-        week: state.week ?? null,
-        display_week: state.display_week ?? null,
-        leg: state.leg ?? null,
-        previewWeek,
-        recapWeek,
+        season: ctx.season,
+        season_type: ctx.season_type,
+        week: ctx.week,
+        display_week: ctx.display_week,
+        leg: ctx.leg,
+        previewWeek: ctx.previewWeek,
+        recapWeek: ctx.recapWeek,
+        latestFinalWeek: ctx.latestFinalWeek,
       });
     } catch (error: any) {
       console.error("NFL state fetch error:", error);
@@ -1137,11 +1136,28 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ error: "league_id and week (>= 1) are required" });
     }
     if (league_id === STATIC_DEMO_LEAGUE_ID) {
-      return res.status(400).json({ error: "Power rankings are not available for the demo league. Use a real Sleeper league ID." });
+      const season = "2024";
+      const { leagueName, teams } = getDemoPowerRankingInputs(season, week);
+      const previousRankings = await getStoredPreviousRankings(league_id, week, season);
+      const rankings = generatePowerRankings(teams, previousRankings);
+      await storeRankingsForWeek(
+        league_id,
+        week,
+        rankings.map((r) => ({ teamId: r.teamId, rank: r.rank, powerScore: r.powerScore })),
+        season,
+      );
+      return res.json({ leagueName, week, rankings });
     }
     try {
-      const { leagueName, teams } = await buildTeamsFromSleeper(league_id, week);
-      const rankings = generatePowerRankings(teams);
+      const { leagueName, teams, season } = await buildTeamsFromSleeper(league_id, week);
+      const previousRankings = await getStoredPreviousRankings(league_id, week, season);
+      const rankings = generatePowerRankings(teams, previousRankings);
+      await storeRankingsForWeek(
+        league_id,
+        week,
+        rankings.map((r) => ({ teamId: r.teamId, rank: r.rank, powerScore: r.powerScore })),
+        season,
+      );
       return res.json({ leagueName, week, rankings });
     } catch (err: any) {
       return res.status(500).json({ error: err?.message || "Failed to generate power rankings" });
@@ -1166,10 +1182,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const appOrigin = publicAppUrl(req);
       if (leagueId === STATIC_DEMO_LEAGUE_ID) {
         if (mode === "preview") {
-          const demoPayload = getDemoWeeklyPreviewPayload(week);
+          const demoPayload = await getDemoWeeklyPreviewPayload(week);
           html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), ...(signoff ? { commissionerSignoff: signoff.slice(0, 180) } : {}), appUrl: appOrigin });
         } else {
-          const demoPayload = getDemoWeeklyEmailPayload(week);
+          const demoPayload = await getDemoWeeklyEmailPayload(week);
           html = generateWeeklyEmail({ ...demoPayload, ...(note ? { commissionerNote: note } : {}), ...(signoff ? { commissionerSignoff: signoff.slice(0, 180) } : {}), appUrl: appOrigin });
         }
       } else {
@@ -1177,8 +1193,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           const result = await getWeeklyPreviewEmail(leagueId, week, note, signoff, appOrigin);
           html = result.emailHtml;
         } else {
-          const previousRankings = getStoredPreviousRankings(leagueId, week);
-          const result = await generateWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
+          const result = await generateWeeklyCommissionerEmail(leagueId, week, [], note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
           html = result.html;
         }
       }
@@ -1228,8 +1243,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         recordSent(leagueId, week, commissionerEmail, "preview");
         return res.json({ ok: true, message: "Matchup preview sent to commissioner." });
       }
-      const previousRankings = getStoredPreviousRankings(leagueId, week);
-      const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
+      const result = await getWeeklyCommissionerEmail(leagueId, week, [], note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
       const subject = getRecapSubject(result.leagueName, result.week, result.emailPayload);
       const text = generateWeeklyEmailPlainText(result.emailPayload);
       const sendResult = await sendEmail({ to: commissionerEmail, subject, html: result.emailHtml, text });
@@ -1238,7 +1252,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       }
       if (!isUnlockedLeague) await markFreeSendUsed(leagueId, commissionerEmail);
       console.log(JSON.stringify({ event: "weekly_email_send_allowed", leagueId, week, mode, unlocked: isUnlockedLeague }));
-      storeRankingsForWeek(leagueId, week, result.rankings.map((r) => ({ teamId: r.teamId, rank: r.rank })));
+      // Rankings already persisted inside getWeeklyCommissionerEmail (idempotent).
       recordSent(leagueId, week, commissionerEmail, "recap");
       return res.json({ ok: true, message: "Weekly email sent to commissioner." });
     } catch (err: any) {
@@ -1290,7 +1304,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       let subject: string;
       if (mode === "preview") {
         if (league_id === STATIC_DEMO_LEAGUE_ID) {
-          const demoPayload = getDemoWeeklyPreviewPayload(week);
+          const demoPayload = await getDemoWeeklyPreviewPayload(week);
           leagueName = demoPayload.leagueName;
           emailHtml = generateWeeklyEmail({
             ...demoPayload,
@@ -1307,7 +1321,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         }
       } else {
         if (league_id === STATIC_DEMO_LEAGUE_ID) {
-          const demoPayload = getDemoWeeklyEmailPayload(week);
+          const demoPayload = await getDemoWeeklyEmailPayload(week);
           leagueName = demoPayload.leagueName;
           emailHtml = generateWeeklyEmail({
             ...demoPayload,
@@ -1318,8 +1332,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           rankings = demoPayload.rankings;
           subject = `${leagueName} — Week ${week} Power Rankings`;
         } else {
-          const previousRankings = getStoredPreviousRankings(league_id, week);
-          const result = await getWeeklyCommissionerEmail(league_id, week, previousRankings, note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
+          const result = await getWeeklyCommissionerEmail(league_id, week, [], note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
           leagueName = result.leagueName;
           emailHtml = result.emailHtml;
           rankings = result.rankings;
@@ -1401,9 +1414,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ message: "Invalid query params", issues: parsed.error.issues });
     }
 
-    // Demo league intercept - return static fictional data (no Sleeper API call)
+    // Demo league intercept — canonical fixture + production roast engine
     if (league_id === STATIC_DEMO_LEAGUE_ID) {
-      return res.json(getDemoWeeklyRoast({ week, roster_id }));
+      return res.json(await getDemoWeeklyRoast({ week, roster_id }));
     }
 
     try {
@@ -1421,10 +1434,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ message: "Invalid request body", issues: parsed.error.issues });
     }
 
-    // Demo league intercept - return static fictional data (no Sleeper API call)
+    // Demo league intercept — canonical fixture + production roast engine
     if (parsed.data.league_id === STATIC_DEMO_LEAGUE_ID) {
       trackEvent("nfl_roast_demo", "/api/roast", "POST", { week: parsed.data.week });
-      return res.json(getDemoWeeklyRoast({ week: parsed.data.week, roster_id: parsed.data.roster_id }));
+      return res.json(
+        await getDemoWeeklyRoast({
+          week: parsed.data.week,
+          roster_id: parsed.data.roster_id,
+        }),
+      );
     }
 
     try {

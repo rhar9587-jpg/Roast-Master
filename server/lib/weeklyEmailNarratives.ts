@@ -1,18 +1,29 @@
 /**
  * League-history narrative hooks for weekly commissioner emails (preview + recap).
- * Calls dominance API and maps this week's matchup pairs to H2H cells for nemesis/owned/rivalry/dynasty.
+ * Joins H2H cells by stable manager keys (`owner:…` / `roster:…`), never by display name.
  */
 
 import { handleLeagueHistoryDominance } from "../league-history/index";
 
+/** Within-week pair identified by stable keys; names are display-only. */
 export interface MatchupPair {
-  teamA: string;
-  teamB: string;
+  /** Canonical manager key from league history (`owner:…` preferred). */
+  teamAKey: string;
+  teamBKey: string;
+  teamAName: string;
+  teamBName: string;
+  /** Within-season roster ids when known. */
+  teamAId?: string;
+  teamBId?: string;
 }
 
 export interface MatchupToWatch {
   teamA: string;
   teamB: string;
+  teamAKey: string;
+  teamBKey: string;
+  teamAId?: string;
+  teamBId?: string;
   narrative: string;
 }
 
@@ -27,21 +38,32 @@ export interface LeagueHistoryNarratives {
 
 export type NarrativeEmailMode = "recap" | "preview";
 
-function norm(name: string): string {
-  return String(name ?? "").trim().toLowerCase();
-}
+type DominanceCell = {
+  a: string;
+  b: string;
+  aName: string;
+  bName: string;
+  badge: string;
+  record: string;
+  games: number;
+};
 
-function findCell(
-  cells: Array<{ aName: string; bName: string; badge: string; record: string; games: number }>,
-  teamA: string,
-  teamB: string,
-): { aName: string; bName: string; badge: string; record: string; games: number } | null {
-  const nA = norm(teamA);
-  const nB = norm(teamB);
+type ManagerTotal = {
+  key: string;
+  name: string;
+  totalWins: number;
+  totalScore: number;
+};
+
+/** Find H2H cell by stable manager keys (order-independent). */
+export function findCellByManagerKeys(
+  cells: DominanceCell[],
+  keyA: string,
+  keyB: string,
+): DominanceCell | null {
+  if (!keyA || !keyB || keyA === keyB) return null;
   for (const c of cells) {
-    const ca = norm(c.aName);
-    const cb = norm(c.bName);
-    if ((ca === nA && cb === nB) || (ca === nB && cb === nA)) return c;
+    if ((c.a === keyA && c.b === keyB) || (c.a === keyB && c.b === keyA)) return c;
   }
   return null;
 }
@@ -58,8 +80,8 @@ export async function getLeagueHistoryNarratives(
 ): Promise<LeagueHistoryNarratives> {
   if (!pairs.length) return {};
 
-  let cells: Array<{ aName: string; bName: string; badge: string; record: string; games: number }>;
-  let totalsByManager: Array<{ name: string; totalWins: number; totalScore: number }>;
+  let cells: DominanceCell[] = [];
+  let totalsByManager: ManagerTotal[] = [];
 
   try {
     const result = await handleLeagueHistoryDominance({
@@ -68,18 +90,22 @@ export async function getLeagueHistoryNarratives(
       end_week: 17,
       include_playoffs: false,
     });
-    cells = (result as any).cells ?? [];
-    totalsByManager = (result as any).totalsByManager ?? [];
+    cells = (result as { cells?: DominanceCell[] }).cells ?? [];
+    totalsByManager = (result as { totalsByManager?: ManagerTotal[] }).totalsByManager ?? [];
   } catch (err) {
-    console.warn("Weekly email narratives skipped (dominance failed):", leagueId, err instanceof Error ? err.message : String(err));
+    console.warn(
+      "Weekly email narratives skipped (dominance failed):",
+      leagueId,
+      err instanceof Error ? err.message : String(err),
+    );
     return {};
   }
 
   const result: LeagueHistoryNarratives = {};
   let bestPriority = -1;
 
-  for (const { teamA, teamB } of pairs) {
-    const cell = findCell(cells, teamA, teamB);
+  for (const pair of pairs) {
+    const cell = findCellByManagerKeys(cells, pair.teamAKey, pair.teamBKey);
     if (!cell || cell.games < 2) continue;
 
     const badge = (cell.badge || "").toUpperCase();
@@ -111,33 +137,49 @@ export async function getLeagueHistoryNarratives(
 
     if (narrative && priority > bestPriority) {
       bestPriority = priority;
-      result.matchupToWatch = { teamA: cell.aName, teamB: cell.bName, narrative };
+      // Preserve this week's roster ids when the pair orientation matches cell keys.
+      const oriented =
+        pair.teamAKey === cell.a
+          ? {
+              teamAId: pair.teamAId,
+              teamBId: pair.teamBId,
+            }
+          : {
+              teamAId: pair.teamBId,
+              teamBId: pair.teamAId,
+            };
+      result.matchupToWatch = {
+        teamA: cell.aName,
+        teamB: cell.bName,
+        teamAKey: cell.a,
+        teamBKey: cell.b,
+        ...oriented,
+        narrative,
+      };
     }
   }
 
-  // Optional: dynasty hook — top team by totalWins in a matchup this week
-  // Skip if matchupToWatch already involves the dynasty (avoid double-up)
+  // Dynasty hook — all-time H2H wins leader (not current-season standings).
+  // Skip if matchupToWatch already involves the dynasty key (avoid double-up).
   if (totalsByManager.length > 0 && !result.storyOfTheWeek) {
     const sorted = [...totalsByManager].sort((a, b) => (b.totalWins ?? 0) - (a.totalWins ?? 0));
-    const dynastyName = sorted[0]?.name;
-    if (dynastyName) {
-      const dynastyNorm = norm(dynastyName);
+    const dynasty = sorted[0];
+    if (dynasty?.key) {
       const watchTouchesDynasty =
         result.matchupToWatch &&
-        (norm(result.matchupToWatch.teamA) === dynastyNorm ||
-          norm(result.matchupToWatch.teamB) === dynastyNorm);
+        (result.matchupToWatch.teamAKey === dynasty.key ||
+          result.matchupToWatch.teamBKey === dynasty.key);
 
       if (!watchTouchesDynasty) {
-        for (const { teamA, teamB } of pairs) {
-          const aNorm = norm(teamA);
-          const bNorm = norm(teamB);
-          if (aNorm === dynastyNorm || bNorm === dynastyNorm) {
-            const underdog = aNorm === dynastyNorm ? teamB : teamA;
+        for (const pair of pairs) {
+          if (pair.teamAKey === dynasty.key || pair.teamBKey === dynasty.key) {
+            const underdogName =
+              pair.teamAKey === dynasty.key ? pair.teamBName : pair.teamAName;
             result.storyOfTheWeek = {
               narrative:
                 mode === "recap"
-                  ? `${underdog} drew the dynasty this week — ${dynastyName} still leads the league in wins.`
-                  : `Can ${underdog} take down the dynasty? ${dynastyName} leads the league in wins.`,
+                  ? `${underdogName} drew the dynasty this week — ${dynasty.name} leads all-time H2H wins.`
+                  : `Can ${underdogName} take down the dynasty? ${dynasty.name} leads all-time H2H wins.`,
             };
             break;
           }

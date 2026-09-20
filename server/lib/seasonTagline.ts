@@ -58,7 +58,7 @@ const COPY_LIBRARY: Record<TaglineBucket, { safe: string[]; spicy: string[] }> =
       "You played right. The schedule played you.",
       "High score. Low placement. Pain.",
       "Statistically tragic.",
-      "The league's unluckiest manager.",
+      "Points for, wins against — brutal.",
       "Schedule strength: impossible.",
     ],
   },
@@ -149,7 +149,7 @@ const COPY_LIBRARY: Record<TaglineBucket, { safe: string[]; spicy: string[] }> =
       "Bad beats all season.",
       "Fantasy is cruel sometimes.",
       "Statistically snakebit.",
-      "The unluckiest .500 team ever.",
+      "The cruelest .500 team ever.",
     ],
   },
   COIN_FLIP: {

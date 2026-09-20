@@ -54,6 +54,7 @@ import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getR
 import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards, type MiniCard } from "./storylines";
 import { computeHeroReceipts } from "./computeHeroReceipts";
 import { suggestViewerKey } from "./suggestViewer";
+import { computePersonalHookCard, type PersonalHookCard } from "./computePersonalHookCard";
 import { track, trackFunnel } from "@/lib/track";
 import { unlockCtaLabel } from "@/lib/brand";
 import type {
@@ -86,28 +87,6 @@ function isCountable(c: DominanceCellDTO) {
 function formatPoints(value: number) {
   return Number.isFinite(value) ? value.toFixed(1) : "—";
 }
-
-type PersonalHookCard =
-  | {
-      type: "second_most_points_loss" | "worst_loss";
-      title: string;
-      subtitle: string;
-      body: string;
-      teaser: string;
-      pointsFor: string;
-      week: number;
-      season?: string;
-    }
-  | {
-      type: "undefeated";
-      title: string;
-      body: string;
-      pointsFor?: string;
-      week?: number;
-      season?: string;
-      teaser?: string;
-      subtitle?: string;
-    };
 
 type DoppelgangerEntry = {
   rosterId: string;
@@ -304,7 +283,7 @@ function computeNflDoppelganger(
       reasons: [
         `Lost ${closeLosses} games by 5 pts or less.`,
         "Fantasy football personally victimized you.",
-        "The unluckiest manager in the league.",
+        "More heartbreakers than anyone this season.",
       ],
       roastLine: "You invented new ways to suffer.",
     },
@@ -439,86 +418,6 @@ function computeNflDoppelganger(
     roastLine: picked.roastLine,
     record: `${viewerPerf.wins}-${viewerPerf.losses}`,
     season: seasonLabel,
-  };
-}
-
-function computePersonalHookCard(
-  viewerKey: string,
-  weeklyMatchups: WeeklyMatchupDetail[],
-  managers: ManagerRow[],
-  leagueSeason?: string,
-): PersonalHookCard | null {
-  const losses = weeklyMatchups.filter(
-    (m) =>
-      m.managerKey === viewerKey &&
-      !m.won &&
-      Number.isFinite(m.points) &&
-      Number.isFinite(m.opponentPoints),
-  );
-
-  if (!losses.length) {
-    return {
-      type: "undefeated",
-      title: "Nobody Gave You This Satisfaction.",
-      body: "No losses found. Your league had to find other ways to cope.",
-      season: leagueSeason,
-    };
-  }
-
-  const weekPointsMap = new Map<string, Array<{ managerKey: string; points: number }>>();
-  for (const m of weeklyMatchups) {
-    if (!Number.isFinite(m.points)) continue;
-    const key = `${m.season}-${m.week}`;
-    const list = weekPointsMap.get(key) || [];
-    list.push({ managerKey: m.managerKey, points: m.points });
-    weekPointsMap.set(key, list);
-  }
-
-  const qualifiedSecondMost = losses.filter((loss) => {
-    const key = `${loss.season}-${loss.week}`;
-    const list = weekPointsMap.get(key) || [];
-    const higherCount = list.filter((p) => p.points > loss.points).length;
-    return higherCount === 1;
-  });
-
-  if (qualifiedSecondMost.length > 0) {
-    const best = [...qualifiedSecondMost].sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points;
-      const aMargin = Math.abs(a.margin ?? (a.opponentPoints - a.points));
-      const bMargin = Math.abs(b.margin ?? (b.opponentPoints - b.points));
-      return aMargin - bMargin;
-    })[0];
-
-    const pointsFor = formatPoints(best.points);
-    return {
-      type: "second_most_points_loss",
-      title: "This Should Have Been a Win.",
-      subtitle: "You scored the 2nd-most points in the league.",
-      body: `You put up ${pointsFor} points in Week ${best.week}. Only one team scored more — and you still lost.`,
-      teaser: "🔒 See who beat you — and why this one hurt so much",
-      pointsFor,
-      week: best.week,
-      season: best.season || leagueSeason,
-    };
-  }
-
-  const worst = [...losses].sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    const aMargin = Math.abs(a.margin ?? (a.opponentPoints - a.points));
-    const bMargin = Math.abs(b.margin ?? (b.opponentPoints - b.points));
-    return aMargin - bMargin;
-  })[0];
-
-  const pointsFor = formatPoints(worst.points);
-  return {
-    type: "worst_loss",
-    title: "You Did Enough.",
-    subtitle: "And still took the L.",
-    body: `You scored ${pointsFor} in Week ${worst.week} and still lost. That’s fantasy football for you.`,
-    teaser: "🔒 See who beat you — and why this one hurt so much",
-    pointsFor,
-    week: worst.week,
-    season: worst.season || leagueSeason,
   };
 }
 
@@ -1219,13 +1118,16 @@ export default function LeagueHistoryPage() {
 
   const personalHookCard = useMemo(() => {
     if (!viewerKey || !data?.weeklyMatchups?.length) return null;
+    const expectedGames =
+      totalsByManager?.find((t) => t.key === viewerKey)?.totalGames ?? null;
     return computePersonalHookCard(
       viewerKey,
       data.weeklyMatchups,
       managers,
       data?.league?.season,
+      expectedGames,
     );
-  }, [viewerKey, data?.weeklyMatchups, managers, data?.league?.season]);
+  }, [viewerKey, data?.weeklyMatchups, managers, data?.league?.season, totalsByManager]);
 
   const nflDoppelganger = useMemo(() => {
     if (!viewerKey || !data?.weeklyMatchups?.length || !managers.length) return null;
@@ -2186,7 +2088,7 @@ export default function LeagueHistoryPage() {
           title="Weekly is included"
           description={`${unlockCtaLabel()} — then generate this week's cards and commissioner email.`}
           previewItems={[
-            "Top Dog, Biggest Embarrassment, Fraud Watch, Worst Coaching, Carry Job, Group Chat Drop",
+            "Top Dog, Biggest Embarrassment, Fraud Watch, Most Points Left on Bench, Carry Job, Group Chat Drop",
             "One scroll of league cards + copy-paste group chat summary",
             "Recap = last week; Preview = this week — then send the commissioner email",
           ]}

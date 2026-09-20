@@ -3,14 +3,23 @@
  * Simple, explainable formula: no prediction model, deterministic and transparent.
  */
 
+import { formatTeamRecord } from "./domain/teamStateThroughWeek";
+
+/** Explicit week identity for score history (never positional). */
+export type WeekKeyedScore = { week: number; score: number };
+
 export interface PowerRankingsTeamInput {
   teamId: string;
   teamName: string;
+  /** Stable owner key when available (`owner:…` / `roster:…`). */
+  ownerKey?: string;
   wins: number;
   losses: number;
+  ties?: number;
   pointsFor: number;
   pointsAgainst?: number;
-  weeklyScores: number[];
+  /** Week-keyed scores; absent weeks are omitted — never padded with zeros. */
+  weeklyScores: WeekKeyedScore[];
 }
 
 export interface PreviousRanking {
@@ -28,6 +37,7 @@ export interface PowerRankingRow {
   commentary: string;
   wins: number;
   losses: number;
+  ties: number;
   pointsFor: number;
   winPct: number;
   averagePoints: number;
@@ -48,30 +58,54 @@ function safeAverage(arr: number[]): number {
   return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
-function computeExpectedWins(
-  team: PowerRankingsTeamInput & { weeklyScores: number[] },
+function scoresByWeek(scores: WeekKeyedScore[] | undefined): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const entry of scores || []) {
+    if (!Number.isFinite(entry?.week) || !Number.isFinite(entry?.score)) continue;
+    map.set(entry.week, entry.score);
+  }
+  return map;
+}
+
+/**
+ * Expected wins: for each week this team played, compare against opponents
+ * who also have a score for that same week. Missing weeks are skipped —
+ * no index alignment and no silent zero for absent scores.
+ * Equal scores contribute 0.5 (tie), not 0.
+ */
+export function computeExpectedWins(
+  team: PowerRankingsTeamInput,
   allTeams: PowerRankingsTeamInput[],
 ): number {
-  const weeklyScores = team.weeklyScores || [];
-  const n = allTeams.length;
-  if (n <= 1 || weeklyScores.length === 0) return 0;
+  const myByWeek = scoresByWeek(team.weeklyScores);
+  if (myByWeek.size === 0 || allTeams.length <= 1) return 0;
+
+  const others = allTeams.filter((t) => t.teamId !== team.teamId);
+  if (!others.length) return 0;
+
+  const otherMaps = others.map((t) => scoresByWeek(t.weeklyScores));
   let expectedWins = 0;
-  const numWeeks = weeklyScores.length;
-  for (let w = 0; w < numWeeks; w++) {
-    const myScore = weeklyScores[w];
+
+  for (const [week, myScore] of Array.from(myByWeek.entries())) {
     let beatCount = 0;
-    for (let i = 0; i < n; i++) {
-      if (allTeams[i].teamId === team.teamId) continue;
-      const otherScores = allTeams[i].weeklyScores || [];
-      const otherScore = w < otherScores.length ? otherScores[w] : 0;
-      if (myScore > otherScore) beatCount++;
+    let compared = 0;
+    for (const other of otherMaps) {
+      if (!other.has(week)) continue;
+      compared += 1;
+      const otherScore = other.get(week)!;
+      if (myScore > otherScore) beatCount += 1;
+      else if (myScore === otherScore) beatCount += 0.5;
     }
-    expectedWins += beatCount / (n - 1);
+    if (compared > 0) {
+      expectedWins += beatCount / compared;
+    }
   }
+
   return Math.round(expectedWins * 100) / 100;
 }
 
 interface EnrichedTeam extends PowerRankingsTeamInput {
+  ties: number;
   winPct: number;
   averagePoints: number;
   recentFormAverage: number;
@@ -82,18 +116,28 @@ interface EnrichedTeam extends PowerRankingsTeamInput {
 function enrichTeam(team: PowerRankingsTeamInput, allTeams: PowerRankingsTeamInput[]): EnrichedTeam {
   const wins = team.wins ?? 0;
   const losses = team.losses ?? 0;
-  const games = wins + losses;
+  const ties = team.ties ?? 0;
+  const games = wins + losses + ties;
   const weeklyScores = team.weeklyScores || [];
-  const numWeeks = Math.max(weeklyScores.length, 1);
-  const winPct = games > 0 ? wins / games : 0;
+  // Half-win for ties (standard fantasy standings treatment)
+  const winPct = games > 0 ? (wins + 0.5 * ties) / games : 0;
+  const scoreValues = weeklyScores.map((w) => w.score);
   const averagePoints =
-    team.pointsFor != null && numWeeks > 0 ? team.pointsFor / numWeeks : safeAverage(weeklyScores);
+    team.pointsFor != null && weeklyScores.length > 0
+      ? team.pointsFor / weeklyScores.length
+      : safeAverage(scoreValues);
+  const recentSorted = [...weeklyScores].sort((a, b) => a.week - b.week);
   const recentFormAverage =
-    weeklyScores.length > 0 ? safeAverage(weeklyScores.slice(-3)) : averagePoints;
+    recentSorted.length > 0
+      ? safeAverage(recentSorted.slice(-3).map((w) => w.score))
+      : averagePoints;
   const expectedWins = computeExpectedWins(team, allTeams);
-  const luckDelta = Math.round((team.wins - expectedWins) * 100) / 100;
+  // Same half-win tie semantics as winPct
+  const actualWinEquiv = wins + 0.5 * ties;
+  const luckDelta = Math.round((actualWinEquiv - expectedWins) * 100) / 100;
   return {
     ...team,
+    ties,
     winPct,
     averagePoints,
     recentFormAverage,
@@ -235,16 +279,18 @@ export function generatePowerRankings(
 
   return withScore.map((t, i) => {
     const rank = i + 1;
+    const ties = t.ties ?? 0;
     return {
       rank,
       teamId: t.teamId,
       teamName: t.teamName,
-      record: `${t.wins}-${t.losses}`,
+      record: formatTeamRecord(t.wins, t.losses, ties),
       powerScore: t.powerScore,
       trend: getTrend(t.teamId, rank, previousRankings),
       commentary: getCommentary(t, leagueStats),
       wins: t.wins,
       losses: t.losses,
+      ties,
       pointsFor: t.pointsFor,
       winPct: t.winPct,
       averagePoints: Math.round(t.averagePoints * 10) / 10,
@@ -264,13 +310,14 @@ export function explainPowerScore(team: Partial<PowerRankingRow> | null): string
     powerScore,
     wins = 0,
     losses = 0,
+    ties = 0,
     averagePoints,
     recentFormAverage,
     luckDelta,
     winPct,
   } = team;
-  const games = wins + losses;
-  const wp = games > 0 ? wins / games : winPct ?? 0;
+  const games = wins + losses + ties;
+  const wp = games > 0 ? (wins + 0.5 * ties) / games : winPct ?? 0;
   const parts: string[] = [];
   parts.push(`Power score: ${powerScore} out of 100.`);
   const winDesc = wp >= 0.65 ? "Strong" : wp >= 0.5 ? "Solid" : "Weak";

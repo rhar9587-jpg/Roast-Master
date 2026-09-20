@@ -7,6 +7,10 @@ import { Lock } from "lucide-react";
 import { useState } from "react";
 import * as React from "react";
 import { unlockCtaLabel } from "@/lib/brand";
+import type { PersonalHookCard } from "./computePersonalHookCard";
+
+// Personal Unlock Pricing
+const PRICE = 2.99;
 
 type MostOwned = {
   victimName: string;
@@ -31,26 +35,6 @@ type BiggestRivalry = {
   badge: string;
   cellKey: string;
 };
-
-type PersonalHookCard =
-  | {
-      type: "second_most_points_loss" | "worst_loss";
-      title: string;
-      subtitle: string;
-      body: string;
-      teaser: string;
-      pointsFor: string;
-      week: number;
-      season?: string;
-    }
-  | {
-      type: "undefeated";
-      title: string;
-      body: string;
-      pointsFor?: string;
-      week?: number;
-      season?: string;
-    };
 
 type NflDoppelganger = {
   team: string;
@@ -163,14 +147,18 @@ export function InsightsDashboard({
       badge="EDGE"
       badgeText={
         personalHookCard.type === "undefeated"
-          ? "UNTOUCHABLE"
+          ? personalHookCard.scope === "partial"
+            ? "UNBEATEN"
+            : "UNTOUCHABLE"
           : personalHookCard.type === "second_most_points_loss"
             ? "ROBBED"
             : "PAIN"
       }
       title={
         personalHookCard.type === "undefeated"
-          ? "UNDEFEATED 🏆"
+          ? personalHookCard.scope === "partial"
+            ? "UNBEATEN IN RANGE"
+            : "UNDEFEATED 🏆"
           : personalHookCard.type === "second_most_points_loss"
             ? "ROBBED 😤"
             : "YOUR WORST LOSS 💀"
@@ -179,12 +167,17 @@ export function InsightsDashboard({
       avatarUrl={viewerAvatarUrl ?? null}
       emoji={viewerEmoji ?? null}
       primaryStat={
-        personalHookCard.type !== "undefeated" && personalHookCard.pointsFor
+        personalHookCard.type === "undefeated"
           ? {
-              value: personalHookCard.pointsFor,
-              label: `WEEK ${personalHookCard.week}`,
+              value: personalHookCard.record ?? `${personalHookCard.wins ?? 0}–${personalHookCard.losses ?? 0}`,
+              label: personalHookCard.scope === "partial" ? "IN RANGE" : "RECORD",
             }
-          : { value: "∞", label: "WINS" }
+          : personalHookCard.pointsFor
+            ? {
+                value: personalHookCard.pointsFor,
+                label: `WEEK ${personalHookCard.week}`,
+              }
+            : { value: "—", label: "—" }
       }
       punchline={personalHookCard.body}
       lines={
@@ -193,7 +186,10 @@ export function InsightsDashboard({
               { label: "Week", value: String(personalHookCard.week) },
               { label: "Points", value: personalHookCard.pointsFor },
             ]
-          : [{ label: "Losses", value: "0" }]
+          : [
+              { label: "Record", value: personalHookCard.record ?? `${personalHookCard.wins ?? 0}–0` },
+              { label: "Losses", value: String(personalHookCard.losses ?? 0) },
+            ]
       }
       season={personalHookCard.season ?? "2024–25"}
       enableShare={isPremium}
