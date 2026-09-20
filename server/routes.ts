@@ -51,6 +51,7 @@ import {
   getDemoAutopsy,
   getDemoWeeklyEmailPayload,
   getDemoWeeklyPreviewPayload,
+  getDemoPowerRankingInputs,
 } from "./league-history/demoLeague";
 import { generateWeeklyEmail } from "./lib/weeklyEmail";
 import { getWeeklyPreviewEmail, generateWeeklyPreviewEmail } from "./lib/weeklyPreview";
@@ -1132,7 +1133,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(400).json({ error: "league_id and week (>= 1) are required" });
     }
     if (league_id === STATIC_DEMO_LEAGUE_ID) {
-      return res.status(400).json({ error: "Power rankings are not available for the demo league. Use a real Sleeper league ID." });
+      const season = "2024";
+      const { leagueName, teams } = getDemoPowerRankingInputs(season, week);
+      const rankings = generatePowerRankings(teams);
+      return res.json({ leagueName, week, rankings });
     }
     try {
       const { leagueName, teams } = await buildTeamsFromSleeper(league_id, week);

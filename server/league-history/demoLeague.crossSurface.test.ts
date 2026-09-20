@@ -393,3 +393,19 @@ describe("email omits invented position leaders", () => {
     expect(blob).not.toContain("Underachievers");
   });
 });
+
+describe("demo power rankings API inputs", () => {
+  it("demo power ranking teams share week scores with roast scoreboard", () => {
+    const week = DEMO_ICONIC_WEEK;
+    const board = getDemoWeekScoreboard(week);
+    const { teams } = getDemoPowerRankingInputs(DEMO_ICONIC_SEASON, week);
+    const rankings = generatePowerRankings(teams);
+    expect(rankings).toHaveLength(12);
+    for (const team of teams) {
+      const rid = Number(team.teamId);
+      expect(team.weeklyScores?.find((w) => w.week === week)?.score).toBe(
+        board.scoresByRosterId[rid],
+      );
+    }
+  });
+});
