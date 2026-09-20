@@ -1135,12 +1135,26 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     if (league_id === STATIC_DEMO_LEAGUE_ID) {
       const season = "2024";
       const { leagueName, teams } = getDemoPowerRankingInputs(season, week);
-      const rankings = generatePowerRankings(teams);
+      const previousRankings = await getStoredPreviousRankings(league_id, week, season);
+      const rankings = generatePowerRankings(teams, previousRankings);
+      await storeRankingsForWeek(
+        league_id,
+        week,
+        rankings.map((r) => ({ teamId: r.teamId, rank: r.rank, powerScore: r.powerScore })),
+        season,
+      );
       return res.json({ leagueName, week, rankings });
     }
     try {
-      const { leagueName, teams } = await buildTeamsFromSleeper(league_id, week);
-      const rankings = generatePowerRankings(teams);
+      const { leagueName, teams, season } = await buildTeamsFromSleeper(league_id, week);
+      const previousRankings = await getStoredPreviousRankings(league_id, week, season);
+      const rankings = generatePowerRankings(teams, previousRankings);
+      await storeRankingsForWeek(
+        league_id,
+        week,
+        rankings.map((r) => ({ teamId: r.teamId, rank: r.rank, powerScore: r.powerScore })),
+        season,
+      );
       return res.json({ leagueName, week, rankings });
     } catch (err: any) {
       return res.status(500).json({ error: err?.message || "Failed to generate power rankings" });
@@ -1176,8 +1190,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           const result = await getWeeklyPreviewEmail(leagueId, week, note, signoff, appOrigin);
           html = result.emailHtml;
         } else {
-          const previousRankings = getStoredPreviousRankings(leagueId, week);
-          const result = await generateWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
+          const result = await generateWeeklyCommissionerEmail(leagueId, week, [], note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
           html = result.html;
         }
       }
@@ -1227,8 +1240,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         recordSent(leagueId, week, commissionerEmail, "preview");
         return res.json({ ok: true, message: "Matchup preview sent to commissioner." });
       }
-      const previousRankings = getStoredPreviousRankings(leagueId, week);
-      const result = await getWeeklyCommissionerEmail(leagueId, week, previousRankings, note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
+      const result = await getWeeklyCommissionerEmail(leagueId, week, [], note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
       const subject = getRecapSubject(result.leagueName, result.week, result.emailPayload);
       const text = generateWeeklyEmailPlainText(result.emailPayload);
       const sendResult = await sendEmail({ to: commissionerEmail, subject, html: result.emailHtml, text });
@@ -1237,7 +1249,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       }
       if (!isUnlockedLeague) await markFreeSendUsed(leagueId, commissionerEmail);
       console.log(JSON.stringify({ event: "weekly_email_send_allowed", leagueId, week, mode, unlocked: isUnlockedLeague }));
-      storeRankingsForWeek(leagueId, week, result.rankings.map((r) => ({ teamId: r.teamId, rank: r.rank })));
+      // Rankings already persisted inside getWeeklyCommissionerEmail (idempotent).
       recordSent(leagueId, week, commissionerEmail, "recap");
       return res.json({ ok: true, message: "Weekly email sent to commissioner." });
     } catch (err: any) {
@@ -1317,8 +1329,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           rankings = demoPayload.rankings;
           subject = `${leagueName} — Week ${week} Power Rankings`;
         } else {
-          const previousRankings = getStoredPreviousRankings(league_id, week);
-          const result = await getWeeklyCommissionerEmail(league_id, week, previousRankings, note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
+          const result = await getWeeklyCommissionerEmail(league_id, week, [], note, signoff, appOrigin, WEEKLY_EMAIL_V2_ENABLED);
           leagueName = result.leagueName;
           emailHtml = result.emailHtml;
           rankings = result.rankings;

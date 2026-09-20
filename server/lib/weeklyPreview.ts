@@ -9,7 +9,7 @@ import type { SleeperMatchup } from "../league-history/sleeper";
 import { buildTeamsFromSleeper } from "./weeklyCommissioner";
 import type { PowerRankingRow } from "./powerRankings";
 import { generatePowerRankings } from "./powerRankings";
-import { getStoredPreviousRankings } from "./weeklyRankingsStore";
+import { getStoredPreviousRankings, storeRankingsForWeek } from "./weeklyRankingsStore";
 import { getLeagueHistoryNarratives, type MatchupPair } from "./weeklyEmailNarratives";
 import { generateWeeklyEmail, generateWeeklyEmailPlainText, type WeeklyEmailData } from "./weeklyEmail";
 
@@ -232,9 +232,19 @@ export async function getWeeklyPreviewEmail(
   appUrl?: string,
 ): Promise<WeeklyPreviewResult> {
   const throughWeek = Math.max(1, week - 1);
-  const { leagueName, teams } = await buildTeamsFromSleeper(leagueId, throughWeek);
-  const previousRankings = getStoredPreviousRankings(leagueId, week);
+  const { leagueName, teams, season } = await buildTeamsFromSleeper(leagueId, throughWeek);
+  // Rankings are through `throughWeek`; previous snapshot must be strictly before that week.
+  const previousRankings = await getStoredPreviousRankings(leagueId, throughWeek, season);
   const rankings = teams.length > 0 ? generatePowerRankings(teams, previousRankings) : [];
+  if (rankings.length) {
+    // Persist through-week rankings so next week's preview/recap has durable trends.
+    await storeRankingsForWeek(
+      leagueId,
+      throughWeek,
+      rankings.map((r) => ({ teamId: r.teamId, rank: r.rank, powerScore: r.powerScore })),
+      season,
+    );
+  }
   const teamById = new Map(
     teams.map((t) => [t.teamId, { teamName: t.teamName, ownerKey: t.ownerKey }]),
   );

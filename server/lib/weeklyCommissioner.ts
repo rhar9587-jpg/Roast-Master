@@ -20,6 +20,7 @@ import { classifyMatchupGroup, scoresFromPlayedClassification } from "./domain/m
 import { classifyWeekMatchupPairs } from "./domain/classifyWeekMatchups";
 import { pickSmallestMarginWinner, pickStoleOneAndGotRobbed, matchupFinalityTruth } from "./domain/matchupOutcomes";
 import { getNflWeekContext, resolveFinalThroughWeek, resolveLeagueWeekFinality } from "../league-history/nflState";
+import { getStoredPreviousRankings, storeRankingsForWeek } from "./weeklyRankingsStore";
 
 // Sleeper API returns roster settings with fpts/fpts_decimal; type is extended here for the adapter
 interface RosterWithPoints {
@@ -159,7 +160,7 @@ export async function buildTeamsFromSleeper(
   leagueId: string,
   throughWeek: number,
   options?: { finalThroughWeek?: number },
-): Promise<{ leagueName: string; teams: PowerRankingsTeamInput[] }> {
+): Promise<{ leagueName: string; teams: PowerRankingsTeamInput[]; season: string }> {
   const [league, rostersRaw, users] = await Promise.all([
     getLeague(leagueId),
     getRosters(leagueId),
@@ -200,7 +201,7 @@ export async function buildTeamsFromSleeper(
     );
   }
 
-  return buildTeamsFromMatchupData({
+  const built = buildTeamsFromMatchupData({
     leagueName: league.name || "Fantasy League",
     throughWeek,
     rosters,
@@ -208,6 +209,10 @@ export async function buildTeamsFromSleeper(
     matchupsByWeek,
     finalThroughWeek,
   });
+  return {
+    ...built,
+    season: String(league.season || "").trim() || "unknown",
+  };
 }
 
 /**
@@ -713,6 +718,7 @@ export function buildIntroSummary(
 export interface WeeklyCommissionerResult {
   leagueName: string;
   week: number;
+  season: string;
   rankings: PowerRankingRow[];
   emailHtml: string;
   emailPayload: WeeklyEmailData;
@@ -721,6 +727,8 @@ export interface WeeklyCommissionerResult {
 /**
  * Full pipeline: fetch Sleeper data, run power rankings, build villain/fraud/intro, generate email.
  * Optional previousRankings (e.g. from last week's stored result) for trend arrows.
+ * When omitted / empty, loads durable previous snapshot for this league+season.
+ * Persists the generated week snapshot (idempotent) for next week's trends.
  * Optional commissionerNote rendered above the intro in the email.
  * Optional appUrl for "Want this for your league?" CTA in the footer.
  */
@@ -734,24 +742,35 @@ export async function getWeeklyCommissionerEmail(
   includeV2 = true,
 ): Promise<WeeklyCommissionerResult> {
   const startMs = Date.now();
-  const { leagueName, teams } = await buildTeamsFromSleeper(leagueId, week);
+  const { leagueName, teams, season } = await buildTeamsFromSleeper(leagueId, week);
   if (teams.length === 0) {
     throw new Error("No team data available for this league and week.");
   }
 
   // Resolve week finality once for all winner-dependent consumers.
   let weekIsFinal = false;
-  let leagueSeason: string | undefined;
+  let leagueSeason = season;
   try {
     const [nfl, league] = await Promise.all([getNflWeekContext(), getLeague(leagueId)]);
-    leagueSeason = league.season;
+    leagueSeason = String(league.season || season).trim() || season;
     weekIsFinal = resolveLeagueWeekFinality(week, league.season, nfl);
   } catch {
     // Unknown NFL/league state: do not invent winners for this week.
     weekIsFinal = false;
   }
 
-  const rankings = generatePowerRankings(teams, previousRankings);
+  const prior =
+    previousRankings.length > 0
+      ? previousRankings
+      : await getStoredPreviousRankings(leagueId, week, leagueSeason);
+  const rankings = generatePowerRankings(teams, prior);
+  // Persist for next week — never fail the email if storage is down.
+  await storeRankingsForWeek(
+    leagueId,
+    week,
+    rankings.map((r) => ({ teamId: r.teamId, rank: r.rank, powerScore: r.powerScore })),
+    leagueSeason,
+  );
   const rosterNameByTeamId = (teamId: string) => {
     const t = teams.find((x) => x.teamId === teamId);
     return t?.teamName ?? teamId;
@@ -925,6 +944,7 @@ export async function getWeeklyCommissionerEmail(
   return {
     leagueName,
     week,
+    season: leagueSeason,
     rankings,
     emailHtml,
     emailPayload,
