@@ -58,24 +58,91 @@ type SleeperPlayer = {
   team?: string;
 };
 
+export const UNKNOWN_PLAYER_DISPLAY = "Unknown Player";
+
+/** True if a string is the banned raw-ID fallback form. */
+export function looksLikeRawPlayerIdFallback(name: string): boolean {
+  return /^Player\s+\S+$/i.test(String(name || "").trim());
+}
+
+/**
+ * Build a user-facing player label from a Sleeper player record.
+ * Returns null when no real name is available (never invents `Player <id>`).
+ */
+export function displayNameFromSleeperPlayer(
+  p: SleeperPlayer | null | undefined,
+): string | null {
+  if (!p) return null;
+  const base =
+    (typeof p.full_name === "string" && p.full_name.trim()) ||
+    [p.first_name, p.last_name]
+      .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+      .join(" ")
+      .trim();
+  if (!base) return null;
+  if (p.position && p.team) return `${base} (${p.position}, ${p.team})`;
+  return base;
+}
+
+/**
+ * Pure resolution order for tests: full map entry → individual record → neutral fallback.
+ * Never returns `Player <id>`.
+ */
+export function resolvePlayerDisplayName(options: {
+  playerId: string;
+  fromMap?: SleeperPlayer | null;
+  fromIndividual?: SleeperPlayer | null;
+}): string {
+  const fromMap = displayNameFromSleeperPlayer(options.fromMap ?? null);
+  if (fromMap) return fromMap;
+  const fromIndividual = displayNameFromSleeperPlayer(options.fromIndividual ?? null);
+  if (fromIndividual) return fromIndividual;
+  return UNKNOWN_PLAYER_DISPLAY;
+}
+
 const playerNameCache = new Map<string, string>();
 
+/** Test helper — clears the in-memory player display cache. */
+export function clearPlayerNameCacheForTests() {
+  playerNameCache.clear();
+}
+
 async function getPlayerName(player_id: string): Promise<string> {
-  if (!player_id) return "Unknown Player";
+  if (!player_id) return UNKNOWN_PLAYER_DISPLAY;
+
   const cached = playerNameCache.get(player_id);
-  if (cached) return cached;
+  if (cached) {
+    // Defend against any historically poisoned raw-ID cache entries.
+    if (!looksLikeRawPlayerIdFallback(cached)) return cached;
+    playerNameCache.delete(player_id);
+  }
+
+  // 1) Prefer the cached full NFL players map (same source used by sit/start).
+  try {
+    const map = await getNflPlayers();
+    const fromMap = displayNameFromSleeperPlayer(map[player_id]);
+    if (fromMap) {
+      playerNameCache.set(player_id, fromMap);
+      return fromMap;
+    }
+  } catch {
+    // Fall through to individual lookup.
+  }
+
+  // 2) Individual Sleeper player endpoint as secondary fallback.
   try {
     const p = await fetchJson<SleeperPlayer>(`https://api.sleeper.app/v1/player/${player_id}`);
-    const name =
-      p.full_name || [p.first_name, p.last_name].filter(Boolean).join(" ") || `Player ${player_id}`;
-    const decorated = p.position && p.team ? `${name} (${p.position}, ${p.team})` : name;
-    playerNameCache.set(player_id, decorated);
-    return decorated;
+    const fromIndividual = displayNameFromSleeperPlayer(p);
+    if (fromIndividual) {
+      playerNameCache.set(player_id, fromIndividual);
+      return fromIndividual;
+    }
   } catch {
-    const fallback = `Player ${player_id}`;
-    playerNameCache.set(player_id, fallback);
-    return fallback;
+    // Fall through to neutral unknown.
   }
+
+  // 3) Never cache a raw-ID fallback — failed lookups must not poison the cache.
+  return UNKNOWN_PLAYER_DISPLAY;
 }
 
 let nflPlayersCache: Record<string, SleeperPlayer> | null = null;
