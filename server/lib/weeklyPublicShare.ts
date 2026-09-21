@@ -9,6 +9,7 @@ import { Resvg } from "@resvg/resvg-js";
 import { BRAND_NAME, SITE_HOST, SITE_URL } from "@shared/site";
 import {
   clampShareWeek,
+  roastMyLeagueUrl,
   weeklyLeagueAppUrl,
   weeklyPublicShareOgImageUrl,
   weeklyPublicShareUrl,
@@ -18,10 +19,33 @@ import { getWeeklyShareOgFallbackPngBytes } from "../assets/weeklyShareOgFallbac
 import { getNflWeekContext, resolveLeagueWeekFinality } from "../league-history/nflState";
 import {
   DEMO_LEAGUE_ID,
+  getDemoPowerRankingInputs,
   getDemoWeeklyRoast,
 } from "../league-history/demoLeague";
-import { DEMO_LEAGUE_NAME } from "../league-history/demo/canonicalDemoFixture";
-import { fetchJson, type SleeperLeague, type SleeperMatchup, type SleeperRoster, type SleeperUser } from "../league-history/sleeper";
+import {
+  DEMO_ICONIC_SEASON,
+  DEMO_LEAGUE_NAME,
+  DEMO_MANAGER_BY_ROSTER,
+  getSleeperMatchupsForDemoWeek,
+} from "../league-history/demo/canonicalDemoFixture";
+import {
+  fetchJson,
+  type SleeperLeague,
+  type SleeperMatchup,
+  type SleeperRoster,
+  type SleeperUser,
+} from "../league-history/sleeper";
+import { completedWinnerPairs, classifyWeekMatchupPairs } from "./domain/classifyWeekMatchups";
+import {
+  selectPublicRecapHero,
+  selectPublicRecapSupportingMoments,
+  type PublicRecapHeroMoment,
+} from "./publicRecapHero";
+import { generatePowerRankings, type PowerRankingRow } from "./powerRankings";
+import {
+  buildTeamsFromSleeper,
+} from "./weeklyCommissioner";
+import { getStoredPreviousRankings } from "./weeklyRankingsStore";
 import { buildWeeklyRoastNarrative } from "./weeklyRoastEngine";
 
 /** Official OG image size for weekly share cards. */
@@ -32,6 +56,31 @@ export type WeeklyPublicShareBeat = {
   title: string;
   subtitle: string;
   stat?: string;
+  type?: string;
+};
+
+export type WeeklyPublicShareHero = {
+  title: string;
+  subtitle: string;
+  stat?: string;
+  type: string;
+};
+
+export type WeeklyPublicShareMatchup = {
+  winnerName: string;
+  winnerScore: number;
+  loserName: string;
+  loserScore: number;
+  margin: number;
+};
+
+export type WeeklyPublicShareRanking = {
+  rank: number;
+  teamName: string;
+  record: string;
+  /** Present only when prior-week history exists; never fabricate movement. */
+  trend?: "up" | "down" | "flat";
+  showMovement: boolean;
 };
 
 export type WeeklyPublicShareData = {
@@ -41,12 +90,23 @@ export type WeeklyPublicShareData = {
   mode: "recap";
   headline: string;
   summary: string;
+  /** Compact one-liner for OG / fallback when no roast hero exists. */
   heroFact: string;
+  /** Strongest roast moment for the public page lead (final weeks only). */
+  hero: WeeklyPublicShareHero | null;
   weekIsFinal: boolean;
   /** Canonical slate readiness — completed claims only when recapReady. */
   recapReady: boolean;
   slateStatus: "final" | "live" | "upcoming" | "unavailable";
   isDemo: boolean;
+  /** Completed matchup results — empty when not recapReady. */
+  matchups: WeeklyPublicShareMatchup[];
+  /**
+   * Compact Power Rankings from the same weekly ranking source as commissioner email.
+   * null = omit section (unavailable / failed load).
+   */
+  powerRankings: WeeklyPublicShareRanking[] | null;
+  /** 2–3 supporting roast moments (excludes hero). */
   beats: WeeklyPublicShareBeat[];
 };
 
@@ -108,9 +168,14 @@ function pickHeroFact(params: {
   highestName?: string;
   highestScore?: number;
   blowoutSubtitle?: string;
+  hero?: WeeklyPublicShareHero | null;
   recapReady: boolean;
   slateStatus: "final" | "live" | "upcoming" | "unavailable";
 }): string {
+  if (params.recapReady && params.hero) {
+    const parts = [params.hero.title, params.hero.stat, params.hero.subtitle].filter(Boolean);
+    return truncate(parts.join(" — "), 120);
+  }
   if (
     params.recapReady &&
     params.highestName &&
@@ -128,23 +193,160 @@ function pickHeroFact(params: {
   return `Week ${params.week}`;
 }
 
-function publicBeatsFromCards(
-  cards: Array<{ type?: string; title?: string; subtitle?: string; stat?: string }>,
-): WeeklyPublicShareBeat[] {
-  const allow = new Set([
-    "top_dog",
-    "biggest_embarrassment",
-    "fraud_watch",
-    "group_chat_drop",
-  ]);
-  return cards
-    .filter((c) => c.type && allow.has(String(c.type)))
-    .slice(0, 3)
-    .map((c) => ({
-      title: String(c.title || "").trim() || "Recap",
-      subtitle: truncate(String(c.subtitle || ""), 140),
-      ...(c.stat ? { stat: String(c.stat) } : {}),
-    }));
+function momentToBeat(m: PublicRecapHeroMoment): WeeklyPublicShareBeat {
+  return {
+    title: m.title,
+    subtitle: truncate(m.subtitle, 140),
+    type: m.type,
+    ...(m.stat ? { stat: m.stat } : {}),
+  };
+}
+
+function buildCompletedMatchups(
+  matchups: SleeperMatchup[],
+  rosterName: (rid: number) => string,
+  recapReady: boolean,
+): WeeklyPublicShareMatchup[] {
+  if (!recapReady || !matchups?.length) return [];
+  const pairs = classifyWeekMatchupPairs(matchups, { weekIsFinal: true });
+  const completed = completedWinnerPairs(pairs);
+  return completed
+    .map((g) => ({
+      winnerName: rosterName(g.winner.rosterId),
+      winnerScore: g.winner.points,
+      loserName: rosterName(g.loser.rosterId),
+      loserScore: g.loser.points,
+      margin: g.margin,
+    }))
+    .sort((a, b) => b.margin - a.margin);
+}
+
+/**
+ * Map engine rankings → public-safe compact rows.
+ * Movement indicators only when prior-week history was supplied to the engine.
+ */
+export function toPublicShareRankings(
+  rankings: PowerRankingRow[],
+  options?: { hasPriorWeekHistory?: boolean },
+): WeeklyPublicShareRanking[] {
+  const hasPrior = options?.hasPriorWeekHistory === true;
+  return rankings.map((r) => ({
+    rank: r.rank,
+    teamName: r.teamName,
+    record: r.record,
+    showMovement: hasPrior,
+    ...(hasPrior ? { trend: r.trend } : {}),
+  }));
+}
+
+/** Shared ranking pipeline used by commissioner email + public recap (demo). */
+export function buildDemoPublicPowerRankings(week: number): WeeklyPublicShareRanking[] | null {
+  try {
+    const { teams } = getDemoPowerRankingInputs(DEMO_ICONIC_SEASON, week);
+    if (!teams.length) return null;
+    // Demo email uses generatePowerRankings(teams) with no prior — no fabricated movement.
+    const rankings = generatePowerRankings(teams, []);
+    return toPublicShareRankings(rankings, { hasPriorWeekHistory: false });
+  } catch {
+    return null;
+  }
+}
+
+async function buildLivePublicPowerRankings(
+  leagueId: string,
+  week: number,
+  season: string,
+  recapReady: boolean,
+): Promise<WeeklyPublicShareRanking[] | null> {
+  if (!recapReady) return null;
+  try {
+    const { teams, season: resolvedSeason } = await buildTeamsFromSleeper(leagueId, week, {
+      finalThroughWeek: week,
+    });
+    if (!teams.length) return null;
+    const seasonKey = String(resolvedSeason || season || "").trim() || "unknown";
+    const prior = await getStoredPreviousRankings(leagueId, week, seasonKey).catch(() => []);
+    const hasPrior = Array.isArray(prior) && prior.length > 0;
+    const rankings = generatePowerRankings(teams, hasPrior ? prior : []);
+    return toPublicShareRankings(rankings, { hasPriorWeekHistory: hasPrior });
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        event: "weekly_public_share_rankings_omit",
+        leagueId,
+        week,
+        err: String(err),
+      }),
+    );
+    return null;
+  }
+}
+
+function assemblePresentation(params: {
+  week: number;
+  cards: Array<{ type?: string; title?: string; subtitle?: string; stat?: string; tagline?: string }>;
+  closestGame?: {
+    teamA?: string;
+    teamB?: string;
+    scoreA?: number;
+    scoreB?: number;
+  };
+  closestMargin?: number | null;
+  recapReady: boolean;
+  slateStatus: "final" | "live" | "upcoming" | "unavailable";
+  highestName?: string;
+  highestScore?: number;
+  blowoutSubtitle?: string;
+}): {
+  hero: WeeklyPublicShareHero | null;
+  beats: WeeklyPublicShareBeat[];
+  heroFact: string;
+} {
+  if (!params.recapReady) {
+    return {
+      hero: null,
+      beats: [],
+      heroFact: pickHeroFact({
+        week: params.week,
+        recapReady: false,
+        slateStatus: params.slateStatus,
+      }),
+    };
+  }
+
+  const closestOpts = params.closestGame
+    ? {
+        closestGame: {
+          ...params.closestGame,
+          margin: params.closestMargin ?? null,
+        },
+      }
+    : undefined;
+
+  const heroMoment = selectPublicRecapHero(params.cards, closestOpts);
+  const supporting = selectPublicRecapSupportingMoments(params.cards, heroMoment, 3, closestOpts);
+  const hero: WeeklyPublicShareHero | null = heroMoment
+    ? {
+        type: heroMoment.type,
+        title: heroMoment.title,
+        subtitle: heroMoment.subtitle,
+        ...(heroMoment.stat ? { stat: heroMoment.stat } : {}),
+      }
+    : null;
+
+  return {
+    hero,
+    beats: supporting.map(momentToBeat),
+    heroFact: pickHeroFact({
+      week: params.week,
+      highestName: params.highestName,
+      highestScore: params.highestScore,
+      blowoutSubtitle: params.blowoutSubtitle,
+      hero,
+      recapReady: true,
+      slateStatus: params.slateStatus,
+    }),
+  };
 }
 
 async function loadLiveWeeklyPublicShare(
@@ -193,14 +395,25 @@ async function loadLiveWeeklyPublicShare(
   const blowout = narrative.cards.find((c) => c.type === "biggest_embarrassment");
   const recapReady = narrative.signals?.recapReady === true;
   const slateStatus = narrative.signals?.slateStatus ?? (weekIsFinal ? "unavailable" : "upcoming");
-  const heroFact = pickHeroFact({
+
+  const presentation = assemblePresentation({
     week,
+    cards: narrative.cards,
+    closestGame: narrative.signals?.closestGame,
+    closestMargin: narrative.signals?.closestMargin,
+    recapReady,
+    slateStatus,
     highestName: narrative.stats.highestScorer?.username,
     highestScore: narrative.stats.highestScorer?.score,
     blowoutSubtitle: blowout?.subtitle,
-    recapReady,
-    slateStatus,
   });
+
+  const powerRankings = await buildLivePublicPowerRankings(
+    league.league_id,
+    week,
+    String(league.season || ""),
+    recapReady,
+  );
 
   return {
     leagueId: league.league_id,
@@ -209,12 +422,15 @@ async function loadLiveWeeklyPublicShare(
     mode: "recap",
     headline: narrative.headline,
     summary: narrative.groupChatSummary,
-    heroFact,
+    heroFact: presentation.heroFact,
+    hero: presentation.hero,
     weekIsFinal,
     recapReady,
     slateStatus,
     isDemo: false,
-    beats: recapReady ? publicBeatsFromCards(narrative.cards) : publicBeatsFromCards(narrative.cards).slice(0, 1),
+    matchups: buildCompletedMatchups(matchups, rosterName, recapReady),
+    powerRankings,
+    beats: presentation.beats,
   };
 }
 
@@ -238,20 +454,58 @@ export async function loadWeeklyPublicShare(
       const league = demo.league as { league_id: string; name: string };
       const stats = demo.stats as {
         highestScorer?: { username?: string; score?: number };
+        closestGame?: {
+          teamA?: string;
+          teamB?: string;
+          scoreA?: number;
+          scoreB?: number;
+        };
+        closestMargin?: number | null;
       };
       const cards = (demo.cards || []) as Array<{
         type?: string;
         title?: string;
         subtitle?: string;
         stat?: string;
+        tagline?: string;
       }>;
       const blowout = cards.find((c) => c.type === "biggest_embarrassment");
       const signals = (demo.signals || {}) as {
         recapReady?: boolean;
         slateStatus?: "final" | "live" | "upcoming" | "unavailable";
+        closestGame?: {
+          teamA?: string;
+          teamB?: string;
+          scoreA?: number;
+          scoreB?: number;
+        };
+        closestMargin?: number | null;
       };
       const recapReady = signals.recapReady !== false;
       const slateStatus = signals.slateStatus ?? "final";
+      const closestGame = signals.closestGame ?? stats.closestGame;
+      const closestMargin =
+        signals.closestMargin ?? stats.closestMargin ?? null;
+
+      const presentation = assemblePresentation({
+        week,
+        cards,
+        closestGame,
+        closestMargin,
+        recapReady,
+        slateStatus,
+        highestName: stats.highestScorer?.username,
+        highestScore: stats.highestScorer?.score,
+        blowoutSubtitle: blowout?.subtitle,
+      });
+
+      const demoMatchups = getSleeperMatchupsForDemoWeek(
+        DEMO_ICONIC_SEASON,
+        week,
+      ) as SleeperMatchup[];
+      const rosterName = (rid: number) =>
+        DEMO_MANAGER_BY_ROSTER.get(rid)?.name ?? `Team ${rid}`;
+
       return {
         leagueId: league.league_id || DEMO_LEAGUE_ID,
         leagueName: league.name || DEMO_LEAGUE_NAME,
@@ -259,19 +513,15 @@ export async function loadWeeklyPublicShare(
         mode: "recap",
         headline: String(demo.headline || `Week ${week}`),
         summary: String(demo.groupChatSummary || ""),
-        heroFact: pickHeroFact({
-          week,
-          highestName: stats.highestScorer?.username,
-          highestScore: stats.highestScorer?.score,
-          blowoutSubtitle: blowout?.subtitle,
-          recapReady,
-          slateStatus,
-        }),
+        heroFact: presentation.heroFact,
+        hero: presentation.hero,
         weekIsFinal: true,
         recapReady,
         slateStatus,
         isDemo: true,
-        beats: publicBeatsFromCards(cards),
+        matchups: buildCompletedMatchups(demoMatchups, rosterName, recapReady),
+        powerRankings: recapReady ? buildDemoPublicPowerRankings(week) : null,
+        beats: presentation.beats,
       };
     } catch (err: any) {
       const msg = String(err?.message || err || "");
@@ -293,7 +543,10 @@ export function buildShareOgTitle(
 }
 
 export function buildShareOgDescription(
-  data: Pick<WeeklyPublicShareData, "week" | "summary" | "heroFact" | "recapReady" | "slateStatus">,
+  data: Pick<
+    WeeklyPublicShareData,
+    "week" | "summary" | "heroFact" | "hero" | "recapReady" | "slateStatus"
+  >,
 ): string {
   if (data.recapReady === false) {
     const status = data.slateStatus ?? "unavailable";
@@ -311,6 +564,10 @@ export function buildShareOgDescription(
     }
     return truncate(data.summary || data.heroFact || `Week ${data.week} is not a completed recap.`, 180);
   }
+  if (data.hero) {
+    const punch = [data.hero.title, data.hero.stat, data.hero.subtitle].filter(Boolean).join(" — ");
+    return truncate(punch || data.heroFact || data.summary || "", 180);
+  }
   const base = `Week ${data.week} recap: top scorer, biggest blowout, fraud watch and league receipts.`;
   const hero = truncate(data.heroFact || "", 80);
   const summary = truncate(data.summary || "", 120);
@@ -320,26 +577,116 @@ export function buildShareOgDescription(
   return base;
 }
 
+function trendGlyph(trend: "up" | "down" | "flat" | undefined): string {
+  if (trend === "up") return "↑";
+  if (trend === "down") return "↓";
+  return "";
+}
+
 export function buildWeeklySharePageHtml(
   data: WeeklyPublicShareData,
   origin: string = SITE_URL,
 ): string {
   const pageUrl = weeklyPublicShareUrl(data.leagueId, data.week, origin);
   const imageUrl = weeklyPublicShareOgImageUrl(data.leagueId, data.week, origin);
-  const appUrl = weeklyLeagueAppUrl(data.leagueId, origin);
-  const homeUrl = String(origin || SITE_URL).replace(/\/$/, "") || SITE_URL;
+  const fullRecapUrl = weeklyLeagueAppUrl(data.leagueId, origin, { week: data.week });
+  const roastCtaUrl = roastMyLeagueUrl(origin);
   const title = buildShareOgTitle(data);
   const description = buildShareOgDescription(data);
-  const beatsHtml = data.beats
-    .map(
-      (b) => `
-      <article class="beat">
-        <h2>${escapeHtml(b.title)}</h2>
-        ${b.stat ? `<p class="stat">${escapeHtml(b.stat)}</p>` : ""}
-        <p>${escapeHtml(b.subtitle)}</p>
-      </article>`,
-    )
-    .join("");
+
+  const isFinalRecap = data.recapReady === true;
+
+  const heroHtml = isFinalRecap && data.hero
+    ? `
+    <section class="hero roast-hero" data-hero-type="${escapeHtml(data.hero.type)}">
+      <div class="kicker">Roast of the week</div>
+      <h2 class="hero-title">${escapeHtml(data.hero.title)}</h2>
+      ${data.hero.stat ? `<p class="hero-stat">${escapeHtml(data.hero.stat)}</p>` : ""}
+      <p class="hero-punch">${escapeHtml(data.hero.subtitle)}</p>
+    </section>`
+    : `
+    <section class="hero">
+      <div class="kicker">${
+        data.slateStatus === "live"
+          ? "Week still in progress"
+          : data.slateStatus === "upcoming"
+            ? "Upcoming week"
+            : data.slateStatus === "unavailable"
+              ? "Scores unavailable"
+              : "League receipt"
+      }</div>
+      <p class="fact">${escapeHtml(data.heroFact)}</p>
+    </section>`;
+
+  const matchupsHtml =
+    isFinalRecap && data.matchups.length
+      ? `
+    <section class="section matchups" aria-label="Matchup results">
+      <h2 class="section-title">Week ${data.week} results</h2>
+      <ul class="matchup-list">
+        ${data.matchups
+          .map(
+            (m) => `
+        <li class="matchup-row">
+          <span class="mu-winner">${escapeHtml(m.winnerName)}</span>
+          <span class="mu-score">${m.winnerScore.toFixed(1)}–${m.loserScore.toFixed(1)}</span>
+          <span class="mu-loser">${escapeHtml(m.loserName)}</span>
+        </li>`,
+          )
+          .join("")}
+      </ul>
+    </section>`
+      : "";
+
+  const rankingsHtml =
+    isFinalRecap && data.powerRankings && data.powerRankings.length
+      ? `
+    <section class="section rankings" aria-label="Power Rankings">
+      <h2 class="section-title">Power Rankings</h2>
+      <ol class="rank-list">
+        ${data.powerRankings
+          .map((r) => {
+            const move =
+              r.showMovement && r.trend && r.trend !== "flat"
+                ? `<span class="rank-move ${r.trend}" aria-label="${r.trend}">${trendGlyph(r.trend)}</span>`
+                : "";
+            return `
+        <li class="rank-row">
+          <span class="rank-num">${r.rank}</span>
+          <span class="rank-name">${escapeHtml(r.teamName)}${move}</span>
+          <span class="rank-record">${escapeHtml(r.record)}</span>
+        </li>`;
+          })
+          .join("")}
+      </ol>
+    </section>`
+      : "";
+
+  const beatsHtml =
+    isFinalRecap && data.beats.length
+      ? `
+    <section class="section beats" aria-label="More roast moments">
+      <h2 class="section-title">Also this week</h2>
+      <div class="beats-grid">
+        ${data.beats
+          .map(
+            (b) => `
+        <article class="beat"${b.type ? ` data-beat-type="${escapeHtml(b.type)}"` : ""}>
+          <h3>${escapeHtml(b.title)}</h3>
+          ${b.stat ? `<p class="stat">${escapeHtml(b.stat)}</p>` : ""}
+          <p>${escapeHtml(b.subtitle)}</p>
+        </article>`,
+          )
+          .join("")}
+      </div>
+    </section>`
+      : !isFinalRecap && data.summary
+        ? `<p class="summary">${escapeHtml(truncate(data.summary, 280))}</p>`
+        : "";
+
+  const secondaryCta = isFinalRecap
+    ? `<a class="cta-secondary" href="${escapeHtml(fullRecapUrl)}">View full Week ${data.week} recap</a>`
+    : `<a class="cta-secondary" href="${escapeHtml(fullRecapUrl)}">Open Week ${data.week} in Weekly</a>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -375,57 +722,75 @@ export function buildWeeklySharePageHtml(
       color: #e8eef5;
       min-height: 100vh;
     }
-    main { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
-    .brand { font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #86efac; font-weight: 700; }
-    h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); line-height: 1.15; margin: 10px 0 8px; }
-    .league { color: #cbd5e1; font-size: 1.05rem; margin: 0 0 18px; }
+    main { max-width: 720px; margin: 0 auto; padding: 28px 18px 64px; }
+    .brand { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #86efac; font-weight: 700; }
+    .context { margin: 8px 0 18px; color: #94a3b8; font-size: 0.92rem; }
+    .context strong { color: #cbd5e1; font-weight: 600; }
+    h1 { font-size: clamp(1.35rem, 3.6vw, 1.75rem); line-height: 1.2; margin: 0 0 4px; color: #cbd5e1; font-weight: 650; }
     .hero {
-      border: 1px solid rgba(134, 239, 172, 0.25);
-      background: linear-gradient(135deg, rgba(15, 42, 24, 0.9), rgba(7, 20, 12, 0.95));
-      border-radius: 16px; padding: 18px 18px 16px; margin-bottom: 22px;
+      border: 1px solid rgba(134, 239, 172, 0.28);
+      background: linear-gradient(135deg, rgba(15, 42, 24, 0.95), rgba(7, 20, 12, 0.98));
+      border-radius: 16px; padding: 20px 18px 18px; margin-bottom: 22px;
     }
-    .hero .kicker { color: #86efac; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; }
-    .hero .fact { font-size: 1.25rem; font-weight: 700; margin: 8px 0 0; }
-    .summary { color: #cbd5e1; line-height: 1.5; margin: 0 0 24px; }
-    .beats { display: grid; gap: 12px; margin-bottom: 28px; }
-    .beat { border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 14px; padding: 14px 16px; background: rgba(15, 23, 42, 0.55); }
-    .beat h2 { margin: 0 0 4px; font-size: 0.95rem; }
+    .hero .kicker { color: #86efac; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; }
+    .hero .fact { font-size: 1.2rem; font-weight: 700; margin: 8px 0 0; }
+    .hero-title { margin: 8px 0 0; font-size: clamp(1.7rem, 5vw, 2.35rem); line-height: 1.1; color: #f8fafc; }
+    .hero-stat { margin: 10px 0 0; color: #a3e635; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
+    .hero-punch { margin: 10px 0 0; color: #cbd5e1; font-size: 1.05rem; line-height: 1.45; }
+    .section { margin-bottom: 24px; }
+    .section-title { margin: 0 0 10px; font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: #86efac; }
+    .matchup-list, .rank-list { list-style: none; margin: 0; padding: 0; }
+    .matchup-row, .rank-row {
+      display: grid; gap: 8px; align-items: baseline;
+      padding: 10px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+      font-size: 0.95rem;
+    }
+    .matchup-row { grid-template-columns: 1fr auto 1fr; }
+    .mu-winner { font-weight: 700; color: #e2e8f0; text-align: left; }
+    .mu-loser { color: #94a3b8; text-align: right; }
+    .mu-score { color: #a3e635; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .rank-row { grid-template-columns: 28px 1fr auto; }
+    .rank-num { color: #64748b; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .rank-name { font-weight: 600; color: #e2e8f0; }
+    .rank-record { color: #94a3b8; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+    .rank-move { margin-left: 6px; font-size: 0.85rem; }
+    .rank-move.up { color: #86efac; }
+    .rank-move.down { color: #fb7185; }
+    .beats-grid { display: grid; gap: 10px; }
+    .beat { border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 12px; padding: 12px 14px; background: rgba(15, 23, 42, 0.45); }
+    .beat h3 { margin: 0 0 4px; font-size: 0.95rem; }
     .beat .stat { margin: 0 0 6px; color: #a3e635; font-weight: 700; }
-    .beat p { margin: 0; color: #94a3b8; font-size: 0.92rem; line-height: 1.4; }
+    .beat p { margin: 0; color: #94a3b8; font-size: 0.9rem; line-height: 1.4; }
+    .summary { color: #cbd5e1; line-height: 1.5; margin: 0 0 22px; }
+    .cta-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
     .cta {
-      display: inline-block; background: #34d399; color: #052e16; font-weight: 800;
-      text-decoration: none; border-radius: 999px; padding: 12px 18px;
+      display: inline-block; text-align: center; background: #34d399; color: #052e16; font-weight: 800;
+      text-decoration: none; border-radius: 999px; padding: 13px 18px;
     }
     .cta:hover { filter: brightness(1.05); }
-    .sub { margin-top: 14px; font-size: 0.85rem; color: #94a3b8; }
-    .sub a { color: #7dd3fc; }
+    .cta-secondary {
+      display: inline-block; text-align: center; color: #7dd3fc; font-weight: 650;
+      text-decoration: none; font-size: 0.95rem; padding: 6px 4px;
+    }
     footer { margin-top: 36px; color: #64748b; font-size: 12px; }
+    @media (min-width: 560px) {
+      .cta-row { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 14px; }
+    }
   </style>
 </head>
 <body>
   <main>
     <div class="brand">${escapeHtml(BRAND_NAME)}</div>
+    ${heroHtml}
     <h1>${escapeHtml(weekSlateHeadline(data.week, data.slateStatus, "public"))}</h1>
-    <p class="league">${escapeHtml(data.leagueName)}</p>
-    <section class="hero">
-      <div class="kicker">${
-        data.recapReady
-          ? "League receipt"
-          : data.slateStatus === "live"
-            ? "Week still in progress"
-            : data.slateStatus === "upcoming"
-              ? "Upcoming week"
-              : "Scores unavailable"
-      }</div>
-      <p class="fact">${escapeHtml(data.heroFact)}</p>
-    </section>
-    <p class="summary">${escapeHtml(truncate(data.summary || data.headline, 280))}</p>
-    <div class="beats">${beatsHtml}</div>
-    <a class="cta" href="${escapeHtml(homeUrl)}">See your own league</a>
-    <p class="sub">
-      Open this league in the app:
-      <a href="${escapeHtml(appUrl)}">${escapeHtml(SITE_HOST)}</a>
-    </p>
+    <p class="context"><strong>${escapeHtml(data.leagueName)}</strong> · Week ${data.week}</p>
+    ${matchupsHtml}
+    ${rankingsHtml}
+    ${beatsHtml}
+    <div class="cta-row">
+      <a class="cta" href="${escapeHtml(roastCtaUrl)}">Roast my league</a>
+      ${secondaryCta}
+    </div>
     <footer>Shared via ${escapeHtml(BRAND_NAME)} · ${escapeHtml(SITE_HOST)}</footer>
   </main>
 </body>
@@ -437,7 +802,7 @@ export function buildWeeklyShareErrorHtml(
   origin: string = SITE_URL,
   status = 404,
 ): string {
-  const homeUrl = String(origin || SITE_URL).replace(/\/$/, "") || SITE_URL;
+  const homeUrl = roastMyLeagueUrl(origin);
   const title = `${BRAND_NAME} — Recap unavailable`;
   const description = truncate(message || "This weekly recap could not be loaded.", 160);
   return `<!DOCTYPE html>
@@ -461,7 +826,7 @@ export function buildWeeklyShareErrorHtml(
     <div class="brand">${escapeHtml(BRAND_NAME)}</div>
     <h1>${status === 400 ? "Invalid share link" : "Recap not found"}</h1>
     <p>${escapeHtml(description)}</p>
-    <p><a href="${escapeHtml(homeUrl)}">See your own league</a></p>
+    <p><a href="${escapeHtml(homeUrl)}">Roast my league</a></p>
   </main>
 </body>
 </html>`;
@@ -470,8 +835,16 @@ export function buildWeeklyShareErrorHtml(
 /** 1200×630 branded OG SVG (no buttons/controls). */
 export function buildWeeklyShareOgSvg(data: WeeklyPublicShareData): string {
   const title = truncate(data.leagueName, 42);
-  const hero = truncate(data.heroFact, 64);
-  const summary = truncate(data.summary || data.headline, 90);
+  const hero = truncate(
+    data.hero
+      ? [data.hero.title, data.hero.stat].filter(Boolean).join(" · ")
+      : data.heroFact,
+    64,
+  );
+  const summary = truncate(
+    data.hero?.subtitle || data.summary || data.headline,
+    90,
+  );
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <defs>
