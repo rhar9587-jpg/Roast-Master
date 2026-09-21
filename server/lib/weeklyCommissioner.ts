@@ -19,6 +19,11 @@ import {
 import { classifyMatchupGroup, scoresFromPlayedClassification } from "./domain/matchupStatus";
 import { classifyWeekMatchupPairs } from "./domain/classifyWeekMatchups";
 import { pickSmallestMarginWinner, pickStoleOneAndGotRobbed, matchupFinalityTruth } from "./domain/matchupOutcomes";
+import {
+  isWeekSlateRecapReady,
+  resolveWeekSlateStatus,
+  type WeekSlateStatus,
+} from "./domain/weekSlateStatus";
 import { getNflWeekContext, resolveFinalThroughWeek, resolveLeagueWeekFinality } from "../league-history/nflState";
 import { getStoredPreviousRankings, storeRankingsForWeek } from "./weeklyRankingsStore";
 import { findBestSitStartMiss } from "./sitStartMiss";
@@ -717,21 +722,79 @@ async function computePositionLeaders(
 
 /**
  * One-line intro summary for the week (deterministic).
- * Non-final weeks must not imply the slate is complete.
+ * Non-final weeks must not imply the slate is complete or underway when it hasn't kicked off.
  */
 export function buildIntroSummary(
   week: number,
   rankings: PowerRankingRow[],
-  weekIsFinal = true,
+  weekIsFinalOrOpts:
+    | boolean
+    | {
+        weekIsFinal?: boolean;
+        slateStatus?: WeekSlateStatus;
+        recapReady?: boolean;
+      } = true,
 ): string {
+  const opts =
+    typeof weekIsFinalOrOpts === "boolean"
+      ? { weekIsFinal: weekIsFinalOrOpts }
+      : weekIsFinalOrOpts;
+  const slateStatus =
+    opts.slateStatus ??
+    (opts.recapReady === true || opts.weekIsFinal === true ? "final" : "live");
+  const recapReady =
+    opts.recapReady === true ||
+    (opts.recapReady !== false && slateStatus === "final");
+
+  let opener: string;
+  if (recapReady || slateStatus === "final") {
+    opener = `Week ${week} is in the books.`;
+  } else if (slateStatus === "upcoming") {
+    opener = `Week ${week} hasn't kicked off yet. Matchups are set — results aren't available.`;
+    return opener;
+  } else if (slateStatus === "unavailable") {
+    opener = `Week ${week} final scores aren't available yet.`;
+    return opener;
+  } else {
+    // live
+    opener = `Week ${week} is live — scores are still moving.`;
+    return opener;
+  }
+
   const top = rankings[0];
   const fraud = rankings.find((r) => r.commentary === "Winning games, but the numbers suggest danger ahead.");
-  const opener = weekIsFinal ? `Week ${week} is in the books.` : `Week ${week} is underway.`;
   if (top && fraud)
     return `${opener} ${top.teamName} leads the power rankings, but ${fraud.teamName} is winning games the numbers don't love.`;
   if (top)
     return `${opener} Here's where everyone stands—${top.teamName} sits at the top of the power rankings.`;
   return `${opener} Time for the weekly power rankings.`;
+}
+
+/**
+ * Strip completed-week results / awards when the slate is not recap-ready.
+ * Power rankings and season races may remain; matchup results and superlatives must not.
+ */
+export function gateWeeklyEmailPayloadForSlate(
+  payload: WeeklyEmailData,
+  params: { recapReady: boolean; slateStatus: WeekSlateStatus },
+): WeeklyEmailData {
+  if (params.recapReady && params.slateStatus === "final") {
+    return { ...payload, slateStatus: params.slateStatus, recapReady: true };
+  }
+  const next: WeeklyEmailData = {
+    ...payload,
+    slateStatus: params.slateStatus,
+    recapReady: false,
+  };
+  delete next.weekMatchups;
+  delete next.weeklySuperlatives;
+  delete next.roastCallouts;
+  delete next.villainOfTheWeek;
+  delete next.leagueAverages;
+  delete next.storyOfTheWeek;
+  // Winner-dependent matchup narratives only belong on a final slate.
+  delete next.matchupToWatch;
+  return next;
 }
 
 export interface WeeklyCommissionerResult {
@@ -802,12 +865,21 @@ export async function getWeeklyCommissionerEmail(
     // omit weekMatchups from payload
   }
 
+  const slate = resolveWeekSlateStatus({ weekIsFinal, matchups: weekMatchupsRaw });
+  const recapReady = isWeekSlateRecapReady(slate.status);
+
   const [villainOfTheWeek, fraudAlert] = await Promise.all([
-    pickVillain(leagueId, week, rankings, rosterNameByTeamId, weekMatchupsRaw, weekIsFinal),
+    recapReady
+      ? pickVillain(leagueId, week, rankings, rosterNameByTeamId, weekMatchupsRaw, weekIsFinal)
+      : Promise.resolve(undefined),
     Promise.resolve(pickFraud(rankings)),
   ]);
 
-  let introSummary = buildIntroSummary(week, rankings, weekIsFinal);
+  let introSummary = buildIntroSummary(week, rankings, {
+    weekIsFinal,
+    slateStatus: slate.status,
+    recapReady,
+  });
   let roastNarrative: Awaited<ReturnType<typeof buildWeeklyRoastNarrative>> | null = null;
   if (weekMatchupsRaw.length > 0 && includeV2) {
     try {
@@ -834,22 +906,28 @@ export async function getWeeklyCommissionerEmail(
     }
   }
   const biggestMovers = computeBiggestMovers(rankings, previousRankings);
-  const weekMatchups = buildWeekMatchups(weekMatchupsRaw, rosterNameByTeamId);
+  const weekMatchups = recapReady
+    ? buildWeekMatchups(weekMatchupsRaw, rosterNameByTeamId)
+    : [];
   let playersById: Record<string, SleeperPlayerLite> | null = null;
   try {
     playersById = await getNflPlayers();
   } catch {
     playersById = null;
   }
-  const weeklySuperlatives = includeV2
-    ? computeWeeklySuperlatives(weekMatchupsRaw, rosterNameByTeamId, playersById, weekIsFinal)
-    : undefined;
+  const weeklySuperlatives =
+    includeV2 && recapReady
+      ? computeWeeklySuperlatives(weekMatchupsRaw, rosterNameByTeamId, playersById, weekIsFinal)
+      : undefined;
   const skipFraudWatch = Boolean(weeklySuperlatives?.stoleOne || weeklySuperlatives?.gotRobbed);
   let roastCallouts =
-    roastNarrative && includeV2
+    roastNarrative && includeV2 && recapReady
       ? buildRoastCalloutsFromNarrative(roastNarrative, { skipFraudWatch })
       : undefined;
-  const leagueAverages = includeV2 ? computeLeagueAverages(teams, weekMatchupsRaw, weekIsFinal) : undefined;
+  const leagueAverages =
+    includeV2 && recapReady
+      ? computeLeagueAverages(teams, weekMatchupsRaw, weekIsFinal)
+      : undefined;
   const seasonRaces = includeV2 ? computeSeasonRaces(teams) : undefined;
   let positionLeaders: WeeklyEmailData["positionLeaders"] | undefined;
   if (includeV2) {
@@ -893,12 +971,16 @@ export async function getWeeklyCommissionerEmail(
     }
     return pairs;
   })();
-  const narratives = await getLeagueHistoryNarratives(leagueId, matchupPairs, "recap");
+  const narratives = await getLeagueHistoryNarratives(
+    leagueId,
+    matchupPairs,
+    recapReady ? "recap" : "preview",
+  );
 
   // If matchup-to-watch was a nemesis (victim never beat dominator) and victim won this week, add story of the week.
   // Resolve victim/dominator by stable roster id / owner key — never by display name.
-  let storyOfTheWeek = narratives.storyOfTheWeek;
-  if (narratives.matchupToWatch && weekMatchupsRaw.length > 0 && weekIsFinal) {
+  let storyOfTheWeek = recapReady ? narratives.storyOfTheWeek : undefined;
+  if (narratives.matchupToWatch && weekMatchupsRaw.length > 0 && recapReady) {
     const nar = narratives.matchupToWatch.narrative;
     if (nar.includes("never") && nar.toLowerCase().includes("beaten")) {
       const watch = narratives.matchupToWatch;
@@ -928,7 +1010,7 @@ export async function getWeeklyCommissionerEmail(
   }
 
   // Recap dynasty story: rewrite with the actual result when scores are final
-  if (storyOfTheWeek?.narrative.includes("drew the dynasty") && weekIsFinal && weekMatchups.length > 0) {
+  if (storyOfTheWeek?.narrative.includes("drew the dynasty") && recapReady && weekMatchups.length > 0) {
     const m = storyOfTheWeek.narrative.match(/^(.+?) drew the dynasty this week — (.+?) leads/);
     if (m) {
       const underdog = m[1]!.trim();
@@ -990,26 +1072,31 @@ export async function getWeeklyCommissionerEmail(
     commentary: r.commentary,
   }));
 
-  const emailPayload: WeeklyEmailData = {
-    leagueName,
-    week,
-    rankings: emailRankings,
-    villainOfTheWeek,
-    fraudAlert,
-    introSummary,
-    ...(commissionerNote?.trim() ? { commissionerNote: commissionerNote.trim() } : {}),
-    ...(commissionerSignoff?.trim() ? { commissionerSignoff: commissionerSignoff.trim().slice(0, 180) } : {}),
-    ...(Object.keys(biggestMovers).length > 0 ? { biggestMovers } : {}),
-    ...(weekMatchups.length > 0 ? { weekMatchups } : {}),
-    ...(weeklySuperlatives ? { weeklySuperlatives } : {}),
-    ...(roastCallouts?.length ? { roastCallouts } : {}),
-    ...(leagueAverages ? { leagueAverages } : {}),
-    ...(seasonRaces ? { seasonRaces } : {}),
-    ...(positionLeaders && positionLeaders.length > 0 ? { positionLeaders } : {}),
-    ...(narratives.matchupToWatch ? { matchupToWatch: narratives.matchupToWatch } : {}),
-    ...(storyOfTheWeek ? { storyOfTheWeek } : {}),
-    ...(appUrl?.trim() ? { appUrl: appUrl.trim() } : {}),
-  };
+  const emailPayload: WeeklyEmailData = gateWeeklyEmailPayloadForSlate(
+    {
+      leagueName,
+      week,
+      rankings: emailRankings,
+      ...(villainOfTheWeek ? { villainOfTheWeek } : {}),
+      ...(fraudAlert ? { fraudAlert } : {}),
+      introSummary,
+      ...(commissionerNote?.trim() ? { commissionerNote: commissionerNote.trim() } : {}),
+      ...(commissionerSignoff?.trim() ? { commissionerSignoff: commissionerSignoff.trim().slice(0, 180) } : {}),
+      ...(Object.keys(biggestMovers).length > 0 ? { biggestMovers } : {}),
+      ...(weekMatchups.length > 0 ? { weekMatchups } : {}),
+      ...(weeklySuperlatives ? { weeklySuperlatives } : {}),
+      ...(roastCallouts?.length ? { roastCallouts } : {}),
+      ...(leagueAverages ? { leagueAverages } : {}),
+      ...(seasonRaces ? { seasonRaces } : {}),
+      ...(positionLeaders && positionLeaders.length > 0 ? { positionLeaders } : {}),
+      ...(recapReady && narratives.matchupToWatch ? { matchupToWatch: narratives.matchupToWatch } : {}),
+      ...(storyOfTheWeek ? { storyOfTheWeek } : {}),
+      ...(appUrl?.trim() ? { appUrl: appUrl.trim() } : {}),
+      slateStatus: slate.status,
+      recapReady,
+    },
+    { recapReady, slateStatus: slate.status },
+  );
 
   const emailHtml = generateWeeklyEmail(emailPayload);
   console.log(JSON.stringify({

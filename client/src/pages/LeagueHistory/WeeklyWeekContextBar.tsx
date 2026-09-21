@@ -12,6 +12,7 @@ import {
   navigateWeeklyWeek,
   weeklyHeadline,
   weeklyModeLabel,
+  weeklyPresentationHeadline,
   type WeeklyEmailMode,
   type WeeklyWeekPresentation,
 } from "./weeklyContext";
@@ -29,7 +30,7 @@ export type WeeklyWeekContextBarProps = {
 
 /**
  * Compact week/mode control for the Weekly tab.
- * Prominent: "Week 8 Recap". Compact: prev/next + Recap/Preview.
+ * Prominent: slate-aware "Week 8 Recap/Live/Upcoming". Compact: prev/next + Recap/Preview.
  * Manual week entry is secondary behind "Choose another week".
  */
 export function WeeklyWeekContextBar({
@@ -41,13 +42,14 @@ export function WeeklyWeekContextBar({
   onWeekOverride,
 }: WeeklyWeekContextBarProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const modeLabel = weeklyModeLabel(mode);
+  const modeLabel = presentation
+    ? presentation.label
+    : weeklyModeLabel(mode);
   const canPrev = leagueWeek > 1;
   const canNext = leagueWeek < 18;
-  const title =
-    presentation && presentation.label !== "Recap" && mode === "recap"
-      ? `Week ${leagueWeek} ${presentation.label}`
-      : weeklyHeadline(leagueWeek, mode);
+  const title = presentation
+    ? weeklyPresentationHeadline(leagueWeek, presentation)
+    : weeklyHeadline(leagueWeek, mode);
   const supportingLine =
     presentation?.supportingLine ??
     (mode === "recap" ? "Here's what happened." : "Here's what's coming.");

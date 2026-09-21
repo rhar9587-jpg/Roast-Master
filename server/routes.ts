@@ -10,6 +10,7 @@ import {
   type RoastResponse,
   type LeagueAutopsyResponse,
 } from "@shared/schema";
+import { isFantasySeasonComplete } from "@shared/seasonComplete";
 import { handleFplRoast, getCurrentGameweek } from "./fpl";
 import {
   recordEvent,
@@ -307,28 +308,6 @@ function pfFromRoster(r?: SleeperRoster) {
   const base = r?.settings?.fpts ?? 0;
   const dec = r?.settings?.fpts_decimal ?? 0;
   return base + dec / 100;
-}
-
-/**
- * Whether a fantasy league season is complete enough for final-placement language.
- * Uses NFL season context + league playoff end — not live standings alone.
- */
-function isFantasySeasonComplete(
-  league: { season?: string; settings?: { playoff_week_end?: number } } | null | undefined,
-  nfl: { season?: string | null; season_type?: string | null; latestFinalWeek?: number } | null | undefined,
-): boolean {
-  if (!nfl || nfl.season == null) return false;
-  const leagueYear = league?.season != null ? String(league.season) : null;
-  const nflYear = String(nfl.season);
-  if (leagueYear && leagueYear < nflYear) return true;
-  if (leagueYear && leagueYear > nflYear) return false;
-  const seasonType = String(nfl.season_type ?? "")
-    .trim()
-    .toLowerCase();
-  if (seasonType === "post" || seasonType === "off") return true;
-  const playoffEnd = Math.max(1, Number(league?.settings?.playoff_week_end) || 17);
-  const latestFinal = Math.max(0, Number(nfl.latestFinalWeek) || 0);
-  return latestFinal >= playoffEnd;
 }
 
 function paFromRoster(r?: SleeperRoster) {

@@ -13,6 +13,7 @@ import {
   weeklyPublicShareOgImageUrl,
   weeklyPublicShareUrl,
 } from "@shared/weeklyShareUrl";
+import { weekSlateHeadline } from "@shared/weekSlateLabels";
 import { getWeeklyShareOgFallbackPngBytes } from "../assets/weeklyShareOgFallbackPng";
 import { getNflWeekContext, resolveLeagueWeekFinality } from "../league-history/nflState";
 import {
@@ -284,14 +285,30 @@ export async function loadWeeklyPublicShare(
   return loadLiveWeeklyPublicShare(leagueId, week);
 }
 
-export function buildShareOgTitle(data: Pick<WeeklyPublicShareData, "leagueName" | "week">): string {
-  return `${BRAND_NAME} — ${data.leagueName} — Week ${data.week}`;
+export function buildShareOgTitle(
+  data: Pick<WeeklyPublicShareData, "leagueName" | "week" | "slateStatus" | "recapReady">,
+): string {
+  const state = weekSlateHeadline(data.week, data.slateStatus ?? (data.recapReady ? "final" : "unavailable"), "public");
+  return `${BRAND_NAME} — ${data.leagueName} — ${state}`;
 }
 
 export function buildShareOgDescription(
-  data: Pick<WeeklyPublicShareData, "week" | "summary" | "heroFact" | "recapReady">,
+  data: Pick<WeeklyPublicShareData, "week" | "summary" | "heroFact" | "recapReady" | "slateStatus">,
 ): string {
   if (data.recapReady === false) {
+    const status = data.slateStatus ?? "unavailable";
+    if (status === "upcoming") {
+      return truncate(
+        data.summary || data.heroFact || `Week ${data.week} hasn't kicked off yet.`,
+        180,
+      );
+    }
+    if (status === "live") {
+      return truncate(
+        data.summary || data.heroFact || `Week ${data.week} is live — scores are still moving.`,
+        180,
+      );
+    }
     return truncate(data.summary || data.heroFact || `Week ${data.week} is not a completed recap.`, 180);
   }
   const base = `Week ${data.week} recap: top scorer, biggest blowout, fraud watch and league receipts.`;
@@ -388,7 +405,7 @@ export function buildWeeklySharePageHtml(
 <body>
   <main>
     <div class="brand">${escapeHtml(BRAND_NAME)}</div>
-    <h1>Week ${data.week} Recap</h1>
+    <h1>${escapeHtml(weekSlateHeadline(data.week, data.slateStatus, "public"))}</h1>
     <p class="league">${escapeHtml(data.leagueName)}</p>
     <section class="hero">
       <div class="kicker">${
@@ -470,7 +487,7 @@ export function buildWeeklyShareOgSvg(data: WeeklyPublicShareData): string {
   <rect x="56" y="56" width="8" height="518" rx="4" fill="#34d399"/>
   <text x="90" y="110" fill="#86efac" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" letter-spacing="4">${escapeXml(BRAND_NAME.toUpperCase())}</text>
   <text x="90" y="190" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="800">${escapeXml(title)}</text>
-  <text x="90" y="260" fill="#a3e635" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="700">Week ${data.week} Recap</text>
+  <text x="90" y="260" fill="#a3e635" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="700">${escapeXml(weekSlateHeadline(data.week, data.slateStatus, "public"))}</text>
   <text x="90" y="360" fill="#e2e8f0" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">${escapeXml(hero)}</text>
   <text x="90" y="420" fill="#94a3b8" font-family="Arial, Helvetica, sans-serif" font-size="26">${escapeXml(summary)}</text>
   <text x="90" y="560" fill="#64748b" font-family="Arial, Helvetica, sans-serif" font-size="22">${escapeXml(SITE_HOST)}</text>

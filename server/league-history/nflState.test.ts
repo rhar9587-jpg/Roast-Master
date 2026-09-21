@@ -134,9 +134,25 @@ describe("buildIntroSummary finality wording", () => {
     expect(buildIntroSummary(4, rankings, true)).toMatch(/^Week 4 is in the books\./);
   });
 
-  it("says the week is underway when not final", () => {
-    expect(buildIntroSummary(5, rankings, false)).toMatch(/^Week 5 is underway\./);
-    expect(buildIntroSummary(5, rankings, false)).not.toMatch(/in the books/);
+  it("says the week hasn't kicked off when upcoming (not underway)", () => {
+    expect(
+      buildIntroSummary(5, rankings, { slateStatus: "upcoming", recapReady: false }),
+    ).toMatch(/hasn't kicked off yet/);
+    expect(
+      buildIntroSummary(5, rankings, { slateStatus: "upcoming", recapReady: false }),
+    ).not.toMatch(/underway/);
+    expect(
+      buildIntroSummary(5, rankings, { slateStatus: "upcoming", recapReady: false }),
+    ).not.toMatch(/in the books/);
+  });
+
+  it("says live when slate is live", () => {
+    expect(
+      buildIntroSummary(5, rankings, { slateStatus: "live", recapReady: false }),
+    ).toMatch(/is live/);
+    expect(
+      buildIntroSummary(5, rankings, { slateStatus: "live", recapReady: false }),
+    ).not.toMatch(/underway|in the books|results/);
   });
 });
 

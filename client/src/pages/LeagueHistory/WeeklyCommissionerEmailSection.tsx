@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { track } from "@/lib/track";
 import { markFreeSendUsed } from "./premium";
 import { setCommissionerEmail } from "./utils";
-import { weeklyHeadline, type WeeklyEmailMode } from "./weeklyContext";
+import { weeklyPresentationHeadline, weeklyHeadline, type WeeklyEmailMode, type WeeklyWeekPresentation } from "./weeklyContext";
 import {
   buildCommissionerEmailPreviewPath,
   buildCommissionerPublicRecapUrl,
@@ -54,6 +54,7 @@ export type WeeklyCommissionerEmailSectionProps = {
   leagueId: string;
   leagueWeek: number;
   weeklyCommissionerEmailMode: WeeklyEmailMode;
+  presentation?: WeeklyWeekPresentation;
   weeklyCommissionerNote: string;
   setWeeklyCommissionerNote: (v: string) => void;
   weeklyCommissionerSignoff: string;
@@ -77,6 +78,7 @@ export function WeeklyCommissionerEmailSection({
   leagueId,
   leagueWeek,
   weeklyCommissionerEmailMode,
+  presentation,
   weeklyCommissionerNote,
   setWeeklyCommissionerNote,
   weeklyCommissionerSignoff,
@@ -101,7 +103,9 @@ export function WeeklyCommissionerEmailSection({
   const [recipientOpen, setRecipientOpen] = useState(false);
 
   const trimmedId = leagueId.trim();
-  const headline = weeklyHeadline(leagueWeek, weeklyCommissionerEmailMode);
+  const headline = presentation
+    ? weeklyPresentationHeadline(leagueWeek, presentation)
+    : weeklyHeadline(leagueWeek, weeklyCommissionerEmailMode);
   const publicRecapUrl = buildCommissionerPublicRecapUrl(trimmedId, leagueWeek);
 
   function openPreview() {
@@ -198,7 +202,11 @@ export function WeeklyCommissionerEmailSection({
       className="rounded-lg border bg-muted/20 p-4 space-y-4 scroll-mt-24"
     >
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-foreground">Commissioner recap</h3>
+        <h3 className="text-sm font-semibold text-foreground">
+          {presentation && !presentation.recapReady
+            ? "Commissioner email"
+            : "Commissioner recap"}
+        </h3>
         <p className="text-xs text-muted-foreground">
           {headline}
           {weeklyEmailGenerateLoading ? " · preparing…" : ""}

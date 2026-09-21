@@ -137,6 +137,68 @@ describe("weekly share SSR HTML + OG metadata", () => {
     expect(html).not.toContain("stack");
   });
 
+  it("public page H1 says Upcoming for upcoming week", () => {
+    const html = buildWeeklySharePageHtml(
+      {
+        ...sample,
+        week: 3,
+        weekIsFinal: false,
+        recapReady: false,
+        slateStatus: "upcoming",
+        headline: "Week 3 hasn't kicked off yet.",
+        summary: "Matchups are set.",
+        heroFact: "Week 3 Upcoming",
+        beats: [],
+      },
+      SITE_URL,
+    );
+    expect(html).toContain("<h1>Week 3 Upcoming</h1>");
+    expect(html).not.toContain("<h1>Week 3 Recap</h1>");
+  });
+
+  it("public page H1 says Live for live week", () => {
+    const html = buildWeeklySharePageHtml(
+      {
+        ...sample,
+        week: 3,
+        weekIsFinal: false,
+        recapReady: false,
+        slateStatus: "live",
+        headline: "Week 3 is live.",
+        summary: "Scores moving.",
+        heroFact: "Week 3 is live",
+        beats: [],
+      },
+      SITE_URL,
+    );
+    expect(html).toContain("<h1>Week 3 Live</h1>");
+  });
+
+  it("public page says Recap only for final week", () => {
+    const html = buildWeeklySharePageHtml(sample, SITE_URL);
+    expect(html).toContain("<h1>Week 1 Recap</h1>");
+  });
+
+  it("OG title/description match slate state", () => {
+    const upcoming = {
+      ...sample,
+      week: 3,
+      recapReady: false,
+      slateStatus: "upcoming" as const,
+      summary: "Week 3 hasn't kicked off yet.",
+      heroFact: "Week 3 Upcoming",
+    };
+    const title = buildShareOgTitle(upcoming);
+    const description = buildShareOgDescription(upcoming);
+    expect(title).toContain("Week 3 Upcoming");
+    expect(title.toLowerCase()).not.toContain("recap");
+    expect(description.toLowerCase()).not.toContain("recap: top scorer");
+    expect(description.toLowerCase()).toMatch(/hasn't kicked off|upcoming/);
+
+    const finalTitle = buildShareOgTitle(sample);
+    expect(finalTitle).toContain("Week 1 Recap");
+  });
+
   it("public share page does not render completed recap language for non-final week", () => {
     const html = buildWeeklySharePageHtml(
       {

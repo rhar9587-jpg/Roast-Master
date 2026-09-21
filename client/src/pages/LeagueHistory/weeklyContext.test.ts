@@ -7,6 +7,7 @@ import {
   resolveWeeklyWeekPresentation,
   weeklyCommissionerBridgeLine,
   weeklyHeadline,
+  weeklyPresentationHeadline,
 } from "./weeklyContext";
 
 describe("resolveDefaultWeeklyContext", () => {
@@ -138,5 +139,11 @@ describe("clampWeek / weeklyHeadline", () => {
   it("formats the week headline", () => {
     expect(weeklyHeadline(8, "recap")).toBe("Week 8 Recap");
     expect(weeklyHeadline(9, "preview")).toBe("Week 9 Preview");
+  });
+
+  it("presentation headline never says Recap for Live/Upcoming/Unavailable", () => {
+    expect(weeklyPresentationHeadline(3, "Upcoming")).toBe("Week 3 Upcoming");
+    expect(weeklyPresentationHeadline(3, "Live")).toBe("Week 3 Live");
+    expect(weeklyPresentationHeadline(3, "Unavailable")).toBe("Week 3 Unavailable");
   });
 });

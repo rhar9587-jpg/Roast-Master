@@ -85,6 +85,9 @@ export interface WeeklyEmailData {
   };
   /** Recap V2: best players by position, if available. */
   positionLeaders?: Array<{ position: string; playerName: string; avgPoints: number; teamName: string }>;
+  /** Canonical slate readiness — completed claims only when recapReady. */
+  recapReady?: boolean;
+  slateStatus?: "final" | "live" | "upcoming" | "unavailable";
 }
 
 function escapeHtml(str: string | null | undefined): string {
@@ -366,7 +369,7 @@ ${rankingsRows}
             </td>
           </tr>
           ` : ""}
-          ${!isPreview && data.weekMatchups && data.weekMatchups.length > 0 ? `
+          ${!isPreview && data.recapReady !== false && data.weekMatchups && data.weekMatchups.length > 0 ? `
           <tr>
             <td style="padding: 0 24px 20px 24px;">
               <p style="margin: 0 0 10px 0; font-size: 11px; color: ${textMuted}; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">This week's results</p>
@@ -417,7 +420,7 @@ ${rankingsRows}
             </td>
           </tr>
           ` : ""}
-          ${!isPreview && data.weeklySuperlatives ? `
+          ${!isPreview && data.recapReady !== false && data.weeklySuperlatives ? `
           <tr>
             <td style="padding: 0 24px 16px 24px;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #1f2430; border-left: 4px solid #64b5f6; border-radius: 4px;">
@@ -530,7 +533,7 @@ export function generateWeeklyEmailPlainText(data: WeeklyEmailData): string {
       if (data.biggestMovers.faller) parts.push(`Biggest faller: ${data.biggestMovers.faller.teamName} (-${Math.abs(data.biggestMovers.faller.change)}).`);
       lines.push("", parts.join(" "));
     }
-    if (data.weekMatchups && data.weekMatchups.length > 0) {
+    if (data.recapReady !== false && data.weekMatchups && data.weekMatchups.length > 0) {
       lines.push("", `WEEK ${data.week} RESULTS`, "---");
       for (const mu of data.weekMatchups) {
         lines.push(`${mu.teamA} ${mu.scoreA.toFixed(1)} – ${mu.scoreB.toFixed(1)} ${mu.teamB}`);
@@ -538,7 +541,7 @@ export function generateWeeklyEmailPlainText(data: WeeklyEmailData): string {
     }
     if (data.villainOfTheWeek) lines.push("", "VILLAIN OF THE WEEK", "---", `${data.villainOfTheWeek.teamName}: ${data.villainOfTheWeek.reason}`);
     if (data.fraudAlert) lines.push("", "FRAUD ALERT", "---", `${data.fraudAlert.teamName}: ${data.fraudAlert.reason}`);
-    if (data.weeklySuperlatives) {
+    if (data.recapReady !== false && data.weeklySuperlatives) {
       lines.push("", "WEEKLY SUPERLATIVES", "---");
       lines.push(`High score: ${data.weeklySuperlatives.highScore.teamName} — ${data.weeklySuperlatives.highScore.points.toFixed(1)} pts.`);
       if (data.weeklySuperlatives.highScore.keyPerformers?.length) {

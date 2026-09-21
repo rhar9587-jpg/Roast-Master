@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { Card, RoastResponse } from "@shared/schema";
 import { weeklyPublicShareUrl } from "@shared/weeklyShareUrl";
+import { weekSlateHeadline, type WeekSlateStatusLabel } from "@shared/weekSlateLabels";
 import { track } from "@/lib/track";
 import { getYoursLine, SHARE_FOOTER } from "@/lib/brand";
 import { WrappedCard } from "@/components/WrappedCard";
@@ -40,6 +41,19 @@ function safeNum(n: number | undefined | null, fallback = 0) {
 type WeeklySlide =
   | { kind: "engine"; idx: number }
   | { kind: "matchup" };
+
+function readSlateSignals(data: RoastResponse): {
+  recapReady: boolean;
+  slateStatus: WeekSlateStatusLabel;
+} {
+  const s = data.signals as
+    | { recapReady?: boolean; slateStatus?: WeekSlateStatusLabel }
+    | undefined;
+  const slateStatus = (s?.slateStatus ??
+    (s?.recapReady === false ? "unavailable" : "final")) as WeekSlateStatusLabel;
+  const recapReady = s?.recapReady === true || (s?.recapReady !== false && slateStatus === "final");
+  return { recapReady, slateStatus };
+}
 
 /**
  * Some responses arrive with a truncated `cards` array (e.g. only `carry_job`), which makes the
@@ -143,12 +157,35 @@ function parseWeeklySignals(data: RoastResponse) {
 }
 
 function buildWeeklyRoastClipboardText(data: RoastResponse, shareUrl?: string): string {
+  const { recapReady, slateStatus } = readSlateSignals(data);
+  const week = Number(data.week) || 1;
+
+  if (!recapReady) {
+    const lines: string[] = [];
+    if (slateStatus === "upcoming") {
+      lines.push(`Week ${week} hasn't kicked off yet.`);
+      lines.push("Matchups are set — check back after games are final.");
+    } else if (slateStatus === "live") {
+      lines.push(`Week ${week} is live — scores are still moving.`);
+    } else {
+      lines.push(`Week ${week} final scores aren't available yet.`);
+      lines.push("Check back after games are final.");
+    }
+    if (shareUrl) {
+      lines.push("", shareUrl);
+    }
+    lines.push("", getYoursLine());
+    return lines.join("\n");
+  }
+
   const lines: string[] = ["🔥 Fantasy Roast 🔥", ""];
 
   lines.push(data.headline.trim());
 
   const low = data.stats.lowestScorer;
-  lines.push(`💀 Biggest embarrassment: ${low.username} (${safeNum(low.score).toFixed(1)} pts 💀)`);
+  if (low?.username && Number(low.score) > 0) {
+    lines.push(`💀 Biggest embarrassment: ${low.username} (${safeNum(low.score).toFixed(1)} pts 💀)`);
+  }
 
   const sig = parseWeeklySignals(data);
   if (sig?.closestGame) {
@@ -163,6 +200,9 @@ function buildWeeklyRoastClipboardText(data: RoastResponse, shareUrl?: string): 
   lines.push("", getYoursLine());
   return lines.join("\n");
 }
+
+/** Exported for unit tests — Share Week clipboard must respect recapReady. */
+export { buildWeeklyRoastClipboardText };
 
 /** Public share URL for a weekly roast payload (canonical social link). */
 export function buildWeeklyPublicShareUrlFromRoast(data: RoastResponse): string {
@@ -218,9 +258,11 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
         league_id: data.league.league_id,
       });
       const shareText = roastClipboardText;
+      const { slateStatus } = readSlateSignals(data);
+      const stateTitle = weekSlateHeadline(data.week, slateStatus, "short");
       const title = data.league?.name
-        ? `${data.league.name} — Week ${data.week} Recap`
-        : `Week ${data.week} Roast`;
+        ? `${data.league.name} — ${stateTitle}`
+        : stateTitle;
       if (typeof navigator !== "undefined" && "share" in navigator) {
         try {
           await navigator.share({
@@ -439,6 +481,7 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
       </div>
 
       {/* Supporting detail */}
+      {readSlateSignals(data).recapReady && (
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
         <span className="rounded-md border bg-background/80 px-2 py-0.5">
           Avg {safeNum(data.stats.averageScore).toFixed(1)} pts
@@ -455,8 +498,9 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
           </span>
         )}
       </div>
+      )}
 
-      {signalsParsed && (
+      {readSlateSignals(data).recapReady && signalsParsed && (
         <Collapsible open={moreOpen} onOpenChange={setMoreOpen}>
           <CollapsibleTrigger asChild>
             <button

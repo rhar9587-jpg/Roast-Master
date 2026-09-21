@@ -73,6 +73,13 @@ import type {
   WeeklyMatchupDetail,
 } from "./types";
 import type { RoastResponse, WrappedResponse, LeagueAutopsyResponse } from "@shared/schema";
+import { isFantasySeasonComplete } from "@shared/seasonComplete";
+import {
+  autopsyGenerateLabel,
+  autopsyModeSupportingLine,
+  autopsySectionTitle,
+  seasonModeSupportingLine,
+} from "./seasonModeCopy";
 
 const EXAMPLE_LEAGUE_ID = "demo-group-chat-dynasty";
 const WEEKLY_ENABLED = true;
@@ -457,6 +464,8 @@ export default function LeagueHistoryPage() {
   const [nflRecapWeek, setNflRecapWeek] = useState(1);
   const [nflPreviewWeek, setNflPreviewWeek] = useState(1);
   const [nflLatestFinalWeek, setNflLatestFinalWeek] = useState(0);
+  const [nflSeason, setNflSeason] = useState<string | null>(null);
+  const [nflSeasonType, setNflSeasonType] = useState<string | null>(null);
   const [nflContextReady, setNflContextReady] = useState(false);
   const [, setWeekOverride] = useState(false);
   const [weeklyRoastData, setWeeklyRoastData] = useState<RoastResponse | null>(null);
@@ -1381,7 +1390,13 @@ export default function LeagueHistoryPage() {
         if (!res.ok) throw new Error("nfl state failed");
         return res.json();
       })
-      .then((data: { recapWeek?: number; previewWeek?: number; latestFinalWeek?: number }) => {
+      .then((data: {
+        recapWeek?: number;
+        previewWeek?: number;
+        latestFinalWeek?: number;
+        season?: string;
+        season_type?: string;
+      }) => {
         if (cancelled) return;
         const previewWeek = Math.min(18, Math.max(1, Number(data.previewWeek) || 1));
         const latestFinalWeek = Math.max(0, Number(data.latestFinalWeek) || 0);
@@ -1392,6 +1407,8 @@ export default function LeagueHistoryPage() {
         setNflPreviewWeek(previewWeek);
         setNflRecapWeek(recapWeek);
         setNflLatestFinalWeek(latestFinalWeek);
+        setNflSeason(data.season != null ? String(data.season) : null);
+        setNflSeasonType(data.season_type != null ? String(data.season_type) : null);
         if (!weekOverrideRef.current) {
           const sel = resolveDefaultWeeklyContext({
             latestFinalWeek,
@@ -1409,6 +1426,8 @@ export default function LeagueHistoryPage() {
         setNflPreviewWeek(1);
         setNflRecapWeek(1);
         setNflLatestFinalWeek(0);
+        setNflSeason(null);
+        setNflSeasonType(null);
         if (!weekOverrideRef.current) {
           const sel = resolveDefaultWeeklyContext({
             latestFinalWeek: 0,
@@ -1716,6 +1735,26 @@ export default function LeagueHistoryPage() {
     recapReady: weeklySignals?.recapReady,
   });
 
+  const playoffWeekEnd = useMemo(() => {
+    const seasons = data?.seasonStats;
+    if (!seasons?.length) return undefined;
+    const newest = [...seasons].sort((a, b) => String(b.season).localeCompare(String(a.season)))[0];
+    const end = newest?.playoffWeekEnd;
+    return typeof end === "number" && Number.isFinite(end) ? end : undefined;
+  }, [data?.seasonStats]);
+
+  const seasonComplete = isFantasySeasonComplete(
+    {
+      season: data?.league?.season,
+      settings: playoffWeekEnd != null ? { playoff_week_end: playoffWeekEnd } : undefined,
+    },
+    {
+      season: nflSeason,
+      season_type: nflSeasonType,
+      latestFinalWeek: nflLatestFinalWeek,
+    },
+  );
+
   // Sync premium state on mount
   useEffect(() => {
     setIsPremiumState(isLeagueUnlocked(leagueId.trim()));
@@ -1902,10 +1941,10 @@ export default function LeagueHistoryPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to fetch End-of-Season.");
+      if (!res.ok) throw new Error(data.error || "Failed to fetch league recap.");
       setAutopsyData(data);
     } catch (err: any) {
-      setAutopsyError(err.message || "Failed to fetch End-of-Season.");
+      setAutopsyError(err.message || "Failed to fetch league recap.");
       setAutopsyData(null);
     } finally {
       setAutopsyLoading(false);
@@ -2108,8 +2147,8 @@ export default function LeagueHistoryPage() {
         <p className="text-sm text-muted-foreground">
           {activeMode === "history" && "See who owns who. Share the receipts."}
           {WEEKLY_ENABLED && activeMode === "weekly" && "Open it. Laugh. Send it to the group chat."}
-          {activeMode === "season" && "Your season. Your wins. Your choke jobs. No hiding."}
-          {activeMode === "end" && "The final verdict on this season. Someone's getting exposed."}
+          {activeMode === "season" && seasonModeSupportingLine(seasonComplete)}
+          {activeMode === "end" && autopsyModeSupportingLine(seasonComplete)}
         </p>
       )}
 
@@ -2250,6 +2289,7 @@ export default function LeagueHistoryPage() {
           leagueId={leagueId}
           leagueWeek={leagueWeek}
           weeklyCommissionerEmailMode={weeklyCommissionerEmailMode}
+          presentation={weeklyPresentation}
           weeklyCommissionerNote={weeklyCommissionerNote}
           setWeeklyCommissionerNote={setWeeklyCommissionerNote}
           weeklyCommissionerSignoff={weeklyCommissionerSignoff}
@@ -2362,21 +2402,30 @@ export default function LeagueHistoryPage() {
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">End-of-Season</h2>
-              <p className="text-sm text-muted-foreground">League-wide moments and chaos.</p>
+              <h2 className="text-lg font-semibold">
+                {autopsySectionTitle(seasonComplete)}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {seasonComplete ? "League-wide moments and chaos." : "League-wide moments while the season is still live."}
+              </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                <span className="font-medium">Locked.</span> Unlock to generate the recap.
+                <span className="font-medium">Locked.</span> Unlock to generate the{" "}
+                {seasonComplete ? "recap" : "snapshot"}.
               </p>
             </div>
-            <Button disabled>Generate End-of-Season</Button>
+            <Button disabled>
+              {autopsyGenerateLabel(seasonComplete)}
+            </Button>
           </div>
         </section>
       )}
 
       {hasData && activeMode === "end" && !showPremiumContent && (
         <LockedModePreview
-          title="Recap is included"
-          description={`${unlockCtaLabel()} — then generate the end-of-season league finale.`}
+          title={seasonComplete ? "Recap is included" : "Season snapshot is included"}
+          description={`${unlockCtaLabel()} — then generate the ${
+            seasonComplete ? "end-of-season league finale" : "league season snapshot"
+          }.`}
           previewItems={[
             "Biggest blowouts and upsets",
             "Season highs and lows",
@@ -2391,11 +2440,17 @@ export default function LeagueHistoryPage() {
         <section className="rounded-lg border bg-muted/20 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">End-of-Season</h2>
-              <p className="text-sm text-muted-foreground">League-wide moments and chaos.</p>
+              <h2 className="text-lg font-semibold">
+                {autopsySectionTitle(seasonComplete)}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {seasonComplete ? "League-wide moments and chaos." : "League-wide moments while the season is still live."}
+              </p>
             </div>
             <Button onClick={fetchLeagueAutopsy} disabled={autopsyLoading}>
-              {autopsyLoading ? "Generating…" : "Generate End-of-Season"}
+              {autopsyLoading
+                ? "Generating…"
+                : autopsyGenerateLabel(seasonComplete)}
             </Button>
           </div>
           {autopsyError && (

@@ -1,3 +1,8 @@
+import {
+  weekPresentationHeadline,
+  type WeekPresentationLabel,
+} from "@shared/weekSlateLabels";
+
 /**
  * Pure helpers for Weekly tab week/mode defaults and navigation.
  * Keep UI defaulting out of React so it can be unit-tested without a DOM.
@@ -51,17 +56,31 @@ export function weeklyModeLabel(mode: WeeklyEmailMode): string {
   return mode === "recap" ? "Recap" : "Preview";
 }
 
-export function weeklyHeadline(week: number, mode: WeeklyEmailMode): string {
-  return `Week ${clampWeek(week)} ${weeklyModeLabel(mode)}`;
-}
-
 /** Presentation state for a selected week relative to NFL latestFinalWeek + roast signals. */
 export type WeeklyWeekPresentation = {
-  label: "Recap" | "Live" | "Upcoming" | "Unavailable";
+  label: WeekPresentationLabel;
   supportingLine: string;
   /** Commissioner bridge must not say "Recap is ready" when false. */
   recapReady: boolean;
 };
+
+/**
+ * Mode-based headline (Recap/Preview toggle). Prefer weeklyPresentationHeadline when
+ * slate presentation is available so non-final weeks never say "Recap".
+ */
+export function weeklyHeadline(week: number, mode: WeeklyEmailMode): string {
+  return `Week ${clampWeek(week)} ${weeklyModeLabel(mode)}`;
+}
+
+/** Slate-aware headline — never "Recap" for non-final weeks. */
+export function weeklyPresentationHeadline(
+  week: number,
+  presentation: Pick<WeeklyWeekPresentation, "label"> | WeekPresentationLabel,
+): string {
+  const label =
+    typeof presentation === "string" ? presentation : presentation.label;
+  return weekPresentationHeadline(week, label, "short");
+}
 
 /**
  * Resolve how the Weekly UI should describe the selected week.
@@ -149,7 +168,7 @@ export function weeklyCommissionerBridgeLine(params: {
   mode: WeeklyEmailMode;
   presentation: WeeklyWeekPresentation;
 }): string {
-  const headline = weeklyHeadline(params.week, params.mode);
+  const headline = weeklyPresentationHeadline(params.week, params.presentation);
   if (params.presentation.recapReady && params.mode === "recap") {
     return `${headline} is ready.`;
   }
