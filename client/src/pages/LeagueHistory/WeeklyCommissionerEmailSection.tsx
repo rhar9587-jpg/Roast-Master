@@ -10,10 +10,13 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/track";
-import { weeklyPublicShareUrl } from "@shared/weeklyShareUrl";
 import { markFreeSendUsed } from "./premium";
 import { setCommissionerEmail } from "./utils";
 import { weeklyHeadline, type WeeklyEmailMode } from "./weeklyContext";
+import {
+  buildCommissionerEmailPreviewPath,
+  buildCommissionerPublicRecapUrl,
+} from "./weeklyCommissionerShare";
 
 function WeeklyEmailSentStatus({ leagueId, week }: { leagueId: string; week: number }) {
   const { data } = useQuery({
@@ -99,7 +102,7 @@ export function WeeklyCommissionerEmailSection({
 
   const trimmedId = leagueId.trim();
   const headline = weeklyHeadline(leagueWeek, weeklyCommissionerEmailMode);
-  const publicRecapUrl = weeklyPublicShareUrl(trimmedId, leagueWeek);
+  const publicRecapUrl = buildCommissionerPublicRecapUrl(trimmedId, leagueWeek);
 
   function openPreview() {
     track("weekly_email_preview", {
@@ -107,13 +110,13 @@ export function WeeklyCommissionerEmailSection({
       week: leagueWeek,
       mode: weeklyCommissionerEmailMode,
     });
-    const params = new URLSearchParams({
-      week: String(leagueWeek),
+    const url = buildCommissionerEmailPreviewPath({
+      leagueId: trimmedId,
+      week: leagueWeek,
       mode: weeklyCommissionerEmailMode,
+      note: weeklyCommissionerNote,
+      signoff: weeklyCommissionerSignoff,
     });
-    if (weeklyCommissionerNote.trim()) params.set("note", weeklyCommissionerNote.trim());
-    if (weeklyCommissionerSignoff.trim()) params.set("signoff", weeklyCommissionerSignoff.trim());
-    const url = `/api/leagues/${encodeURIComponent(trimmedId)}/weekly-email/preview?${params.toString()}`;
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
@@ -123,23 +126,12 @@ export function WeeklyCommissionerEmailSection({
         league_id: trimmedId,
         week: leagueWeek,
       });
-      const shareTitle = `Week ${leagueWeek} Recap`;
-      const shareText = `${headline} — Fantasy Roast`;
-      if (typeof navigator !== "undefined" && "share" in navigator) {
-        try {
-          await navigator.share({
-            title: shareTitle,
-            text: shareText,
-            url: publicRecapUrl,
-          });
-          toast({ title: "Shared", description: "Public recap link ready for the group chat." });
-          return;
-        } catch {
-          /* fall through to clipboard */
-        }
-      }
+      // Copy action = clipboard of the public share URL (never the email preview API).
       await navigator.clipboard.writeText(publicRecapUrl);
-      toast({ title: "Recap link copied", description: publicRecapUrl });
+      toast({
+        title: "Recap link copied",
+        description: "Share this with your league — not the email preview.",
+      });
     } catch {
       toast({ title: "Could not copy link", variant: "destructive" });
     }
@@ -233,38 +225,46 @@ export function WeeklyCommissionerEmailSection({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          disabled={!canGenerateAndPreviewWeeklyEmail}
-          onClick={() => {
-            setWeeklyEmailGenerateLoading(true);
-            try {
-              openPreview();
-            } finally {
-              // Preview opens a new tab; generation happens server-side on that request.
-              setTimeout(() => setWeeklyEmailGenerateLoading(false), 400);
-            }
-          }}
-        >
-          Preview
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!trimmedId || leagueWeek < 1}
-          onClick={() => void copyRecapLink()}
-        >
-          Copy recap link
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={!canSendWeeklyEmail || weeklyEmailSendLoading}
-          onClick={() => void sendEmail()}
-        >
-          {weeklyEmailSendLoading ? "Sending…" : "Send"}
-        </Button>
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            disabled={!canGenerateAndPreviewWeeklyEmail}
+            onClick={() => {
+              setWeeklyEmailGenerateLoading(true);
+              try {
+                openPreview();
+              } finally {
+                // Preview opens a new tab; generation happens server-side on that request.
+                setTimeout(() => setWeeklyEmailGenerateLoading(false), 400);
+              }
+            }}
+          >
+            Preview email
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!trimmedId || leagueWeek < 1}
+            onClick={() => void copyRecapLink()}
+          >
+            Copy recap link
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!canSendWeeklyEmail || weeklyEmailSendLoading}
+            onClick={() => void sendEmail()}
+          >
+            {weeklyEmailSendLoading ? "Sending…" : "Send"}
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground leading-snug">
+          <span className="font-medium text-foreground/80">Preview email</span> opens the
+          commissioner email HTML.{" "}
+          <span className="font-medium text-foreground/80">Copy recap link</span> copies the
+          public share URL for your league group chat.
+        </p>
       </div>
 
       {canGenerateAndPreviewWeeklyEmail && (
