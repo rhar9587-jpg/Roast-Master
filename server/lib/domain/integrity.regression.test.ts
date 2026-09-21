@@ -7,6 +7,7 @@
  * Coverage map (existing files, not duplicated here):
  * - Historical Week N state: powerRankings.test.ts, teamStateThroughWeek via matchupStatus
  * - Matchup truth: matchupStatus.test.ts, matchupOutcomes.test.ts
+ * - Week slate readiness: weekSlateStatus.test.ts, weeklyRoastEngine.slateStatus.test.ts
  * - Season outcomes: seasonOutcome.test.ts
  * - Demo cross-surface: demoLeague.crossSurface.test.ts
  * - Identity: managerIdentity.test.ts, stableIdentityNarrative.test.ts
@@ -20,11 +21,12 @@ describe("integrity suite marker", () => {
     const groups = [
       "historical-week-state",
       "matchup-truth",
+      "week-slate-readiness",
       "season-outcomes",
       "demo-consistency",
       "stable-identity",
       "ranking-persistence",
     ];
-    expect(groups.length).toBe(6);
+    expect(groups.length).toBe(7);
   });
 });

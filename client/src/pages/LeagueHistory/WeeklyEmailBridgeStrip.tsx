@@ -1,12 +1,17 @@
 import { Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { track } from "@/lib/track";
-import { weeklyHeadline, type WeeklyEmailMode } from "./weeklyContext";
+import {
+  weeklyCommissionerBridgeLine,
+  type WeeklyEmailMode,
+  type WeeklyWeekPresentation,
+} from "./weeklyContext";
 
 export type WeeklyEmailBridgeStripProps = {
   leagueWeek: number;
   leagueName?: string;
   emailMode: WeeklyEmailMode;
+  presentation: WeeklyWeekPresentation;
 };
 
 /**
@@ -16,12 +21,13 @@ export function WeeklyEmailBridgeStrip({
   leagueWeek,
   leagueName,
   emailMode,
+  presentation,
 }: WeeklyEmailBridgeStripProps) {
-  const headline = weeklyHeadline(leagueWeek, emailMode);
-  const readyLine =
-    emailMode === "recap"
-      ? `${headline} is ready.`
-      : `${headline} setup is ready.`;
+  const readyLine = weeklyCommissionerBridgeLine({
+    week: leagueWeek,
+    mode: emailMode,
+    presentation,
+  });
 
   return (
     <section
@@ -51,6 +57,7 @@ export function WeeklyEmailBridgeStrip({
             track("commissioner_cta_clicked", {
               week: leagueWeek,
               mode: emailMode,
+              recap_ready: presentation.recapReady,
             });
             const el = document.getElementById("weekly-commissioner-email");
             el?.scrollIntoView({ behavior: "smooth", block: "start" });

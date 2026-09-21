@@ -313,11 +313,30 @@ describe("losers bracket availability vs empty", () => {
       losersBracket: [],
       losersBracketStatus: "available",
       leagueSize: 2,
+      seasonComplete: true,
     });
     const byId = new Map(outcomes.map((o) => [o.rosterId, o]));
     expect(byId.get(2)?.lastPlace).toBe(true);
     expect(byId.get(1)?.lastPlace).toBe(false);
     expect(byId.get(2)?.source.lastPlace).toBe("regular_season_standings");
+  });
+
+  it("mid-season known-empty losers bracket does not invent final last place", () => {
+    const outcomes = buildSeasonOutcomes({
+      season: "2026",
+      rosterIds: [1, 2],
+      regularSeasonStandings: standings,
+      winnersBracket: [],
+      losersBracket: [],
+      losersBracketStatus: "available",
+      leagueSize: 2,
+      seasonComplete: false,
+    });
+    for (const o of outcomes) {
+      expect(o.lastPlace).toBeUndefined();
+      expect(o.finalFinish).toBeUndefined();
+      expect(o.source.lastPlace).toBe("absent");
+    }
   });
 
   it("unavailable losers bracket → no lastPlace guess", () => {

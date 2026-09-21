@@ -13,6 +13,11 @@ import {
   pickFraudWatchPair,
   pickLargestMarginWinner,
 } from "./domain/matchupOutcomes";
+import {
+  isWeekSlateRecapReady,
+  resolveWeekSlateStatus,
+  type WeekSlateStatus,
+} from "./domain/weekSlateStatus";
 import { findBestSitStartMiss } from "./sitStartMiss";
 import {
   UNKNOWN_PLAYER_DISPLAY,
@@ -38,6 +43,12 @@ export type WeeklyRoastSignals = {
   blowoutMargin: number | null;
   highestScore: number;
   lowestScore: number;
+  /** Calendar finality from NFL state (may be true while slate is still unscored). */
+  weekIsFinal: boolean;
+  /** Canonical slate readiness for completed-tense UX. */
+  slateStatus: WeekSlateStatus;
+  /** True only when completed-tense recap / Top Dog language is allowed. */
+  recapReady: boolean;
 };
 
 export type WeeklyRoastNarrative = {
@@ -379,17 +390,24 @@ export async function buildWeeklyRoastNarrative(params: {
   week: number;
   matchups: SleeperMatchup[];
   rosterName: (rid: number) => string;
-  /** When false, winner-dependent cards (blowout / fraud / closest final) are skipped. */
+  /**
+   * When false, winner-dependent cards (blowout / fraud / closest final) are skipped.
+   * Defaults to false — callers must assert calendar finality explicitly.
+   */
   weekIsFinal?: boolean;
 }): Promise<WeeklyRoastNarrative> {
   const { league, week, matchups, rosterName } = params;
-  const weekIsFinal = params.weekIsFinal !== false;
+  const weekIsFinal = params.weekIsFinal === true;
   if (!matchups?.length) {
     throw new Error(`No matchup data found for week ${week}.`);
   }
 
+  const slate = resolveWeekSlateStatus({ weekIsFinal, matchups });
+  const recapReady = isWeekSlateRecapReady(slate.status);
+
   // High / low / median: final weeks use played classifications only (exclude 0–0 shells).
   // Non-final weeks may surface live scores without inventing winners.
+  // Never fall back to inventing a "highest scorer" from all-zero shells when recap isn't ready.
   const scoreByRoster = new Map<number, number>();
   if (weekIsFinal) {
     const pairs = classifyWeekMatchupPairs(matchups, { weekIsFinal: true });
@@ -401,12 +419,10 @@ export async function buildWeeklyRoastNarrative(params: {
       }
     }
   } else {
-    for (const m of matchups) scoreByRoster.set(m.roster_id, safeNumber(m.points));
-  }
-
-  // Fallback if classification yields nothing (e.g. all scheduled): use raw scores for display.
-  if (scoreByRoster.size === 0) {
-    for (const m of matchups) scoreByRoster.set(m.roster_id, safeNumber(m.points));
+    for (const m of matchups) {
+      const pts = safeNumber(m.points);
+      if (pts > 0) scoreByRoster.set(m.roster_id, pts);
+    }
   }
 
   const entries = Array.from(scoreByRoster.entries()).map(([rid, score]) => ({
@@ -424,62 +440,100 @@ export async function buildWeeklyRoastNarrative(params: {
   const scores = sorted.map((e) => e.score).sort((a, b) => a - b);
   const mid = Math.floor(scores.length / 2);
   const medianScore =
-    scores.length % 2 === 1 ? scores[mid]! : (scores[mid - 1]! + scores[mid]!) / 2;
+    scores.length === 0
+      ? 0
+      : scores.length % 2 === 1
+        ? scores[mid]!
+        : (scores[mid - 1]! + scores[mid]!) / 2;
 
-  const closest = computeClosestGame(matchups, weekIsFinal);
-  const blowout = computeBiggestBlowout(matchups, rosterName, weekIsFinal);
-  const fraud = computeFraudWatch(matchups, rosterName, medianScore, weekIsFinal);
-  const [carry, worstCoach] = await Promise.all([
-    computeCarryJob(matchups, rosterName),
-    computeWorstCoaching(matchups, rosterName),
-  ]);
+  const closest = recapReady ? computeClosestGame(matchups, true) : null;
+  const blowout = recapReady ? computeBiggestBlowout(matchups, rosterName, true) : null;
+  const fraud = recapReady
+    ? computeFraudWatch(matchups, rosterName, medianScore, true)
+    : null;
+  const [carry, worstCoach] = recapReady
+    ? await Promise.all([
+        computeCarryJob(matchups, rosterName),
+        computeWorstCoaching(matchups, rosterName),
+      ])
+    : [null, null];
 
-  const headline = buildHeadline({
-    week,
-    highestName: highestScorer.username,
-    lowestName: lowestScorer.username,
-    sameTeam: highestScorer.roster_id === lowestScorer.roster_id && highestScorer.roster_id !== 0,
-    closest,
-    rosterName,
-  });
+  let headline: string;
+  let groupChatSummary: string;
+  const cards: Card[] = [];
 
-  const groupChatSummary = buildGroupChatSummary({
-    week,
-    leagueName: league.name,
-    highestName: highestScorer.username,
-    highScore: highestScorer.score,
-    lowestName: lowestScorer.username,
-    lowScore: lowestScorer.score,
-    blowout,
-    fraud,
-    worst: worstCoach,
-  });
-
-  const topDogCard: Card = {
-    type: "top_dog",
-    title: "Top Dog",
-    subtitle: `${highestScorer.username} paced the league this week.`,
-    stat: `${formatPts(highestScorer.score)} pts`,
-    tagline: "Highest score on the board.",
-    meta: { roster_id: highestScorer.roster_id },
-  };
-
-  const groupChatCard: Card = {
-    type: "group_chat_drop",
-    title: "Group Chat Drop",
-    subtitle: groupChatSummary.slice(0, 280) + (groupChatSummary.length > 280 ? "…" : ""),
-    tagline: "Copy, paste, send.",
-    stat: "League recap",
-  };
-
-  const cards: Card[] = [
-    topDogCard,
-    ...(blowout ? [blowout] : []),
-    ...(fraud ? [fraud] : []),
-    ...(worstCoach ? [worstCoach] : []),
-    ...(carry ? [carry] : []),
-    groupChatCard,
-  ];
+  if (recapReady && highestScorer.roster_id !== 0) {
+    headline = buildHeadline({
+      week,
+      highestName: highestScorer.username,
+      lowestName: lowestScorer.username,
+      sameTeam:
+        highestScorer.roster_id === lowestScorer.roster_id && highestScorer.roster_id !== 0,
+      closest,
+      rosterName,
+    });
+    groupChatSummary = buildGroupChatSummary({
+      week,
+      leagueName: league.name,
+      highestName: highestScorer.username,
+      highScore: highestScorer.score,
+      lowestName: lowestScorer.username,
+      lowScore: lowestScorer.score,
+      blowout,
+      fraud,
+      worst: worstCoach,
+    });
+    cards.push({
+      type: "top_dog",
+      title: "Top Dog",
+      subtitle: `${highestScorer.username} paced the league this week.`,
+      stat: `${formatPts(highestScorer.score)} pts`,
+      tagline: "Highest score on the board.",
+      meta: { roster_id: highestScorer.roster_id },
+    });
+    if (blowout) cards.push(blowout);
+    if (fraud) cards.push(fraud);
+    if (worstCoach) cards.push(worstCoach);
+    if (carry) cards.push(carry);
+    cards.push({
+      type: "group_chat_drop",
+      title: "Group Chat Drop",
+      subtitle: groupChatSummary.slice(0, 280) + (groupChatSummary.length > 280 ? "…" : ""),
+      tagline: "Copy, paste, send.",
+      stat: "League recap",
+    });
+  } else if (slate.status === "live") {
+    headline = `Week ${week} is live — scores are still moving.`;
+    groupChatSummary = `${league.name} — Week ${week} is in progress. No final Top Dog or blowout crowns until the slate is final.`;
+    cards.push({
+      type: "group_chat_drop",
+      title: "Week in progress",
+      subtitle: groupChatSummary.slice(0, 280),
+      tagline: "Check back when games are final.",
+      stat: "Live",
+    });
+  } else if (slate.status === "upcoming") {
+    headline = `Week ${week} hasn't kicked off yet.`;
+    groupChatSummary = `${league.name} — Week ${week} matchups are on the board, but nothing is final. 0–0 shells are not results.`;
+    cards.push({
+      type: "group_chat_drop",
+      title: "Upcoming week",
+      subtitle: groupChatSummary.slice(0, 280),
+      tagline: "Preview only — not a recap.",
+      stat: "Upcoming",
+    });
+  } else {
+    // unavailable — calendar final / missing scores / delayed scoring
+    headline = `Week ${week} scores aren't in yet.`;
+    groupChatSummary = `${league.name} — Week ${week} doesn't have final scored matchups yet. This is not a completed recap.`;
+    cards.push({
+      type: "group_chat_drop",
+      title: "Scores unavailable",
+      subtitle: groupChatSummary.slice(0, 280),
+      tagline: "Open the latest completed week instead.",
+      stat: "Unavailable",
+    });
+  }
 
   const signals: WeeklyRoastSignals = {
     medianScore,
@@ -492,11 +546,15 @@ export async function buildWeeklyRoastNarrative(params: {
           scoreB: closest.pointsB,
         }
       : undefined,
-    blowoutMargin: blowout?.meta && typeof blowout.meta === "object" && "margin" in blowout.meta
-      ? Number((blowout.meta as { margin: number }).margin)
-      : null,
+    blowoutMargin:
+      blowout?.meta && typeof blowout.meta === "object" && "margin" in blowout.meta
+        ? Number((blowout.meta as { margin: number }).margin)
+        : null,
     highestScore: highestScorer.score,
     lowestScore: lowestScorer.score,
+    weekIsFinal,
+    slateStatus: slate.status,
+    recapReady,
   };
 
   return {

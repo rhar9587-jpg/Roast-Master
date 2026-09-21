@@ -309,6 +309,28 @@ function pfFromRoster(r?: SleeperRoster) {
   return base + dec / 100;
 }
 
+/**
+ * Whether a fantasy league season is complete enough for final-placement language.
+ * Uses NFL season context + league playoff end — not live standings alone.
+ */
+function isFantasySeasonComplete(
+  league: { season?: string; settings?: { playoff_week_end?: number } } | null | undefined,
+  nfl: { season?: string | null; season_type?: string | null; latestFinalWeek?: number } | null | undefined,
+): boolean {
+  if (!nfl || nfl.season == null) return false;
+  const leagueYear = league?.season != null ? String(league.season) : null;
+  const nflYear = String(nfl.season);
+  if (leagueYear && leagueYear < nflYear) return true;
+  if (leagueYear && leagueYear > nflYear) return false;
+  const seasonType = String(nfl.season_type ?? "")
+    .trim()
+    .toLowerCase();
+  if (seasonType === "post" || seasonType === "off") return true;
+  const playoffEnd = Math.max(1, Number(league?.settings?.playoff_week_end) || 17);
+  const latestFinal = Math.max(0, Number(nfl.latestFinalWeek) || 0);
+  return latestFinal >= playoffEnd;
+}
+
 function paFromRoster(r?: SleeperRoster) {
   const base = r?.settings?.fpts_against ?? 0;
   const dec = r?.settings?.fpts_against_decimal ?? 0;
@@ -703,12 +725,15 @@ async function handleWrapped(params: RoastRequest) {
     leagueId: league_id,
   });
 
+  const seasonComplete = isFantasySeasonComplete(league, nfl);
   const cards = [
     {
       type: "season_summary",
-      title: "Season Summary",
+      title: seasonComplete ? "Season Summary" : "Season so far",
       subtitle: derivedRank
-        ? `#${derivedRank} of ${rosters.length} teams`
+        ? seasonComplete
+          ? `#${derivedRank} of ${rosters.length} teams`
+          : `#${derivedRank} of ${rosters.length} so far`
         : `${displayName} season recap`,
       stat: record,
       meta: {
@@ -718,6 +743,7 @@ async function handleWrapped(params: RoastRequest) {
         pointsAgainst: Math.round(pointsAgainst),
         tagline: taglineResult.tagline,
         taglineBucket: taglineResult.bucket,
+        seasonComplete,
       },
     },
     {
@@ -933,10 +959,13 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
     const ties = lastPlaceRoster.settings?.ties ?? 0;
     const record = ties ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
     const teamName = rosterName(lastPlaceRoster.roster_id);
+    const seasonComplete = isFantasySeasonComplete(league, nfl);
     cards.push({
       type: "last_place",
       title: "THE BODY",
-      subtitle: `${teamName} finished #${rosters.length}`,
+      subtitle: seasonComplete
+        ? `${teamName} finished #${rosters.length}`
+        : `${teamName} sits #${rosters.length} so far`,
       tagline: selectCardCopy("last_place", league_id).tagline,
       stat: record,
       meta: {
@@ -944,6 +973,7 @@ async function handleLeagueAutopsy(params: { league_id: string }): Promise<Leagu
         rank: rosters.length,
         record,
         team: teamName,
+        seasonComplete,
       },
     });
   }

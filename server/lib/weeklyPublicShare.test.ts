@@ -34,6 +34,8 @@ const sample: WeeklyPublicShareData = {
   summary: "Top Dog ate, fraud watch is open, and someone got smoked.",
   heroFact: "Top scorer: Alice — 142.3 pts",
   weekIsFinal: true,
+  recapReady: true,
+  slateStatus: "final",
   isDemo: false,
   beats: [
     { title: "Top Dog", subtitle: "Alice paced the league.", stat: "142.3 pts" },
@@ -133,6 +135,26 @@ describe("weekly share SSR HTML + OG metadata", () => {
     expect(html).toContain("Invalid share link");
     expect(html).not.toContain("at Object.");
     expect(html).not.toContain("stack");
+  });
+
+  it("public share page does not render completed recap language for non-final week", () => {
+    const html = buildWeeklySharePageHtml(
+      {
+        ...sample,
+        week: 3,
+        weekIsFinal: true,
+        recapReady: false,
+        slateStatus: "unavailable",
+        headline: "Week 3 scores aren't in yet.",
+        summary: "NFL Downunder — Week 3 doesn't have final scored matchups yet.",
+        heroFact: "Week 3 scores unavailable",
+        beats: [{ title: "Scores unavailable", subtitle: "Not a completed recap." }],
+      },
+      SITE_URL,
+    );
+    expect(html.toLowerCase()).not.toContain("ran the slate");
+    expect(html).toContain("Scores unavailable");
+    expect(html).not.toContain("League receipt");
   });
 });
 

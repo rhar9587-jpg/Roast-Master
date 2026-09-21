@@ -776,7 +776,7 @@ export async function getDemoWeeklyEmailPayload(
       })
     : null;
 
-  const introSummary = narrative
+  const introSummary = narrative?.signals?.recapReady
     ? `${narrative.headline} ${narrative.groupChatSummary}`
     : buildIntroSummary(week, rankings, true);
 

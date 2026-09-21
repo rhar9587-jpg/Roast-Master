@@ -13,6 +13,7 @@ import {
   weeklyHeadline,
   weeklyModeLabel,
   type WeeklyEmailMode,
+  type WeeklyWeekPresentation,
 } from "./weeklyContext";
 
 export type { WeeklyEmailMode };
@@ -21,6 +22,7 @@ export type WeeklyWeekContextBarProps = {
   mode: WeeklyEmailMode;
   leagueWeek: number;
   disabled?: boolean;
+  presentation?: WeeklyWeekPresentation;
   onModeChange: (mode: WeeklyEmailMode) => void;
   onWeekOverride: (week: number) => void;
 };
@@ -34,6 +36,7 @@ export function WeeklyWeekContextBar({
   mode,
   leagueWeek,
   disabled = false,
+  presentation,
   onModeChange,
   onWeekOverride,
 }: WeeklyWeekContextBarProps) {
@@ -41,6 +44,13 @@ export function WeeklyWeekContextBar({
   const modeLabel = weeklyModeLabel(mode);
   const canPrev = leagueWeek > 1;
   const canNext = leagueWeek < 18;
+  const title =
+    presentation && presentation.label !== "Recap" && mode === "recap"
+      ? `Week ${leagueWeek} ${presentation.label}`
+      : weeklyHeadline(leagueWeek, mode);
+  const supportingLine =
+    presentation?.supportingLine ??
+    (mode === "recap" ? "Here's what happened." : "Here's what's coming.");
 
   return (
     <section className="space-y-3" aria-label="Week context">
@@ -50,11 +60,9 @@ export function WeeklyWeekContextBar({
             This week
           </p>
           <h2 className="text-2xl md:text-3xl font-black tracking-tight text-foreground leading-none mt-1">
-            {weeklyHeadline(leagueWeek, mode)}
+            {title}
           </h2>
-          <p className="text-sm text-muted-foreground mt-1.5">
-            {mode === "recap" ? "Here's what happened." : "Here's what's coming."}
-          </p>
+          <p className="text-sm text-muted-foreground mt-1.5">{supportingLine}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">

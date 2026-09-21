@@ -50,6 +50,7 @@ import { WeeklyWeekContextBar } from "./WeeklyWeekContextBar";
 import {
   resolveDefaultWeeklyContext,
   resolveWeekForMode,
+  resolveWeeklyWeekPresentation,
   type WeeklyEmailMode,
 } from "./weeklyContext";
 import { isLeagueUnlocked, unlockLeague, unlockLeagues, lockLeague, hasUsedFreeSend } from "./premium";
@@ -1704,6 +1705,17 @@ export default function LeagueHistoryPage() {
   const matchupCount = allCells.length;
   const managerCount = managers.length;
 
+  const weeklySignals = weeklyRoastData?.signals as
+    | { slateStatus?: string; recapReady?: boolean }
+    | undefined;
+  const weeklyPresentation = resolveWeeklyWeekPresentation({
+    week: leagueWeek,
+    mode: weeklyCommissionerEmailMode,
+    latestFinalWeek: nflLatestFinalWeek,
+    slateStatus: weeklySignals?.slateStatus,
+    recapReady: weeklySignals?.recapReady,
+  });
+
   // Sync premium state on mount
   useEffect(() => {
     setIsPremiumState(isLeagueUnlocked(leagueId.trim()));
@@ -2148,6 +2160,7 @@ export default function LeagueHistoryPage() {
         <WeeklyWeekContextBar
           mode={weeklyCommissionerEmailMode}
           leagueWeek={leagueWeek}
+          presentation={weeklyPresentation}
           onModeChange={applyWeeklyMode}
           onWeekOverride={overrideLeagueWeek}
         />
@@ -2226,6 +2239,7 @@ export default function LeagueHistoryPage() {
               leagueWeek={leagueWeek}
               leagueName={weeklyRoastData.league?.name}
               emailMode={weeklyCommissionerEmailMode}
+              presentation={weeklyPresentation}
             />
           )}
         </>

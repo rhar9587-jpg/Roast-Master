@@ -42,6 +42,9 @@ export type WeeklyPublicShareData = {
   summary: string;
   heroFact: string;
   weekIsFinal: boolean;
+  /** Canonical slate readiness — completed claims only when recapReady. */
+  recapReady: boolean;
+  slateStatus: "final" | "live" | "upcoming" | "unavailable";
   isDemo: boolean;
   beats: WeeklyPublicShareBeat[];
 };
@@ -104,15 +107,24 @@ function pickHeroFact(params: {
   highestName?: string;
   highestScore?: number;
   blowoutSubtitle?: string;
-  weekIsFinal: boolean;
+  recapReady: boolean;
+  slateStatus: "final" | "live" | "upcoming" | "unavailable";
 }): string {
-  if (params.weekIsFinal && params.highestName && Number.isFinite(params.highestScore)) {
+  if (
+    params.recapReady &&
+    params.highestName &&
+    Number.isFinite(params.highestScore) &&
+    Number(params.highestScore) > 0
+  ) {
     return `Top scorer: ${params.highestName} — ${Number(params.highestScore).toFixed(1)} pts`;
   }
-  if (params.weekIsFinal && params.blowoutSubtitle) {
+  if (params.recapReady && params.blowoutSubtitle) {
     return truncate(params.blowoutSubtitle, 96);
   }
-  return `Week ${params.week} Recap`;
+  if (params.slateStatus === "live") return `Week ${params.week} is live`;
+  if (params.slateStatus === "upcoming") return `Week ${params.week} Upcoming`;
+  if (params.slateStatus === "unavailable") return `Week ${params.week} scores unavailable`;
+  return `Week ${params.week}`;
 }
 
 function publicBeatsFromCards(
@@ -178,12 +190,15 @@ async function loadLiveWeeklyPublicShare(
   });
 
   const blowout = narrative.cards.find((c) => c.type === "biggest_embarrassment");
+  const recapReady = narrative.signals?.recapReady === true;
+  const slateStatus = narrative.signals?.slateStatus ?? (weekIsFinal ? "unavailable" : "upcoming");
   const heroFact = pickHeroFact({
     week,
     highestName: narrative.stats.highestScorer?.username,
     highestScore: narrative.stats.highestScorer?.score,
     blowoutSubtitle: blowout?.subtitle,
-    weekIsFinal,
+    recapReady,
+    slateStatus,
   });
 
   return {
@@ -195,8 +210,10 @@ async function loadLiveWeeklyPublicShare(
     summary: narrative.groupChatSummary,
     heroFact,
     weekIsFinal,
+    recapReady,
+    slateStatus,
     isDemo: false,
-    beats: publicBeatsFromCards(narrative.cards),
+    beats: recapReady ? publicBeatsFromCards(narrative.cards) : publicBeatsFromCards(narrative.cards).slice(0, 1),
   };
 }
 
@@ -228,21 +245,30 @@ export async function loadWeeklyPublicShare(
         stat?: string;
       }>;
       const blowout = cards.find((c) => c.type === "biggest_embarrassment");
+      const signals = (demo.signals || {}) as {
+        recapReady?: boolean;
+        slateStatus?: "final" | "live" | "upcoming" | "unavailable";
+      };
+      const recapReady = signals.recapReady !== false;
+      const slateStatus = signals.slateStatus ?? "final";
       return {
         leagueId: league.league_id || DEMO_LEAGUE_ID,
         leagueName: league.name || DEMO_LEAGUE_NAME,
         week,
         mode: "recap",
-        headline: String(demo.headline || `Week ${week} Recap`),
+        headline: String(demo.headline || `Week ${week}`),
         summary: String(demo.groupChatSummary || ""),
         heroFact: pickHeroFact({
           week,
           highestName: stats.highestScorer?.username,
           highestScore: stats.highestScorer?.score,
           blowoutSubtitle: blowout?.subtitle,
-          weekIsFinal: true,
+          recapReady,
+          slateStatus,
         }),
         weekIsFinal: true,
+        recapReady,
+        slateStatus,
         isDemo: true,
         beats: publicBeatsFromCards(cards),
       };
@@ -263,8 +289,11 @@ export function buildShareOgTitle(data: Pick<WeeklyPublicShareData, "leagueName"
 }
 
 export function buildShareOgDescription(
-  data: Pick<WeeklyPublicShareData, "week" | "summary" | "heroFact">,
+  data: Pick<WeeklyPublicShareData, "week" | "summary" | "heroFact" | "recapReady">,
 ): string {
+  if (data.recapReady === false) {
+    return truncate(data.summary || data.heroFact || `Week ${data.week} is not a completed recap.`, 180);
+  }
   const base = `Week ${data.week} recap: top scorer, biggest blowout, fraud watch and league receipts.`;
   const hero = truncate(data.heroFact || "", 80);
   const summary = truncate(data.summary || "", 120);
@@ -362,7 +391,15 @@ export function buildWeeklySharePageHtml(
     <h1>Week ${data.week} Recap</h1>
     <p class="league">${escapeHtml(data.leagueName)}</p>
     <section class="hero">
-      <div class="kicker">${data.weekIsFinal ? "League receipt" : "Week still in progress"}</div>
+      <div class="kicker">${
+        data.recapReady
+          ? "League receipt"
+          : data.slateStatus === "live"
+            ? "Week still in progress"
+            : data.slateStatus === "upcoming"
+              ? "Upcoming week"
+              : "Scores unavailable"
+      }</div>
       <p class="fact">${escapeHtml(data.heroFact)}</p>
     </section>
     <p class="summary">${escapeHtml(truncate(data.summary || data.headline, 280))}</p>

@@ -50,6 +50,8 @@ type WeeklySlide =
 function normalizeWeeklyEngineCards(data: RoastResponse): Card[] {
   const raw = data.cards;
   const incoming: Card[] = Array.isArray(raw) ? raw : [];
+  const signals = data.signals as { recapReady?: boolean } | undefined;
+  const recapReady = signals?.recapReady !== false;
 
   // Text-only group chat cards are not share graphics — keep them out of the carousel.
   const visualIncoming = incoming.filter((c) => c.type !== "group_chat_drop");
@@ -58,9 +60,13 @@ function normalizeWeeklyEngineCards(data: RoastResponse): Card[] {
     return visualIncoming;
   }
 
+  // Do not invent Top Dog / Jail cards for non-final or all-zero weeks.
   const high = data.stats?.highestScorer;
   const low = data.stats?.lowestScorer;
-  if (!high?.username || !low?.username) {
+  if (!recapReady || !high?.username || !low?.username) {
+    return visualIncoming;
+  }
+  if (!(Number(high.score) > 0) && !(Number(low.score) > 0)) {
     return visualIncoming;
   }
 

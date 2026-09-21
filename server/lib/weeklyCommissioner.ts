@@ -818,7 +818,10 @@ export async function getWeeklyCommissionerEmail(
         rosterName: (rid: number) => rosterNameByTeamId(String(rid)),
         weekIsFinal,
       });
-      introSummary = `${roastNarrative.headline} ${roastNarrative.groupChatSummary}`;
+      // Only promote roast headline into the email intro when the slate is genuinely final.
+      if (roastNarrative.signals?.recapReady) {
+        introSummary = `${roastNarrative.headline} ${roastNarrative.groupChatSummary}`;
+      }
     } catch (e) {
       console.log(
         JSON.stringify({

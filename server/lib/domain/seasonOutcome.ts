@@ -93,6 +93,12 @@ export type BuildSeasonOutcomesInput = {
    */
   losersBracketStatus?: "available" | "unavailable";
   leagueSize?: number;
+  /**
+   * When true (or championship is resolved), known-empty losers brackets may fall
+   * back to regular-season cellar as last place. Mid-season must leave this false/absent
+   * so in-progress seasons never invent a final wooden spoon.
+   */
+  seasonComplete?: boolean;
 };
 
 /**
@@ -186,9 +192,10 @@ export function buildSeasonOutcomes(input: BuildSeasonOutcomesInput): SeasonOutc
       losersBracketStatus === "available" &&
       losersRows.length === 0 &&
       regularSeasonRank != null &&
-      leagueSize > 0
+      leagueSize > 0 &&
+      (input.seasonComplete === true || bracket.championshipResolved)
     ) {
-      // Known empty consolation bracket — regular-season cellar is final last place.
+      // Known empty consolation + season complete — regular-season cellar is final last place.
       lastPlace = regularSeasonRank === leagueSize;
       lastPlaceSource = lastPlace ? "regular_season_standings" : "absent";
       if (lastPlace && finalFinish == null) {
@@ -197,6 +204,7 @@ export function buildSeasonOutcomes(input: BuildSeasonOutcomesInput): SeasonOutc
       }
     }
     // losersBracketStatus === "unavailable" → leave lastPlace unset (do not guess)
+    // Mid-season empty losers without championship → leave lastPlace unset
 
     const confidence: SeasonOutcome["source"]["confidence"] = (() => {
       if (bracket.championshipResolved && (hasWinnersBracket || hasLosersBracketRows)) return "high";
