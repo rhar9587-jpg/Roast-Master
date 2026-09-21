@@ -24,6 +24,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { mapEngineCardToVisual } from "@/pages/LeagueHistory/weeklyShareCards";
+import { SHARE_WEEKLY_RECAP_LABEL } from "@/pages/LeagueHistory/shareHierarchyLabels";
 
 type Accent = "green" | "pink" | "blue" | "orange";
 
@@ -213,10 +214,8 @@ export function buildWeeklyPublicShareUrlFromRoast(data: RoastResponse): string 
 
 function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremium: boolean }) {
   const [copied, setCopied] = useState(false);
-  const [copiedMatchup, setCopiedMatchup] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [secondaryOpen, setSecondaryOpen] = useState(false);
   const [cardIndex, setCardIndex] = useState(0);
   const summary = data.groupChatSummary?.trim();
   const signalsParsed = useMemo(() => parseWeeklySignals(data), [data.signals]);
@@ -282,33 +281,6 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
       /* ignore */
     } finally {
       setShareBusy(false);
-    }
-  };
-
-  const copyText = async () => {
-    try {
-      await navigator.clipboard.writeText(roastClipboardText);
-      track("weekly_roast_copied", {
-        league_id: data.league.league_id,
-        week: data.week,
-      });
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  const copyMatchupLine = async () => {
-    if (!data.matchup) return;
-    const m = data.matchup;
-    const line = `${m.you.username} vs ${m.opponent.username} — ${safeNum(m.you.score).toFixed(2)}–${safeNum(m.opponent.score).toFixed(2)} — ${m.result}`;
-    try {
-      await navigator.clipboard.writeText(line);
-      setCopiedMatchup(true);
-      setTimeout(() => setCopiedMatchup(false), 2000);
-    } catch {
-      /* ignore */
     }
   };
 
@@ -427,57 +399,24 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
         )}
       </div>
 
-      {/* Primary share action */}
-      <div className="flex flex-col gap-2">
+      {/* Primary week share — single CTA */}
+      <div className="flex flex-col gap-2" data-testid="weekly-primary-share">
         <Button
           type="button"
           size="lg"
-          className="w-full sm:w-auto font-bold interact-cta"
+          className="w-full font-bold interact-cta"
           disabled={shareBusy}
           onClick={() => void shareWeek()}
+          data-testid="share-weekly-recap"
         >
           {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-          {copied ? "Copied" : shareBusy ? "Sharing…" : `Share Week ${data.week}`}
+          {copied ? "Copied" : shareBusy ? "Sharing…" : SHARE_WEEKLY_RECAP_LABEL}
         </Button>
-
-        <Collapsible open={secondaryOpen} onOpenChange={setSecondaryOpen}>
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-            >
-              More share options
-              <ChevronDown
-                className={`h-3.5 w-3.5 transition-transform ${secondaryOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2 space-y-2">
-            {summary && (
-              <div className="rounded-lg border bg-muted/30 p-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                  Group chat text
-                </p>
-                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{summary}</p>
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => void copyText()}>
-                {copied ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-                {copied ? "Copied" : "Copy text"}
-              </Button>
-              {data.matchup && (
-                <Button type="button" variant="outline" size="sm" onClick={() => void copyMatchupLine()}>
-                  {copiedMatchup ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-                  {copiedMatchup ? "Copied" : "Copy matchup line"}
-                </Button>
-              )}
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Download PNG from any card above when you want a story asset.
-            </p>
-          </CollapsibleContent>
-        </Collapsible>
+        {summary && readSlateSignals(data).recapReady && (
+          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+            {summary}
+          </p>
+        )}
       </div>
 
       {/* Supporting detail */}

@@ -53,7 +53,8 @@ export function navigateWeeklyWeek(week: number, delta: -1 | 1): number {
 }
 
 export function weeklyModeLabel(mode: WeeklyEmailMode): string {
-  return mode === "recap" ? "Recap" : "Preview";
+  // Avoid ambiguous "Preview" (also used for email). Upcoming = matchup preview mode.
+  return mode === "recap" ? "Recap" : "Upcoming";
 }
 
 /** Presentation state for a selected week relative to NFL latestFinalWeek + roast signals. */

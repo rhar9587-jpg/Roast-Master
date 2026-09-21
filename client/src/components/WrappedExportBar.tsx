@@ -1,8 +1,11 @@
-
 import { useMemo, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 import { Download, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  SAVE_IMAGE_LABEL,
+  SHARE_THIS_CARD_LABEL,
+} from "@/pages/LeagueHistory/shareHierarchyLabels";
 
 type Props = {
   title: string; // used for filename
@@ -61,33 +64,22 @@ export function WrappedExportBar({ title, children }: Props) {
   };
 
   return (
-    <div className="mt-4 flex gap-2 justify-end">
-      <Button onClick={exportPng} disabled={isExporting}>
-        <Download className="h-4 w-4 mr-2" />
-        Download PNG
-      </Button>
-
-      {/* Share with tooltip */}
-      <div className="relative group">
-        <Button variant="secondary" onClick={share} disabled={isExporting}>
+    <div className="space-y-3">
+      <div ref={ref}>{children}</div>
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <Button onClick={share} disabled={isExporting} className="w-full sm:w-auto">
           <Share2 className="h-4 w-4 mr-2" />
-          Post the Roast
+          {SHARE_THIS_CARD_LABEL}
         </Button>
-
-        {/* Tooltip */}
-        <div
-          role="tooltip"
-          className="
-            pointer-events-none absolute -top-11 right-0 z-50
-            whitespace-nowrap rounded-lg bg-black/90 px-3 py-2
-            text-xs font-semibold text-white shadow-lg
-            opacity-0 translate-y-1 transition
-            group-hover:opacity-100 group-hover:translate-y-0
-          "
+        <Button
+          variant="outline"
+          onClick={exportPng}
+          disabled={isExporting}
+          className="w-full sm:w-auto text-muted-foreground"
         >
-          Let the league witness this.
-          <div className="absolute right-4 top-full h-2 w-2 rotate-45 bg-black/90" />
-        </div>
+          <Download className="h-4 w-4 mr-2" />
+          {SAVE_IMAGE_LABEL}
+        </Button>
       </div>
     </div>
   );

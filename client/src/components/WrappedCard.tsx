@@ -5,6 +5,10 @@ import { exportCardPng, dataUrlToFile, downloadDataUrl } from "@/lib/exportCardI
 import { WatermarkOverlay } from "@/components/ui/WatermarkOverlay";
 import { BRAND_NAME, PRICE_LABEL, SITE_HOST } from "@/lib/brand";
 import {
+  SAVE_IMAGE_LABEL,
+  SHARE_THIS_CARD_LABEL,
+} from "@/pages/LeagueHistory/shareHierarchyLabels";
+import {
   clampPosterText,
   extractHeroNumber,
   formatMargin,
@@ -576,35 +580,32 @@ export function WrappedCard({
         </div>
 
         {/* Share controls — never inside export ref */}
-        <div className="flex flex-col gap-2 border-t border-border/60 bg-white px-3 py-3 sm:px-4 sm:py-4">
-          <div className="flex flex-wrap justify-end gap-2">
+        <div
+          className="flex flex-col gap-2 border-t border-border/60 bg-white px-3 py-3 sm:px-4 sm:py-4"
+          data-testid="card-share-controls"
+        >
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+            <button
+              type="button"
+              onClick={() => void smartShare()}
+              disabled={isExporting}
+              className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60 sm:px-4"
+              data-testid="share-this-card"
+            >
+              <Share2 className="h-4 w-4" />
+              {isExporting ? "Preparing…" : SHARE_THIS_CARD_LABEL}
+            </button>
+
             <button
               type="button"
               onClick={() => void downloadPng()}
               disabled={isExporting}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60 sm:px-4"
+              className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-60 sm:px-4"
+              data-testid="save-image"
             >
               <Download className="h-4 w-4" />
-              {isExporting ? "Preparing…" : "Download PNG"}
+              {isExporting ? "Preparing…" : SAVE_IMAGE_LABEL}
             </button>
-
-            <div className="group relative">
-              <button
-                type="button"
-                onClick={() => void smartShare()}
-                disabled={isExporting}
-                className="inline-flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm font-semibold text-foreground disabled:opacity-60 sm:px-4"
-              >
-                <Share2 className="h-4 w-4" />
-                Post the Roast
-              </button>
-              <div
-                role="tooltip"
-                className="pointer-events-none absolute -top-11 right-0 z-50 whitespace-nowrap rounded-lg bg-black/90 px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg transition group-hover:translate-y-0 group-hover:opacity-100"
-              >
-                Let the league witness this.
-              </div>
-            </div>
           </div>
           {!isPremium && (
             <p className="text-right text-xs text-gray-500">

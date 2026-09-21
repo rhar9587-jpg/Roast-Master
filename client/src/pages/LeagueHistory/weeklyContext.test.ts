@@ -138,7 +138,7 @@ describe("clampWeek / weeklyHeadline", () => {
 
   it("formats the week headline", () => {
     expect(weeklyHeadline(8, "recap")).toBe("Week 8 Recap");
-    expect(weeklyHeadline(9, "preview")).toBe("Week 9 Preview");
+    expect(weeklyHeadline(9, "preview")).toBe("Week 9 Upcoming");
   });
 
   it("presentation headline never says Recap for Live/Upcoming/Unavailable", () => {

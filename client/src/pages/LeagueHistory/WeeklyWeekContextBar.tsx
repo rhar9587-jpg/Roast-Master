@@ -99,7 +99,7 @@ export function WeeklyWeekContextBar({
           <div
             className="inline-flex rounded-lg border bg-background p-0.5 gap-0.5"
             role="group"
-            aria-label="Recap or Preview"
+            aria-label="Recap or Upcoming"
           >
             <Button
               type="button"
@@ -119,7 +119,7 @@ export function WeeklyWeekContextBar({
               disabled={disabled}
               onClick={() => onModeChange("preview")}
             >
-              Preview
+              Upcoming
             </Button>
           </div>
         </div>

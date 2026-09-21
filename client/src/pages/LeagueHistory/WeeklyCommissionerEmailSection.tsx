@@ -12,11 +12,22 @@ import { cn } from "@/lib/utils";
 import { track } from "@/lib/track";
 import { markFreeSendUsed } from "./premium";
 import { setCommissionerEmail } from "./utils";
-import { weeklyPresentationHeadline, weeklyHeadline, type WeeklyEmailMode, type WeeklyWeekPresentation } from "./weeklyContext";
+import {
+  weeklyPresentationHeadline,
+  weeklyHeadline,
+  type WeeklyEmailMode,
+  type WeeklyWeekPresentation,
+} from "./weeklyContext";
 import {
   buildCommissionerEmailPreviewPath,
   buildCommissionerPublicRecapUrl,
 } from "./weeklyCommissionerShare";
+import {
+  COPY_PUBLIC_RECAP_LINK_LABEL,
+  EMAIL_TOOLS_LABEL,
+  SEND_EMAIL_LABEL,
+  VIEW_EMAIL_LABEL,
+} from "./shareHierarchyLabels";
 
 function WeeklyEmailSentStatus({ leagueId, week }: { leagueId: string; week: number }) {
   const { data } = useQuery({
@@ -36,11 +47,11 @@ function WeeklyEmailSentStatus({ leagueId, week }: { leagueId: string; week: num
   const lines: string[] = [];
   if (data.recap?.sent && data.recap.sentAt) {
     const label = new Date(data.recap.sentAt).toLocaleDateString(undefined, { dateStyle: "medium" });
-    lines.push(`Recap sent on ${label}`);
+    lines.push(`Recap email sent on ${label}`);
   }
   if (data.preview?.sent && data.preview.sentAt) {
     const label = new Date(data.preview.sentAt).toLocaleDateString(undefined, { dateStyle: "medium" });
-    lines.push(`Preview sent on ${label}`);
+    lines.push(`Upcoming matchups email sent on ${label}`);
   }
   if (lines.length === 0) return null;
   return (
@@ -99,6 +110,7 @@ export function WeeklyCommissionerEmailSection({
 }: WeeklyCommissionerEmailSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [optionalOpen, setOptionalOpen] = useState(false);
   const [recipientOpen, setRecipientOpen] = useState(false);
 
@@ -130,11 +142,9 @@ export function WeeklyCommissionerEmailSection({
         league_id: trimmedId,
         week: leagueWeek,
       });
-      // Copy action = clipboard of the public share URL (never the email preview API).
       await navigator.clipboard.writeText(publicRecapUrl);
       toast({
-        title: "Recap link copied",
-        description: "Share this with your league — not the email preview.",
+        title: "Public recap link copied",
       });
     } catch {
       toast({ title: "Could not copy link", variant: "destructive" });
@@ -143,6 +153,7 @@ export function WeeklyCommissionerEmailSection({
 
   async function sendEmail() {
     if (!commissionerEmail.trim()) {
+      setToolsOpen(true);
       setRecipientOpen(true);
       toast({ title: "Enter commissioner email", variant: "destructive" });
       return;
@@ -181,7 +192,7 @@ export function WeeklyCommissionerEmailSection({
         title: "Sent",
         description:
           weeklyCommissionerEmailMode === "preview"
-            ? "Matchup preview sent to commissioner."
+            ? "Upcoming matchups email sent to commissioner."
             : "Weekly email sent to commissioner.",
       });
       queryClient.invalidateQueries({ queryKey: ["weekly-email-sent", trimmedId, leagueWeek] });
@@ -199,158 +210,160 @@ export function WeeklyCommissionerEmailSection({
   return (
     <section
       id="weekly-commissioner-email"
-      className="rounded-lg border bg-muted/20 p-4 space-y-4 scroll-mt-24"
+      className="rounded-lg border bg-muted/10 p-3 sm:p-4 space-y-3 scroll-mt-24"
+      data-testid="email-tools-section"
     >
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-foreground">
-          {presentation && !presentation.recapReady
-            ? "Commissioner email"
-            : "Commissioner recap"}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {headline}
-          {weeklyEmailGenerateLoading ? " · preparing…" : ""}
-        </p>
-      </div>
-
-      {!showPremiumContent && !isDemo && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-3 text-sm text-amber-800 dark:text-amber-200">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <p className="min-w-0 flex-1">
-              {freeSendAlreadyUsed
-                ? "You've used your free send. Unlock to keep sending."
-                : "Unlock to send weekly commissioner emails (preview + recap) for this league."}
-            </p>
-            <Button size="sm" className="w-full shrink-0 sm:w-auto" onClick={onCheckout}>
-              {freeSendAlreadyUsed ? "Unlock to send again" : "Unlock weekly emails for this league"}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            {freeSendAlreadyUsed
-              ? "Commissioners send this every week."
-              : "Your first send is free. Commissioners send this every week."}
-          </p>
-        </div>
-      )}
-
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            disabled={!canGenerateAndPreviewWeeklyEmail}
-            onClick={() => {
-              setWeeklyEmailGenerateLoading(true);
-              try {
-                openPreview();
-              } finally {
-                // Preview opens a new tab; generation happens server-side on that request.
-                setTimeout(() => setWeeklyEmailGenerateLoading(false), 400);
-              }
-            }}
-          >
-            Preview email
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!trimmedId || leagueWeek < 1}
-            onClick={() => void copyRecapLink()}
-          >
-            Copy recap link
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!canSendWeeklyEmail || weeklyEmailSendLoading}
-            onClick={() => void sendEmail()}
-          >
-            {weeklyEmailSendLoading ? "Sending…" : "Send"}
-          </Button>
-        </div>
-        <p className="text-[11px] text-muted-foreground leading-snug">
-          <span className="font-medium text-foreground/80">Preview email</span> opens the
-          commissioner email HTML.{" "}
-          <span className="font-medium text-foreground/80">Copy recap link</span> copies the
-          public share URL for your league group chat.
-        </p>
-      </div>
-
-      {canGenerateAndPreviewWeeklyEmail && (
-        <Collapsible open={optionalOpen} onOpenChange={setOptionalOpen}>
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="flex w-full items-center justify-between rounded-lg border border-dashed bg-background/50 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted/50"
-            >
-              <span>Customize note</span>
-              <ChevronDown
-                className={cn("h-4 w-4 shrink-0 transition-transform", optionalOpen && "rotate-180")}
-              />
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-3 pt-3">
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground">
-                Add a note at the top (optional)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Big week — trade deadline Tuesday!"
-                value={weeklyCommissionerNote}
-                onChange={(e) => setWeeklyCommissionerNote(e.target.value)}
-                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                maxLength={500}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground">
-                Sign-off line (optional)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Good luck this week!"
-                value={weeklyCommissionerSignoff}
-                onChange={(e) => setWeeklyCommissionerSignoff(e.target.value)}
-                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                maxLength={180}
-              />
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-
-      <Collapsible open={recipientOpen} onOpenChange={setRecipientOpen}>
+      <Collapsible open={toolsOpen} onOpenChange={setToolsOpen}>
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="flex w-full items-center justify-between rounded-lg border border-dashed bg-background/50 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted/50"
+            className="flex w-full items-center justify-between rounded-lg px-1 py-1 text-left"
+            data-testid="email-tools-trigger"
           >
-            <span>Change recipient</span>
+            <div className="min-w-0 space-y-0.5">
+              <h3 className="text-sm font-semibold text-foreground">{EMAIL_TOOLS_LABEL}</h3>
+              <p className="text-xs text-muted-foreground truncate">
+                {headline}
+                {weeklyEmailGenerateLoading ? " · preparing…" : ""}
+              </p>
+            </div>
             <ChevronDown
-              className={cn("h-4 w-4 shrink-0 transition-transform", recipientOpen && "rotate-180")}
+              className={cn(
+                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                toolsOpen && "rotate-180",
+              )}
             />
           </button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-3 space-y-2">
-          <label className="block text-xs font-medium text-muted-foreground">Commissioner email</label>
-          <input
-            type="email"
-            placeholder="commissioner@example.com"
-            value={commissionerEmail}
-            onChange={(e) => {
-              const v = e.target.value;
-              setCommissionerEmailState(v);
-              if (trimmedId) setCommissionerEmail(trimmedId, v);
-            }}
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            disabled={!canSendWeeklyEmail}
-          />
-          <p className="text-xs text-muted-foreground">
-            We&apos;ll send the report here. You can forward it to your league or BCC everyone.
-          </p>
-          {showPremiumContent && (
-            <WeeklyEmailSentStatus leagueId={trimmedId} week={leagueWeek} />
+
+        <CollapsibleContent className="space-y-3 pt-3">
+          {!showPremiumContent && !isDemo && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-3 text-sm text-amber-800 dark:text-amber-200">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <p className="min-w-0 flex-1">
+                  {freeSendAlreadyUsed
+                    ? "You've used your free send. Unlock to keep sending."
+                    : "Unlock to send weekly commissioner emails for this league."}
+                </p>
+                <Button size="sm" className="w-full shrink-0 sm:w-auto" onClick={onCheckout}>
+                  {freeSendAlreadyUsed ? "Unlock to send again" : "Unlock weekly emails"}
+                </Button>
+              </div>
+            </div>
           )}
+
+          <div className="flex flex-wrap gap-2" data-testid="email-tools-actions">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!canGenerateAndPreviewWeeklyEmail}
+              data-testid="view-email"
+              onClick={() => {
+                setWeeklyEmailGenerateLoading(true);
+                try {
+                  openPreview();
+                } finally {
+                  setTimeout(() => setWeeklyEmailGenerateLoading(false), 400);
+                }
+              }}
+            >
+              {VIEW_EMAIL_LABEL}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!trimmedId || leagueWeek < 1}
+              data-testid="copy-public-recap-link"
+              onClick={() => void copyRecapLink()}
+            >
+              {COPY_PUBLIC_RECAP_LINK_LABEL}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!canSendWeeklyEmail || weeklyEmailSendLoading}
+              data-testid="send-email"
+              onClick={() => void sendEmail()}
+            >
+              {weeklyEmailSendLoading ? "Sending…" : SEND_EMAIL_LABEL}
+            </Button>
+          </div>
+
+          {canGenerateAndPreviewWeeklyEmail && (
+            <Collapsible open={optionalOpen} onOpenChange={setOptionalOpen}>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-lg border border-dashed bg-background/50 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted/50"
+                >
+                  <span>Customize note</span>
+                  <ChevronDown
+                    className={cn("h-4 w-4 shrink-0 transition-transform", optionalOpen && "rotate-180")}
+                  />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    Add a note at the top (optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Big week — trade deadline Tuesday!"
+                    value={weeklyCommissionerNote}
+                    onChange={(e) => setWeeklyCommissionerNote(e.target.value)}
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    maxLength={500}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    Sign-off line (optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Good luck this week!"
+                    value={weeklyCommissionerSignoff}
+                    onChange={(e) => setWeeklyCommissionerSignoff(e.target.value)}
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    maxLength={180}
+                  />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          <Collapsible open={recipientOpen} onOpenChange={setRecipientOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded-lg border border-dashed bg-background/50 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted/50"
+              >
+                <span>Change recipient</span>
+                <ChevronDown
+                  className={cn("h-4 w-4 shrink-0 transition-transform", recipientOpen && "rotate-180")}
+                />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-3 space-y-2">
+              <label className="block text-xs font-medium text-muted-foreground">Commissioner email</label>
+              <input
+                type="email"
+                placeholder="commissioner@example.com"
+                value={commissionerEmail}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCommissionerEmailState(v);
+                  if (trimmedId) setCommissionerEmail(trimmedId, v);
+                }}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                disabled={!canSendWeeklyEmail}
+              />
+              {showPremiumContent && (
+                <WeeklyEmailSentStatus leagueId={trimmedId} week={leagueWeek} />
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         </CollapsibleContent>
       </Collapsible>
     </section>

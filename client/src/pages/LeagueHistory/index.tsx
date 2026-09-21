@@ -2289,8 +2289,8 @@ export default function LeagueHistoryPage() {
           description={`${unlockCtaLabel()} — then this week's cards and commissioner email load instantly.`}
           previewItems={[
             "Top Dog, Biggest Blowout, Fraud Watch, Bench Crimes — one idea per share card",
-            "Share Week X for the group chat in one tap",
-            "Commissioner Preview & Send right under the roast",
+            "Share weekly recap for the group chat in one tap",
+            "Email tools for commissioner view / send",
           ]}
           onUnlock={handleCheckout}
           lockedTotalCount={lockedTotalCount}
