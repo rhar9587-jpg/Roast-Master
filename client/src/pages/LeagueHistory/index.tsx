@@ -45,8 +45,8 @@ import { SeasonWrappedCard } from "@/components/SeasonWrappedCard";
 import { LeagueAutopsyCard } from "@/components/LeagueAutopsyCard";
 import { LockedModePreview } from "./LockedModePreview";
 import { WeeklyCommissionerEmailSection } from "./WeeklyCommissionerEmailSection";
-import { WeeklyEmailBridgeStrip } from "./WeeklyEmailBridgeStrip";
 import { WeeklyWeekContextBar } from "./WeeklyWeekContextBar";
+import { buildCompactWeekResults } from "./weeklyCompactResults";
 import {
   resolveDefaultWeeklyContext,
   resolveWeekForMode,
@@ -1797,6 +1797,24 @@ export default function LeagueHistoryPage() {
     recapReady: weeklySignals?.recapReady,
   });
 
+  const weeklyCompactResults = useMemo(() => {
+    if (!weeklyPresentation.recapReady) return [];
+    const nameByKey = (key: string) =>
+      managers.find((m) => m.key === key)?.name ?? key;
+    return buildCompactWeekResults(data?.weeklyMatchups, {
+      week: leagueWeek,
+      season: data?.league?.season,
+      nameByKey,
+      recapReady: weeklyPresentation.recapReady,
+    });
+  }, [
+    weeklyPresentation.recapReady,
+    data?.weeklyMatchups,
+    data?.league?.season,
+    leagueWeek,
+    managers,
+  ]);
+
   const playoffWeekEnd = useMemo(() => {
     const seasons = data?.seasonStats;
     if (!seasons?.length) return undefined;
@@ -2189,7 +2207,10 @@ export default function LeagueHistoryPage() {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveMode(tab.id as Mode)}
+                onClick={() => {
+                  setActiveMode(tab.id as Mode);
+                  if (tab.id === "weekly") setIsSelectorCollapsed(true);
+                }}
                 className={`flex flex-col items-stretch gap-0.5 rounded-lg text-left transition ${
                   tab.primary ? "px-3 py-2 min-w-[8.5rem]" : "px-2.5 py-1.5 min-w-[5.5rem]"
                 } ${
@@ -2221,12 +2242,17 @@ export default function LeagueHistoryPage() {
         </div>
       )}
 
-      {hasData && (
+      {hasData && activeMode !== "weekly" && (
         <p className="text-sm text-muted-foreground">
           {activeMode === "history" && "See who owns who. Share the receipts."}
-          {WEEKLY_ENABLED && activeMode === "weekly" && "Open it. Laugh. Send it to the group chat."}
           {activeMode === "season" && seasonModeSupportingLine(seasonComplete)}
           {activeMode === "end" && autopsyModeSupportingLine(seasonComplete)}
+        </p>
+      )}
+
+      {hasData && WEEKLY_ENABLED && activeMode === "weekly" && data?.league?.name && (
+        <p className="text-sm text-muted-foreground truncate" data-testid="weekly-league-context">
+          {data.league.name}
         </p>
       )}
 
@@ -2253,25 +2279,28 @@ export default function LeagueHistoryPage() {
         </div>
       )}
 
-      <div ref={selectorRef}>
-        <LeagueSelector
-          leagueId={leagueId}
-          startWeek={startWeek}
-          endWeek={endWeek}
-          includePlayoffs={includePlayoffs}
-          onLeagueIdChange={setLeagueId}
-          onStartWeekChange={setStartWeek}
-          onEndWeekChange={setEndWeek}
-          onIncludePlayoffsChange={handleIncludePlayoffsChange}
-          onAnalyze={() => refetch()}
-          isFetching={isFetching}
-          error={error as Error | null}
-          isCollapsed={isSelectorCollapsed}
-          onCollapsedChange={setIsSelectorCollapsed}
-          leagueName={data?.league?.name}
-          season={data?.league?.season}
-        />
-      </div>
+      {/* League selector: keep above Weekly content only when not yet loaded; otherwise demote below. */}
+      {!(WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent) && (
+        <div ref={selectorRef}>
+          <LeagueSelector
+            leagueId={leagueId}
+            startWeek={startWeek}
+            endWeek={endWeek}
+            includePlayoffs={includePlayoffs}
+            onLeagueIdChange={setLeagueId}
+            onStartWeekChange={setStartWeek}
+            onEndWeekChange={setEndWeek}
+            onIncludePlayoffsChange={handleIncludePlayoffsChange}
+            onAnalyze={() => refetch()}
+            isFetching={isFetching}
+            error={error as Error | null}
+            isCollapsed={isSelectorCollapsed}
+            onCollapsedChange={setIsSelectorCollapsed}
+            leagueName={data?.league?.name}
+            season={data?.league?.season}
+          />
+        </div>
+      )}
 
       {WEEKLY_ENABLED && hasData && activeMode === "weekly" && (
         <WeeklyWeekContextBar
@@ -2349,14 +2378,11 @@ export default function LeagueHistoryPage() {
           )}
 
           {weeklyRoastData && (
-            <RoastCard data={weeklyRoastData} isPremium={showPremiumContent} variant="weekly" />
-          )}
-          {weeklyRoastData && (
-            <WeeklyEmailBridgeStrip
-              leagueWeek={leagueWeek}
-              leagueName={weeklyRoastData.league?.name}
-              emailMode={weeklyCommissionerEmailMode}
-              presentation={weeklyPresentation}
+            <RoastCard
+              data={weeklyRoastData}
+              isPremium={showPremiumContent}
+              variant="weekly"
+              weekResults={weeklyCompactResults}
             />
           )}
         </>
@@ -2386,6 +2412,29 @@ export default function LeagueHistoryPage() {
           onCheckout={handleCheckout}
           setServerFreeSendUsed={setServerFreeSendUsed}
         />
+      )}
+
+      {/* Demoted league controls — after Weekly payoff */}
+      {WEEKLY_ENABLED && hasData && activeMode === "weekly" && showPremiumContent && (
+        <div ref={selectorRef} className="pt-2" data-testid="weekly-demoted-league-controls">
+          <LeagueSelector
+            leagueId={leagueId}
+            startWeek={startWeek}
+            endWeek={endWeek}
+            includePlayoffs={includePlayoffs}
+            onLeagueIdChange={setLeagueId}
+            onStartWeekChange={setStartWeek}
+            onEndWeekChange={setEndWeek}
+            onIncludePlayoffsChange={handleIncludePlayoffsChange}
+            onAnalyze={() => refetch()}
+            isFetching={isFetching}
+            error={error as Error | null}
+            isCollapsed={isSelectorCollapsed}
+            onCollapsedChange={setIsSelectorCollapsed}
+            leagueName={data?.league?.name}
+            season={data?.league?.season}
+          />
+        </div>
       )}
 
       {hasData && activeMode === "season" && !showPremiumContent && (

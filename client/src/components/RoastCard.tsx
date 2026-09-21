@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Trophy,
@@ -14,6 +14,7 @@ import {
 import type { Card, RoastResponse } from "@shared/schema";
 import { weeklyPublicShareUrl } from "@shared/weeklyShareUrl";
 import { weekSlateHeadline, type WeekSlateStatusLabel } from "@shared/weekSlateLabels";
+import { partitionWeeklyRoastCards } from "@shared/weeklyHero";
 import { track } from "@/lib/track";
 import { getYoursLine, SHARE_FOOTER } from "@/lib/brand";
 import { WrappedCard } from "@/components/WrappedCard";
@@ -25,6 +26,8 @@ import {
 } from "@/components/ui/collapsible";
 import { mapEngineCardToVisual } from "@/pages/LeagueHistory/weeklyShareCards";
 import { SHARE_WEEKLY_RECAP_LABEL } from "@/pages/LeagueHistory/shareHierarchyLabels";
+import { WeeklyCompactResults } from "@/pages/LeagueHistory/WeeklyCompactResults";
+import { WeeklyPowerRankingsPanel } from "@/pages/LeagueHistory/WeeklyPowerRankingsPanel";
 
 type Accent = "green" | "pink" | "blue" | "orange";
 
@@ -33,15 +36,19 @@ interface RoastCardProps {
   isPremium?: boolean;
   /** League Weekly tab: headline + engine cards + optional group chat (single source from API). */
   variant?: "default" | "weekly";
+  /** Completed-week compact results (Weekly tab only). */
+  weekResults?: Array<{
+    winnerName: string;
+    winnerScore: number;
+    loserName: string;
+    loserScore: number;
+    margin: number;
+  }>;
 }
 
 function safeNum(n: number | undefined | null, fallback = 0) {
   return typeof n === "number" && Number.isFinite(n) ? n : fallback;
 }
-
-type WeeklySlide =
-  | { kind: "engine"; idx: number }
-  | { kind: "matchup" };
 
 function readSlateSignals(data: RoastResponse): {
   recapReady: boolean;
@@ -212,36 +219,59 @@ export function buildWeeklyPublicShareUrlFromRoast(data: RoastResponse): string 
   return weeklyPublicShareUrl(leagueId, week);
 }
 
-function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremium: boolean }) {
+function WeeklyEngineLayout({
+  data,
+  isPremium,
+  weekResults = [],
+}: {
+  data: RoastResponse;
+  isPremium: boolean;
+  weekResults?: Array<{
+    winnerName: string;
+    winnerScore: number;
+    loserName: string;
+    loserScore: number;
+    margin: number;
+  }>;
+}) {
   const [copied, setCopied] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [cardIndex, setCardIndex] = useState(0);
+  const [extraOpen, setExtraOpen] = useState(false);
   const summary = data.groupChatSummary?.trim();
   const signalsParsed = useMemo(() => parseWeeklySignals(data), [data.signals]);
+  const { recapReady, slateStatus } = readSlateSignals(data);
 
   const engineCards = useMemo(
     () => normalizeWeeklyEngineCards(data),
     [data.cards, data.stats, data.groupChatSummary, data.headline],
   );
-  const hasMatchup = Boolean(data.matchup);
 
-  const slides: WeeklySlide[] = useMemo(() => {
-    const s: WeeklySlide[] = engineCards.map((_, idx) => ({ kind: "engine" as const, idx }));
-    if (hasMatchup) s.push({ kind: "matchup" });
-    return s;
-  }, [engineCards, hasMatchup]);
+  const closestOpts = useMemo(() => {
+    if (!recapReady || !signalsParsed?.closestGame) return null;
+    return {
+      teamA: signalsParsed.closestGame.teamA,
+      teamB: signalsParsed.closestGame.teamB,
+      scoreA: signalsParsed.closestGame.scoreA,
+      scoreB: signalsParsed.closestGame.scoreB,
+      margin: signalsParsed.closestMargin,
+    };
+  }, [recapReady, signalsParsed]);
 
-  const slideCount = slides.length;
-
-  useEffect(() => {
-    setCardIndex(0);
-  }, [data.week, data.league?.league_id, slideCount]);
-
-  const goPrev = () =>
-    setCardIndex((i) => (slideCount > 0 ? (i - 1 + slideCount) % slideCount : 0));
-  const goNext = () =>
-    setCardIndex((i) => (slideCount > 0 ? (i + 1) % slideCount : 0));
+  const partition = useMemo(() => {
+    if (!recapReady) {
+      return {
+        hero: engineCards[0] ?? null,
+        heroIsSynthetic: false,
+        supporting: [] as Card[],
+        remainder: engineCards.slice(1),
+      };
+    }
+    return partitionWeeklyRoastCards(engineCards, {
+      closestGame: closestOpts,
+      supportingLimit: 3,
+    });
+  }, [engineCards, recapReady, closestOpts]);
 
   const publicShareUrl = useMemo(() => buildWeeklyPublicShareUrlFromRoast(data), [data]);
   const roastClipboardText = useMemo(
@@ -257,7 +287,6 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
         league_id: data.league.league_id,
       });
       const shareText = roastClipboardText;
-      const { slateStatus } = readSlateSignals(data);
       const stateTitle = weekSlateHeadline(data.week, slateStatus, "short");
       const title = data.league?.name
         ? `${data.league.name} — ${stateTitle}`
@@ -284,123 +313,70 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
     }
   };
 
-  const currentSlide = slides[cardIndex];
-
-  const renderEngineCard = (idx: number) => {
-    const c = engineCards[idx];
-    if (!c) return null;
+  const renderEngineCard = (c: Card, opts?: { hero?: boolean }) => {
     const visual = mapEngineCardToVisual(c, data.week, data);
     return (
-      <WrappedCard
-        kicker={visual.kicker}
-        kickerIcon={null}
-        title={visual.title}
-        subtitle={visual.subtitle}
-        {...(visual.bigValue
-          ? { bigValue: visual.bigValue, statLabel: visual.statLabel ?? "Stat" }
-          : {})}
-        tagline={visual.tagline}
-        footer={SHARE_FOOTER}
-        accent={visual.accent}
-        isMatchup={visual.isMatchup}
-        matchupData={visual.matchupData}
-        isPremium={isPremium}
-      />
+      <div
+        className={opts?.hero ? "relative" : undefined}
+        data-testid={opts?.hero ? "weekly-hero-roast" : "weekly-supporting-roast"}
+        data-card-type={c.type}
+      >
+        {opts?.hero ? (
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary mb-2">
+            Roast of the week
+          </p>
+        ) : null}
+        <WrappedCard
+          kicker={visual.kicker}
+          kickerIcon={null}
+          title={visual.title}
+          subtitle={visual.subtitle}
+          {...(visual.bigValue
+            ? { bigValue: visual.bigValue, statLabel: visual.statLabel ?? "Stat" }
+            : {})}
+          tagline={visual.tagline}
+          footer={SHARE_FOOTER}
+          accent={visual.accent}
+          isMatchup={visual.isMatchup}
+          matchupData={visual.matchupData}
+          isPremium={isPremium}
+        />
+      </div>
     );
   };
 
+  const heroCard = partition.hero;
+  const supporting = partition.supporting;
+  const remainder = partition.remainder;
+
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-5">
-      <div className="space-y-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          Week {data.week}
-          {data.league?.name ? ` · ${data.league.name}` : ""}
-        </p>
-        <h2 className="text-2xl md:text-3xl font-black tracking-tight text-foreground leading-tight">
-          {data.headline}
-        </h2>
-      </div>
-
-      {/* Shareable roast cards — hero */}
+    <div className="w-full max-w-3xl mx-auto space-y-4" data-testid="weekly-engine-layout">
+      {/* 1–2. Hero roast — primary payoff */}
       <div className="space-y-2">
-        {slideCount === 0 ? (
-          <p className="text-sm text-muted-foreground rounded-lg border border-dashed bg-muted/20 px-3 py-4">
-            No shareable league cards for this week yet. Check back when scores are in.
-          </p>
+        {heroCard ? (
+          <motion.div
+            key={`hero-${heroCard.type}`}
+            initial={{ opacity: 0, y: 10, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.22 }}
+          >
+            {renderEngineCard(heroCard, { hero: true })}
+          </motion.div>
         ) : (
-          <>
-            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-              <p className="text-sm font-semibold text-foreground tracking-tight">
-                {slideCount} share card{slideCount === 1 ? "" : "s"}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={goPrev}
-                  className="h-10 w-10 rounded-xl border bg-background flex items-center justify-center interact-icon"
-                  aria-label="Previous card"
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  className="h-10 w-10 rounded-xl border bg-background flex items-center justify-center interact-icon"
-                  aria-label="Next card"
-                >
-                  ›
-                </button>
-              </div>
-            </div>
-
-            {currentSlide && (
-              <motion.div
-                key={`${currentSlide.kind}-${currentSlide.kind === "engine" ? currentSlide.idx : "m"}`}
-                initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.25 }}
-              >
-                {currentSlide.kind === "engine"
-                  ? renderEngineCard(currentSlide.idx)
-                  : data.matchup ? (
-                      <WrappedCard
-                        kicker="YOUR MATCHUP"
-                        title={
-                          data.matchup.result === "WIN"
-                            ? "HANDLED BUSINESS"
-                            : data.matchup.result === "LOSS"
-                              ? "TOOK THE L"
-                              : data.matchup.result === "TIE"
-                                ? "DEAD EVEN"
-                                : "PENDING"
-                        }
-                        isMatchup
-                        matchupData={{
-                          teamA: data.matchup.you.username,
-                          scoreA: safeNum(data.matchup.you.score),
-                          teamB: data.matchup.opponent.username,
-                          scoreB: safeNum(data.matchup.opponent.score),
-                          margin: Math.abs(
-                            safeNum(data.matchup.you.score) - safeNum(data.matchup.opponent.score),
-                          ),
-                        }}
-                        bigValue={`+${Math.abs(
-                          safeNum(data.matchup.you.score) - safeNum(data.matchup.opponent.score),
-                        ).toFixed(1)}`}
-                        tagline="Receipts attached."
-                        footer={SHARE_FOOTER}
-                        accent="green"
-                        isPremium={isPremium}
-                      />
-                    ) : null}
-              </motion.div>
-            )}
-          </>
+          <p className="text-sm text-muted-foreground rounded-lg border border-dashed bg-muted/20 px-3 py-4">
+            {recapReady
+              ? "No shareable league cards for this week yet."
+              : slateStatus === "live"
+                ? "Week is live — final roast cards unlock when the slate is final."
+                : slateStatus === "upcoming"
+                  ? "Week hasn't kicked off yet — check back after games are final."
+                  : "Scores aren't available for a completed recap yet."}
+          </p>
         )}
       </div>
 
-      {/* Primary week share — single CTA */}
-      <div className="flex flex-col gap-2" data-testid="weekly-primary-share">
+      {/* 3. Primary week share — single CTA, close to the joke */}
+      <div className="flex flex-col gap-1.5" data-testid="weekly-primary-share">
         <Button
           type="button"
           size="lg"
@@ -412,66 +388,132 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
           {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
           {copied ? "Copied" : shareBusy ? "Sharing…" : SHARE_WEEKLY_RECAP_LABEL}
         </Button>
-        {summary && readSlateSignals(data).recapReady && (
-          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
-            {summary}
-          </p>
-        )}
       </div>
 
-      {/* Supporting detail */}
-      {readSlateSignals(data).recapReady && (
-      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-        <span className="rounded-md border bg-background/80 px-2 py-0.5">
-          Avg {safeNum(data.stats.averageScore).toFixed(1)} pts
-        </span>
-        <span className="rounded-md border bg-background/80 px-2 py-0.5">
-          High {safeNum(data.stats.highestScorer.score).toFixed(1)}
-        </span>
-        <span className="rounded-md border bg-background/80 px-2 py-0.5">
-          Low {safeNum(data.stats.lowestScorer.score).toFixed(1)}
-        </span>
-        {signalsParsed?.medianScore != null && (
-          <span className="rounded-md border bg-background/80 px-2 py-0.5">
-            Median {safeNum(signalsParsed.medianScore).toFixed(1)}
-          </span>
-        )}
-      </div>
-      )}
+      {/* 4. Compact results — final weeks only */}
+      {recapReady && weekResults.length > 0 ? (
+        <WeeklyCompactResults week={data.week} results={weekResults} />
+      ) : null}
 
-      {readSlateSignals(data).recapReady && signalsParsed && (
+      {/* 5. Power Rankings — shared /api/power-rankings source */}
+      {recapReady ? (
+        <WeeklyPowerRankingsPanel
+          leagueId={data.league.league_id}
+          week={data.week}
+          enabled={recapReady}
+        />
+      ) : null}
+
+      {/* 6–7. Supporting roast moments + card-level share (on WrappedCard) */}
+      {recapReady && supporting.length > 0 ? (
+        <section className="space-y-3" aria-label="Also this week" data-testid="weekly-supporting-moments">
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Also this week
+          </h3>
+          <div className="space-y-4">
+            {supporting.map((c, i) => (
+              <motion.div
+                key={`sup-${c.type}-${i}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: Math.min(i * 0.04, 0.12) }}
+              >
+                {renderEngineCard(c)}
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {recapReady && remainder.length > 0 ? (
+        <Collapsible open={extraOpen} onOpenChange={setExtraOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded-lg border border-dashed border-border/80 bg-muted/20 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted/40"
+              data-testid="weekly-see-more-roasts"
+            >
+              <span>See more from this week</span>
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 transition-transform ${extraOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-4 pt-3">
+            {remainder.map((c, i) => (
+              <div key={`rem-${c.type}-${i}`}>{renderEngineCard(c)}</div>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      ) : null}
+
+      {/* Personal matchup (if viewer selected) — secondary to league hero */}
+      {data.matchup ? (
+        <div className="space-y-2" data-testid="weekly-your-matchup">
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Your matchup
+          </h3>
+          <WrappedCard
+            kicker="YOUR MATCHUP"
+            title={
+              data.matchup.result === "WIN"
+                ? "HANDLED BUSINESS"
+                : data.matchup.result === "LOSS"
+                  ? "TOOK THE L"
+                  : data.matchup.result === "TIE"
+                    ? "DEAD EVEN"
+                    : "PENDING"
+            }
+            isMatchup
+            matchupData={{
+              teamA: data.matchup.you.username,
+              scoreA: safeNum(data.matchup.you.score),
+              teamB: data.matchup.opponent.username,
+              scoreB: safeNum(data.matchup.opponent.score),
+              margin: Math.abs(
+                safeNum(data.matchup.you.score) - safeNum(data.matchup.opponent.score),
+              ),
+            }}
+            bigValue={`+${Math.abs(
+              safeNum(data.matchup.you.score) - safeNum(data.matchup.opponent.score),
+            ).toFixed(1)}`}
+            tagline="Receipts attached."
+            footer={SHARE_FOOTER}
+            accent="green"
+            isPremium={isPremium}
+          />
+        </div>
+      ) : null}
+
+      {recapReady && summary ? (
+        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{summary}</p>
+      ) : null}
+
+      {recapReady && signalsParsed && (
         <Collapsible open={moreOpen} onOpenChange={setMoreOpen}>
           <CollapsibleTrigger asChild>
             <button
               type="button"
-              className="flex w-full max-w-3xl mx-auto items-center justify-between rounded-lg border border-dashed border-border/80 bg-muted/20 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted/40"
+              className="flex w-full items-center justify-between rounded-lg border border-dashed border-border/60 bg-transparent px-3 py-1.5 text-left text-[11px] font-medium text-muted-foreground hover:text-foreground"
             >
-              <span>More from this week</span>
+              <span>Week stats</span>
               <ChevronDown
-                className={`h-4 w-4 shrink-0 transition-transform ${moreOpen ? "rotate-180" : ""}`}
+                className={`h-3.5 w-3.5 shrink-0 transition-transform ${moreOpen ? "rotate-180" : ""}`}
               />
             </button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="max-w-3xl mx-auto space-y-2 pt-2 text-xs text-muted-foreground">
-            {signalsParsed.closestGame && (
-              <p>
-                <span className="font-medium text-foreground">Closest game: </span>
-                {signalsParsed.closestGame.teamA} {signalsParsed.closestGame.scoreA.toFixed(2)} –{" "}
-                {signalsParsed.closestGame.teamB} {signalsParsed.closestGame.scoreB.toFixed(2)}
-              </p>
-            )}
-            {signalsParsed.closestMargin != null && (
-              <p>
-                <span className="font-medium text-foreground">Closest margin: </span>
-                {safeNum(signalsParsed.closestMargin).toFixed(2)} pts
-              </p>
-            )}
-            {signalsParsed.blowoutMargin != null && (
-              <p>
-                <span className="font-medium text-foreground">Biggest blowout margin: </span>
-                {safeNum(signalsParsed.blowoutMargin).toFixed(2)} pts
-              </p>
-            )}
+          <CollapsibleContent className="space-y-2 pt-2 text-xs text-muted-foreground">
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-md border bg-background/80 px-2 py-0.5">
+                Avg {safeNum(data.stats.averageScore).toFixed(1)} pts
+              </span>
+              <span className="rounded-md border bg-background/80 px-2 py-0.5">
+                High {safeNum(data.stats.highestScorer.score).toFixed(1)}
+              </span>
+              <span className="rounded-md border bg-background/80 px-2 py-0.5">
+                Low {safeNum(data.stats.lowestScorer.score).toFixed(1)}
+              </span>
+            </div>
           </CollapsibleContent>
         </Collapsible>
       )}
@@ -479,7 +521,12 @@ function WeeklyEngineLayout({ data, isPremium }: { data: RoastResponse; isPremiu
   );
 }
 
-export function RoastCard({ data, isPremium = false, variant = "default" }: RoastCardProps) {
+export function RoastCard({
+  data,
+  isPremium = false,
+  variant = "default",
+  weekResults,
+}: RoastCardProps) {
   const [index, setIndex] = useState(0);
   const [isExporting] = useState(false);
 
@@ -616,7 +663,7 @@ export function RoastCard({ data, isPremium = false, variant = "default" }: Roas
   }, [data]);
 
   if (useWeeklyEngine) {
-    return <WeeklyEngineLayout data={data} isPremium={isPremium} />;
+    return <WeeklyEngineLayout data={data} isPremium={isPremium} weekResults={weekResults} />;
   }
 
   const total = cards.length;

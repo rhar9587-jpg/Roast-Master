@@ -1,17 +1,14 @@
-/**
- * Tests for public recap hero selection (presentation-only).
- */
-
 import { describe, expect, it } from "vitest";
 import {
   closestGameHeroCandidate,
+  partitionWeeklyRoastCards,
   publicRecapDisplayTitle,
   publicRecapHeroPriority,
   selectPublicRecapHero,
   selectPublicRecapSupportingMoments,
 } from "./publicRecapHero";
 
-describe("publicRecapHero selection", () => {
+describe("publicRecapHero selection (shared weeklyHero)", () => {
   it("prefers Murder Scene / biggest blowout over Top Dog", () => {
     const hero = selectPublicRecapHero([
       { type: "top_dog", title: "Top Dog", subtitle: "Alice paced the league.", stat: "142.3 pts" },
@@ -69,7 +66,7 @@ describe("publicRecapHero selection", () => {
     expect(hero?.title).toBe("Carry Job");
   });
 
-  it("limits supporting moments to 2–3 and excludes the hero type", () => {
+  it("limits supporting moments and excludes the hero type", () => {
     const cards = [
       { type: "biggest_embarrassment", title: "Biggest Embarrassment", subtitle: "Blowout.", stat: "+40" },
       { type: "top_dog", title: "Top Dog", subtitle: "High score.", stat: "140" },
@@ -105,5 +102,14 @@ describe("publicRecapHero selection", () => {
         margin: 20,
       }),
     ).toBeNull();
+  });
+
+  it("partition keeps hero out of supporting list", () => {
+    const part = partitionWeeklyRoastCards([
+      { type: "biggest_embarrassment", title: "x", subtitle: "y", stat: "+1" },
+      { type: "top_dog", title: "t", subtitle: "s", stat: "100" },
+    ]);
+    expect(part.hero?.type).toBe("biggest_embarrassment");
+    expect(part.supporting.map((c) => c.type)).not.toContain("biggest_embarrassment");
   });
 });

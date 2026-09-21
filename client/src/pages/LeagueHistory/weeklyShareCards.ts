@@ -189,6 +189,41 @@ export function mapEngineCardToVisual(
     };
   }
 
+  if (type.includes("closest") || type.includes("narrow") || type.includes("nail")) {
+    const teamA = metaStr(meta, "teamA") || metaStr(meta, "team_a");
+    const teamB = metaStr(meta, "teamB") || metaStr(meta, "team_b");
+    const scoreA = metaNum(meta, "scoreA") ?? metaNum(meta, "score_a");
+    const scoreB = metaNum(meta, "scoreB") ?? metaNum(meta, "score_b");
+    const margin = metaNum(meta, "margin");
+    if (teamA && teamB && scoreA != null && scoreB != null) {
+      return {
+        kicker: "NARROW ESCAPE",
+        title: "NAIL-BITER",
+        isMatchup: true,
+        matchupData: {
+          teamA,
+          scoreA,
+          teamB,
+          scoreB,
+          margin: margin ?? Math.abs(scoreA - scoreB),
+        },
+        bigValue: `+${safeNum(margin ?? Math.abs(scoreA - scoreB)).toFixed(1)}`,
+        statLabel: "Margin",
+        tagline: shortPunchline(card.tagline, "One play away."),
+        accent: "orange",
+      };
+    }
+    return {
+      kicker: "NARROW ESCAPE",
+      title: shortPunchline(card.title, "NAIL-BITER", 40).toUpperCase(),
+      subtitle: shortPunchline(card.subtitle, "Closest game of the week.", 110),
+      bigValue: card.stat,
+      statLabel: "Margin",
+      tagline: shortPunchline(card.tagline, "One play away."),
+      accent: "orange",
+    };
+  }
+
   if (type.includes("lowest") || (card.title ?? "").toLowerCase().includes("jail")) {
     const name = metaStr(meta, "username") || data.stats.lowestScorer.username;
     const score = metaNum(meta, "score") ?? data.stats.lowestScorer.score;

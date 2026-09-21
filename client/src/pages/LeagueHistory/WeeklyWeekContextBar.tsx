@@ -31,7 +31,7 @@ export type WeeklyWeekContextBarProps = {
 /**
  * Compact week/mode control for the Weekly tab.
  * Prominent: slate-aware "Week 8 Recap/Live/Upcoming". Compact: prev/next + Recap/Preview.
- * Manual week entry is secondary behind "Choose another week".
+ * Manual week entry is secondary behind "Choose another week" (collapsed by default).
  */
 export function WeeklyWeekContextBar({
   mode,
@@ -50,21 +50,14 @@ export function WeeklyWeekContextBar({
   const title = presentation
     ? weeklyPresentationHeadline(leagueWeek, presentation)
     : weeklyHeadline(leagueWeek, mode);
-  const supportingLine =
-    presentation?.supportingLine ??
-    (mode === "recap" ? "Here's what happened." : "Here's what's coming.");
 
   return (
-    <section className="space-y-3" aria-label="Week context">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <section className="space-y-2" aria-label="Week context" data-testid="weekly-week-context">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            This week
-          </p>
-          <h2 className="text-2xl md:text-3xl font-black tracking-tight text-foreground leading-none mt-1">
+          <h2 className="text-xl md:text-2xl font-black tracking-tight text-foreground leading-none">
             {title}
           </h2>
-          <p className="text-sm text-muted-foreground mt-1.5">{supportingLine}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -73,21 +66,21 @@ export function WeeklyWeekContextBar({
               type="button"
               size="icon"
               variant="ghost"
-              className="h-9 w-9 rounded-r-none"
+              className="h-8 w-8 rounded-r-none"
               disabled={disabled || !canPrev}
               aria-label="Previous week"
               onClick={() => onWeekOverride(navigateWeeklyWeek(leagueWeek, -1))}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="px-2 text-xs font-semibold tabular-nums text-muted-foreground min-w-[4.5rem] text-center">
+            <span className="px-2 text-xs font-semibold tabular-nums text-muted-foreground min-w-[4rem] text-center">
               Wk {leagueWeek}
             </span>
             <Button
               type="button"
               size="icon"
               variant="ghost"
-              className="h-9 w-9 rounded-l-none"
+              className="h-8 w-8 rounded-l-none"
               disabled={disabled || !canNext}
               aria-label="Next week"
               onClick={() => onWeekOverride(navigateWeeklyWeek(leagueWeek, 1))}
@@ -105,7 +98,7 @@ export function WeeklyWeekContextBar({
               type="button"
               size="sm"
               variant={mode === "recap" ? "default" : "ghost"}
-              className={cn("h-8 px-3", mode === "recap" && "shadow-sm")}
+              className={cn("h-7 px-2.5 text-xs", mode === "recap" && "shadow-sm")}
               disabled={disabled}
               onClick={() => onModeChange("recap")}
             >
@@ -115,7 +108,7 @@ export function WeeklyWeekContextBar({
               type="button"
               size="sm"
               variant={mode === "preview" ? "default" : "ghost"}
-              className={cn("h-8 px-3", mode === "preview" && "shadow-sm")}
+              className={cn("h-7 px-2.5 text-xs", mode === "preview" && "shadow-sm")}
               disabled={disabled}
               onClick={() => onModeChange("preview")}
             >
@@ -125,11 +118,13 @@ export function WeeklyWeekContextBar({
         </div>
       </div>
 
-      <Collapsible open={pickerOpen} onOpenChange={setPickerOpen}>
+      <Collapsible open={pickerOpen} onOpenChange={setPickerOpen} data-testid="weekly-advanced-week-controls">
         <CollapsibleTrigger asChild>
           <button
             type="button"
             className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            data-testid="weekly-choose-week-trigger"
+            data-state={pickerOpen ? "open" : "closed"}
           >
             Choose another week
             <ChevronDown
