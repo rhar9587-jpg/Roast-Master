@@ -6,9 +6,15 @@
  * - recapWeek   = max(1, previewWeek - 1)  — UI default for "last recap"
  * - latestFinalWeek = max(0, previewWeek - 1) — last week safe to count as completed
  *   for W/L/PF/PA (0 during week 1 before any week is final)
+ *
+ * Season-active vs offseason for landing defaults uses the same `season_type`
+ * field via `@shared/nflSeasonStatus` — do not invent a parallel calendar.
  */
 
 import { fetchJson } from "./sleeper";
+import { isNflFantasySeasonActive } from "@shared/nflSeasonStatus";
+
+export { isNflFantasySeasonActive } from "@shared/nflSeasonStatus";
 
 export type SleeperNflStateRaw = {
   week?: number;
@@ -33,6 +39,8 @@ export type NflWeekContext = {
    * 0 when the season's first week is still in progress.
    */
   latestFinalWeek: number;
+  /** True during Sleeper pre/regular season (Weekly landing default). */
+  seasonActive: boolean;
 };
 
 /** Derive week context from a Sleeper /state/nfl payload (pure; testable). */
@@ -51,6 +59,7 @@ export function nflWeekContextFromState(state: SleeperNflStateRaw): NflWeekConte
     previewWeek,
     recapWeek,
     latestFinalWeek,
+    seasonActive: isNflFantasySeasonActive(state.season_type),
   };
 }
 

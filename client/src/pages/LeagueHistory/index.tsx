@@ -48,8 +48,11 @@ import { WeeklyCommissionerEmailSection } from "./WeeklyCommissionerEmailSection
 import { WeeklyEmailBridgeStrip } from "./WeeklyEmailBridgeStrip";
 import { WeeklyWeekContextBar } from "./WeeklyWeekContextBar";
 import {
+  resolveDefaultLandingMode,
   resolveDefaultWeeklyContext,
+  resolveLandingModeUnlessOverridden,
   resolveWeekForMode,
+  resolveWeeklyContextUnlessOverridden,
   type WeeklyEmailMode,
 } from "./weeklyContext";
 import { isLeagueUnlocked, unlockLeague, unlockLeagues, lockLeague, hasUsedFreeSend } from "./premium";
@@ -456,6 +459,7 @@ export default function LeagueHistoryPage() {
   const [nflRecapWeek, setNflRecapWeek] = useState(1);
   const [nflPreviewWeek, setNflPreviewWeek] = useState(1);
   const [nflLatestFinalWeek, setNflLatestFinalWeek] = useState(0);
+  const [nflSeasonType, setNflSeasonType] = useState<string | null>(null);
   const [nflContextReady, setNflContextReady] = useState(false);
   const [, setWeekOverride] = useState(false);
   const [weeklyRoastData, setWeeklyRoastData] = useState<RoastResponse | null>(null);
@@ -463,6 +467,8 @@ export default function LeagueHistoryPage() {
   const [weeklyRoastError, setWeeklyRoastError] = useState<string | null>(null);
   const weeklyAutoLoadKeyRef = useRef<string | null>(null);
   const weekOverrideRef = useRef(false);
+  /** Manual tab selection for this league session — do not snap back to season default. */
+  const modeOverrideRef = useRef(false);
   const [seasonWrappedData, setSeasonWrappedData] = useState<WrappedResponse | null>(null);
   const [seasonWrappedLoading, setSeasonWrappedLoading] = useState(false);
   const [seasonWrappedError, setSeasonWrappedError] = useState<string | null>(null);
@@ -1372,7 +1378,7 @@ export default function LeagueHistoryPage() {
     }
   };
 
-  // NFL state → smart recap/preview week defaults
+  // NFL state → season-aware landing tab + smart recap/preview week defaults
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/nfl/state")
@@ -1380,40 +1386,63 @@ export default function LeagueHistoryPage() {
         if (!res.ok) throw new Error("nfl state failed");
         return res.json();
       })
-      .then((data: { recapWeek?: number; previewWeek?: number; latestFinalWeek?: number }) => {
-        if (cancelled) return;
-        const previewWeek = Math.min(18, Math.max(1, Number(data.previewWeek) || 1));
-        const latestFinalWeek = Math.max(0, Number(data.latestFinalWeek) || 0);
-        const recapWeek = Math.min(
-          18,
-          Math.max(1, Number(data.recapWeek) || Math.max(1, latestFinalWeek || previewWeek - 1 || 1)),
-        );
-        setNflPreviewWeek(previewWeek);
-        setNflRecapWeek(recapWeek);
-        setNflLatestFinalWeek(latestFinalWeek);
-        if (!weekOverrideRef.current) {
-          const sel = resolveDefaultWeeklyContext({
-            latestFinalWeek,
-            recapWeek,
-            previewWeek,
-          });
-          setWeeklyCommissionerEmailMode(sel.mode);
-          setLeagueWeek(sel.week);
-        }
-        setNflContextReady(true);
-      })
+      .then(
+        (data: {
+          season_type?: string | null;
+          recapWeek?: number;
+          previewWeek?: number;
+          latestFinalWeek?: number;
+        }) => {
+          if (cancelled) return;
+          const seasonType =
+            data.season_type != null && String(data.season_type).trim()
+              ? String(data.season_type).trim()
+              : null;
+          const previewWeek = Math.min(18, Math.max(1, Number(data.previewWeek) || 1));
+          const latestFinalWeek = Math.max(0, Number(data.latestFinalWeek) || 0);
+          const recapWeek = Math.min(
+            18,
+            Math.max(1, Number(data.recapWeek) || Math.max(1, latestFinalWeek || previewWeek - 1 || 1)),
+          );
+          setNflSeasonType(seasonType);
+          setNflPreviewWeek(previewWeek);
+          setNflRecapWeek(recapWeek);
+          setNflLatestFinalWeek(latestFinalWeek);
+          const landing = resolveLandingModeUnlessOverridden(
+            seasonType,
+            modeOverrideRef.current,
+            WEEKLY_ENABLED,
+          );
+          if (landing) setActiveMode(landing);
+          const sel = resolveWeeklyContextUnlessOverridden(
+            { latestFinalWeek, recapWeek, previewWeek },
+            weekOverrideRef.current,
+          );
+          if (sel) {
+            setWeeklyCommissionerEmailMode(sel.mode);
+            setLeagueWeek(sel.week);
+          }
+          setNflContextReady(true);
+        },
+      )
       .catch(() => {
         if (cancelled) return;
-        // Fallback: preview week 1 when NFL state unavailable (no completed week assumed)
+        // Conservative fallback: no completed week, unknown season → Receipts
+        setNflSeasonType(null);
         setNflPreviewWeek(1);
         setNflRecapWeek(1);
         setNflLatestFinalWeek(0);
-        if (!weekOverrideRef.current) {
-          const sel = resolveDefaultWeeklyContext({
-            latestFinalWeek: 0,
-            recapWeek: 1,
-            previewWeek: 1,
-          });
+        const landing = resolveLandingModeUnlessOverridden(
+          null,
+          modeOverrideRef.current,
+          WEEKLY_ENABLED,
+        );
+        if (landing) setActiveMode(landing);
+        const sel = resolveWeeklyContextUnlessOverridden(
+          { latestFinalWeek: 0, recapWeek: 1, previewWeek: 1 },
+          weekOverrideRef.current,
+        );
+        if (sel) {
           setWeeklyCommissionerEmailMode(sel.mode);
           setLeagueWeek(sel.week);
         }
@@ -1709,12 +1738,14 @@ export default function LeagueHistoryPage() {
     setIsPremiumState(isLeagueUnlocked(leagueId.trim()));
   }, [leagueId]);
 
-  // Reset mode-specific data when league changes (not when History endWeek tweaks)
+  // Reset mode-specific data when league changes (not when History endWeek tweaks).
+  // Fresh league entry clears session overrides and reapplies season-aware defaults.
   useEffect(() => {
     if (!leagueId) return;
-    setActiveMode("history");
-    setWeekOverride(false);
+    modeOverrideRef.current = false;
     weekOverrideRef.current = false;
+    setWeekOverride(false);
+    setActiveMode(resolveDefaultLandingMode(nflSeasonType, WEEKLY_ENABLED));
     const sel = resolveDefaultWeeklyContext({
       latestFinalWeek: nflLatestFinalWeek,
       recapWeek: nflRecapWeek,
@@ -1730,7 +1761,14 @@ export default function LeagueHistoryPage() {
     setSeasonRosterId("");
     setAutopsyData(null);
     setAutopsyError(null);
+    // Only re-run on league identity change; NFL fields are read for the initial default.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: league entry only
   }, [leagueId]);
+
+  function selectLeagueMode(mode: Mode) {
+    modeOverrideRef.current = true;
+    setActiveMode(mode);
+  }
 
   // Load roster list when "Your Season" is selected
   useEffect(() => {
@@ -2060,7 +2098,7 @@ export default function LeagueHistoryPage() {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveMode(tab.id as Mode)}
+                onClick={() => selectLeagueMode(tab.id as Mode)}
                 className={`flex flex-col items-stretch gap-0.5 rounded-lg text-left transition ${
                   tab.primary ? "px-3 py-2 min-w-[8.5rem]" : "px-2.5 py-1.5 min-w-[5.5rem]"
                 } ${

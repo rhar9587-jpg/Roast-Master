@@ -33,6 +33,22 @@ describe("nflWeekContextFromState", () => {
     expect(ctx.latestFinalWeek).toBe(0);
     expect(ctx.recapWeek).toBe(1); // UI default still ≥ 1
   });
+
+  it("marks regular/pre as seasonActive and post/off as inactive", () => {
+    expect(
+      nflWeekContextFromState({ display_week: 5, season_type: "regular" }).seasonActive,
+    ).toBe(true);
+    expect(nflWeekContextFromState({ display_week: 1, season_type: "pre" }).seasonActive).toBe(
+      true,
+    );
+    expect(nflWeekContextFromState({ display_week: 1, season_type: "post" }).seasonActive).toBe(
+      false,
+    );
+    expect(nflWeekContextFromState({ display_week: 1, season_type: "off" }).seasonActive).toBe(
+      false,
+    );
+    expect(nflWeekContextFromState({ display_week: 1 }).seasonActive).toBe(false);
+  });
 });
 
 describe("resolveFinalThroughWeek", () => {

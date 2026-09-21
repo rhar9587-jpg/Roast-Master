@@ -1114,6 +1114,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.json({
         season: ctx.season,
         season_type: ctx.season_type,
+        seasonActive: ctx.seasonActive,
         week: ctx.week,
         display_week: ctx.display_week,
         leg: ctx.leg,
