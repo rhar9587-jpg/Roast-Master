@@ -1486,12 +1486,19 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     // Demo league intercept — canonical fixture + production roast engine
     if (parsed.data.league_id === STATIC_DEMO_LEAGUE_ID) {
       trackEvent("nfl_roast_demo", "/api/roast", "POST", { week: parsed.data.week });
-      return res.json(
-        await getDemoWeeklyRoast({
-          week: parsed.data.week,
-          roster_id: parsed.data.roster_id,
-        }),
-      );
+      try {
+        return res.json(
+          await getDemoWeeklyRoast({
+            week: parsed.data.week,
+            roster_id: parsed.data.roster_id,
+          }),
+        );
+      } catch (err: any) {
+        return res.status(500).json({
+          error: err?.message || "Failed to fetch demo roast",
+          message: err?.message || "Failed to fetch demo roast",
+        });
+      }
     }
 
     try {

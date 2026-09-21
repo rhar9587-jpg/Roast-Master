@@ -331,6 +331,55 @@ export function getDemoPowerRankingInputs(season: string, throughWeek: number) {
 export async function getDemoWeeklyRoast(params: { week?: number; roster_id?: number }) {
   const week = params.week ?? DEMO_ICONIC_WEEK;
   const matchups = getSleeperMatchupsForDemoWeek(DEMO_ICONIC_SEASON, week);
+
+  // Canonical fixture only materializes the iconic week as Sleeper matchup rows.
+  // Other weeks must not 500 the Weekly tab — return a clear non-recap slate.
+  if (!matchups.length) {
+    const headline =
+      week === DEMO_ICONIC_WEEK
+        ? `Week ${week} scores aren't in the demo fixture.`
+        : `Week ${week} isn't in the demo fixture.`;
+    const groupChatSummary = `Group Chat Dynasty demo — try Week ${DEMO_ICONIC_WEEK} for the full roast (Murder Scene, rankings, and share cards).`;
+    return {
+      league: {
+        league_id: DEMO_LEAGUE_ID,
+        name: DEMO_LEAGUE_NAME,
+        season: DEMO_ICONIC_SEASON,
+      },
+      week,
+      headline,
+      stats: {
+        averageScore: 0,
+        highestScorer: { roster_id: 1, username: "—", score: 0 },
+        lowestScorer: { roster_id: 1, username: "—", score: 0 },
+      },
+      cards: [
+        {
+          type: "group_chat_drop",
+          title: "Demo week",
+          subtitle: groupChatSummary,
+          tagline: `Open Week ${DEMO_ICONIC_WEEK}.`,
+          stat: "Unavailable",
+        },
+      ],
+      groupChatSummary,
+      signals: {
+        medianScore: null,
+        closestMargin: null,
+        blowoutMargin: null,
+        highestScore: 0,
+        lowestScore: 0,
+        weekIsFinal: true,
+        slateStatus: "unavailable" as const,
+        recapReady: false,
+        demo: true,
+        demoIconicWeek: DEMO_ICONIC_WEEK,
+      },
+      mode: "DEMO" as const,
+      fallback_reason: "demo_week_without_matchups",
+    };
+  }
+
   const narrative = await buildWeeklyRoastNarrative({
     league: {
       league_id: DEMO_LEAGUE_ID,
@@ -359,7 +408,7 @@ export async function getDemoWeeklyRoast(params: { week?: number; roster_id?: nu
     stats: narrative.stats,
     cards,
     groupChatSummary: narrative.groupChatSummary,
-    signals: { ...narrative.signals, demo: true },
+    signals: { ...narrative.signals, demo: true, demoIconicWeek: DEMO_ICONIC_WEEK },
     mode: "DEMO" as const,
     fallback_reason: null,
   };

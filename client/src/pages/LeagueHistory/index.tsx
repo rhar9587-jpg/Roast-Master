@@ -87,6 +87,8 @@ import {
 } from "./seasonModeCopy";
 
 const EXAMPLE_LEAGUE_ID = "demo-group-chat-dynasty";
+/** Canonical demo roast week — fixture only materializes this week's Sleeper matchups. */
+const EXAMPLE_DEMO_WEEK = 8;
 const WEEKLY_ENABLED = true;
 type Mode = "history" | "weekly" | "season" | "end";
 type TeamOption = { roster_id: number; name: string };
@@ -1472,13 +1474,18 @@ export default function LeagueHistoryPage() {
         setNflSeason(data.season != null ? String(data.season) : null);
         setNflSeasonType(data.season_type != null ? String(data.season_type) : null);
         if (!weekOverrideRef.current) {
-          const sel = resolveDefaultWeeklyContext({
-            latestFinalWeek,
-            recapWeek,
-            previewWeek,
-          });
-          setWeeklyCommissionerEmailMode(sel.mode);
-          setLeagueWeek(sel.week);
+          if (leagueId.trim() === EXAMPLE_LEAGUE_ID) {
+            setWeeklyCommissionerEmailMode("recap");
+            setLeagueWeek(EXAMPLE_DEMO_WEEK);
+          } else {
+            const sel = resolveDefaultWeeklyContext({
+              latestFinalWeek,
+              recapWeek,
+              previewWeek,
+            });
+            setWeeklyCommissionerEmailMode(sel.mode);
+            setLeagueWeek(sel.week);
+          }
         }
         setNflContextReady(true);
       })
@@ -1491,13 +1498,18 @@ export default function LeagueHistoryPage() {
         setNflSeason(null);
         setNflSeasonType(null);
         if (!weekOverrideRef.current) {
-          const sel = resolveDefaultWeeklyContext({
-            latestFinalWeek: 0,
-            recapWeek: 1,
-            previewWeek: 1,
-          });
-          setWeeklyCommissionerEmailMode(sel.mode);
-          setLeagueWeek(sel.week);
+          if (leagueId.trim() === EXAMPLE_LEAGUE_ID) {
+            setWeeklyCommissionerEmailMode("recap");
+            setLeagueWeek(EXAMPLE_DEMO_WEEK);
+          } else {
+            const sel = resolveDefaultWeeklyContext({
+              latestFinalWeek: 0,
+              recapWeek: 1,
+              previewWeek: 1,
+            });
+            setWeeklyCommissionerEmailMode(sel.mode);
+            setLeagueWeek(sel.week);
+          }
         }
         setNflContextReady(true);
       });
@@ -1860,13 +1872,18 @@ export default function LeagueHistoryPage() {
     } else {
       setWeekOverride(false);
       weekOverrideRef.current = false;
-      const sel = resolveDefaultWeeklyContext({
-        latestFinalWeek: nflLatestFinalWeek,
-        recapWeek: nflRecapWeek,
-        previewWeek: nflPreviewWeek,
-      });
-      setLeagueWeek(sel.week);
-      setWeeklyCommissionerEmailMode(pendingEmail ?? sel.mode);
+      if (leagueId.trim() === EXAMPLE_LEAGUE_ID) {
+        setLeagueWeek(EXAMPLE_DEMO_WEEK);
+        setWeeklyCommissionerEmailMode(pendingEmail ?? "recap");
+      } else {
+        const sel = resolveDefaultWeeklyContext({
+          latestFinalWeek: nflLatestFinalWeek,
+          recapWeek: nflRecapWeek,
+          previewWeek: nflPreviewWeek,
+        });
+        setLeagueWeek(sel.week);
+        setWeeklyCommissionerEmailMode(pendingEmail ?? sel.mode);
+      }
     }
 
     setWeeklyRoastData(null);
@@ -1953,8 +1970,24 @@ export default function LeagueHistoryPage() {
             : {}),
         }),
       });
-      const raw = await res.json();
-      if (!res.ok) throw new Error(raw.error || "Failed to fetch weekly roast.");
+      const text = await res.text();
+      let raw: any = null;
+      try {
+        raw = text ? JSON.parse(text) : null;
+      } catch {
+        throw new Error(
+          res.ok
+            ? "Couldn't read the weekly roast response."
+            : `Couldn't load Week ${leagueWeek}. Try Week ${EXAMPLE_DEMO_WEEK} for the demo league.`,
+        );
+      }
+      if (!res.ok) {
+        throw new Error(
+          raw?.error ||
+            raw?.message ||
+            `Failed to fetch weekly roast for Week ${leagueWeek}.`,
+        );
+      }
       // Always keep `cards` as an array so weekly UI can count slides reliably.
       setWeeklyRoastData({
         ...raw,
