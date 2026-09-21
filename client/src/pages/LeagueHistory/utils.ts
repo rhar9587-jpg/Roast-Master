@@ -15,6 +15,11 @@ export type RecentLeague = {
   startWeek: number;
   endWeek: number;
   timestamp: number;
+  /** Last active product tab (weekly / history / …). */
+  lastTab?: "weekly" | "history" | "season" | "end";
+  /** Last Weekly week selection when known. */
+  lastWeek?: number;
+  lastEmailMode?: "recap" | "preview";
 };
 
 const STORAGE_KEY = "fantasy-roast-recent-leagues";
@@ -40,33 +45,47 @@ export function saveRecentLeague(
   leagueName?: string,
   season?: string,
   startWeek?: number,
-  endWeek?: number
+  endWeek?: number,
+  extras?: {
+    lastTab?: RecentLeague["lastTab"];
+    lastWeek?: number;
+    lastEmailMode?: RecentLeague["lastEmailMode"];
+  },
 ): void {
   try {
     const recent = getRecentLeagues();
-    // Remove existing entry for this leagueId/startWeek/endWeek combo
-    const filtered = recent.filter(
-      (r) =>
-        !(
-          r.leagueId === leagueId &&
-          r.startWeek === (startWeek ?? 1) &&
-          r.endWeek === (endWeek ?? 17)
-        )
-    );
+    // Remove existing entry for this leagueId (keep one resume target per league)
+    const filtered = recent.filter((r) => r.leagueId !== leagueId);
+    const prev = recent.find((r) => r.leagueId === leagueId);
     // Add new entry at the beginning
     const newEntry: RecentLeague = {
       leagueId,
-      leagueName,
-      season,
-      startWeek: startWeek ?? 1,
-      endWeek: endWeek ?? 17,
+      leagueName: leagueName ?? prev?.leagueName,
+      season: season ?? prev?.season,
+      startWeek: startWeek ?? prev?.startWeek ?? 1,
+      endWeek: endWeek ?? prev?.endWeek ?? 17,
       timestamp: Date.now(),
+      lastTab: extras?.lastTab ?? prev?.lastTab,
+      lastWeek: extras?.lastWeek ?? prev?.lastWeek,
+      lastEmailMode: extras?.lastEmailMode ?? prev?.lastEmailMode,
     };
     const updated = [newEntry, ...filtered].slice(0, MAX_RECENT_LEAGUES);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   } catch (err) {
     // Silently fail if localStorage quota exceeded or other error
     console.warn("Failed to save recent league:", err);
+  }
+}
+
+/** Drop a stored league (e.g. after a hard not-found) so resume cannot trap the user. */
+export function removeRecentLeague(leagueId: string): void {
+  try {
+    const id = String(leagueId || "").trim();
+    if (!id) return;
+    const updated = getRecentLeagues().filter((r) => r.leagueId !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn("Failed to remove recent league:", err);
   }
 }
 

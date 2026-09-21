@@ -1717,10 +1717,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
       const success_url = `${CLIENT_URL}/league-history/dominance?league_id=${encodeURIComponent(
         league_id
-      )}&success=true&session_id={CHECKOUT_SESSION_ID}`;
+      )}&tab=weekly&success=true&session_id={CHECKOUT_SESSION_ID}`;
       const cancel_url = `${CLIENT_URL}/league-history/dominance?league_id=${encodeURIComponent(
         league_id
-      )}&canceled=true`;
+      )}&tab=weekly&canceled=true`;
 
       const session = await stripe.checkout.sessions.create({
         mode: "payment",

@@ -11,7 +11,7 @@
     "db:push": "drizzle-kit push",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integrity": "vitest run server/lib/domain/matchupStatus.test.ts server/lib/domain/matchupOutcomes.test.ts server/lib/domain/seasonOutcome.test.ts server/lib/domain/weekSlateStatus.test.ts server/league-history/demoLeague.crossSurface.test.ts server/lib/domain/managerIdentity.test.ts server/lib/domain/stableIdentityNarrative.test.ts server/lib/weeklyRankingsStore.test.ts server/lib/powerRankings.test.ts server/lib/weeklySuperlativesSemantics.test.ts server/lib/domain/integrity.regression.test.ts server/lib/weeklyRoastEngine.slateStatus.test.ts server/lib/weeklyCommissioner.slateStatus.test.ts server/lib/weeklyPublicShare.test.ts client/src/pages/LeagueHistory/finalitySurfaceConsistency.test.ts client/src/components/RoastCard.slateStatus.test.ts"
+    "test:integrity": "vitest run server/lib/domain/matchupStatus.test.ts server/lib/domain/matchupOutcomes.test.ts server/lib/domain/seasonOutcome.test.ts server/lib/domain/weekSlateStatus.test.ts server/league-history/demoLeague.crossSurface.test.ts server/lib/domain/managerIdentity.test.ts server/lib/domain/stableIdentityNarrative.test.ts server/lib/weeklyRankingsStore.test.ts server/lib/powerRankings.test.ts server/lib/weeklySuperlativesSemantics.test.ts server/lib/domain/integrity.regression.test.ts server/lib/weeklyRoastEngine.slateStatus.test.ts server/lib/weeklyCommissioner.slateStatus.test.ts server/lib/weeklyPublicShare.test.ts client/src/pages/LeagueHistory/finalitySurfaceConsistency.test.ts client/src/components/RoastCard.slateStatus.test.ts client/src/pages/LeagueHistory/leagueAppNav.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

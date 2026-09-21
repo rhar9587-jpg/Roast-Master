@@ -1,10 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FplRoastCard } from "@/components/FplRoastCard";
 import type { FplRoastResponse } from "@shared/schema";
 import { ChevronDown, ChevronRight, HelpCircle } from "lucide-react";
 import { getRecentLeagues, setStoredUsername } from "./LeagueHistory/utils";
+import {
+  buildLeagueAppPath,
+  pickResumeLeague,
+  resumeContinueTitle,
+  resumeSupportingLine,
+} from "./LeagueHistory/leagueAppNav";
 import { trackFunnel } from "@/lib/track";
 import { OFFER, PRICE_LABEL, unlockCtaLabel } from "@/lib/brand";
 
@@ -33,6 +39,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const EXAMPLE_LEAGUE_ID = "demo-group-chat-dynasty";
+  const [nflLatestFinalWeek, setNflLatestFinalWeek] = useState(0);
+
+  const resumeLeague = useMemo(() => pickResumeLeague(getRecentLeagues()), []);
 
   // Deep link from league page sticky CTA: /#get-started
   useEffect(() => {
@@ -56,6 +65,34 @@ export default function Home() {
         // Silently fail, user can enter manually
       });
   }, []);
+
+  useEffect(() => {
+    fetch("/api/nfl/state")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { latestFinalWeek?: number } | null) => {
+        if (data) setNflLatestFinalWeek(Math.max(0, Number(data.latestFinalWeek) || 0));
+      })
+      .catch(() => {
+        /* optional for Continue supporting line */
+      });
+  }, []);
+
+  function openLeagueWeekly(opts: {
+    leagueId: string;
+    week?: number;
+    emailMode?: "recap" | "preview";
+    startWeek?: number;
+    endWeek?: number;
+  }) {
+    window.location.href = buildLeagueAppPath({
+      leagueId: opts.leagueId,
+      tab: "weekly",
+      week: opts.week,
+      emailMode: opts.emailMode,
+      startWeek: opts.startWeek ?? 1,
+      endWeek: opts.endWeek ?? 17,
+    });
+  }
 
   async function findLeagues() {
     if (!username) {
@@ -88,15 +125,8 @@ export default function Home() {
     setLeagueId(lId);
     if (!lId) return;
 
-    // Track league selection
     trackFunnel.leagueSelected(season);
-
-    const params = new URLSearchParams({
-      league_id: lId,
-      start_week: String(1),
-      end_week: String(17),
-    });
-    window.location.href = `/league-history/dominance?${params.toString()}`;
+    openLeagueWeekly({ leagueId: lId });
   }
 
   async function fetchFplRoast() {
@@ -139,37 +169,38 @@ export default function Home() {
 
   function handleViewLeagueHistory() {
     const recent = typeof window !== "undefined" ? getRecentLeagues() : [];
-    const mostRecent = recent[0];
+    const mostRecent = pickResumeLeague(recent);
     if (mostRecent?.leagueId) {
-      const params = new URLSearchParams({
-        league_id: mostRecent.leagueId,
-        start_week: String(mostRecent.startWeek ?? 1),
-        end_week: String(mostRecent.endWeek ?? 17),
+      openLeagueWeekly({
+        leagueId: mostRecent.leagueId,
+        week: mostRecent.lastWeek,
+        emailMode: mostRecent.lastEmailMode,
+        startWeek: mostRecent.startWeek,
+        endWeek: mostRecent.endWeek,
       });
-      window.location.href = `/league-history/dominance?${params.toString()}`;
       return;
     }
     if (leagueId) {
-      const params = new URLSearchParams({
-        league_id: leagueId,
-        start_week: String(1),
-        end_week: String(17),
-      });
-      window.location.href = `/league-history/dominance?${params.toString()}`;
+      openLeagueWeekly({ leagueId });
       return;
     }
-    const exampleLeagueId = "demo-group-chat-dynasty";
-    window.location.href = `/league-history/dominance?league_id=${exampleLeagueId}&start_week=1&end_week=17`;
+    openLeagueWeekly({ leagueId: EXAMPLE_LEAGUE_ID });
   }
 
   function handleTryExampleLeague() {
     trackFunnel.exampleClicked();
-    const params = new URLSearchParams({
-      league_id: EXAMPLE_LEAGUE_ID,
-      start_week: String(1),
-      end_week: String(17),
+    openLeagueWeekly({ leagueId: EXAMPLE_LEAGUE_ID });
+  }
+
+  function handleContinueLeague() {
+    if (!resumeLeague) return;
+    openLeagueWeekly({
+      leagueId: resumeLeague.leagueId,
+      week: resumeLeague.lastWeek,
+      emailMode: resumeLeague.lastEmailMode,
+      startWeek: resumeLeague.startWeek,
+      endWeek: resumeLeague.endWeek,
     });
-    window.location.href = `/league-history/dominance?${params.toString()}`;
   }
 
   return (
@@ -180,35 +211,65 @@ export default function Home() {
           {/* Hero Section */}
           <section className="text-center py-6 md:py-8 space-y-4">
             <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-              Who owns your league?
+              See what happened this week
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-              See who owns who. Share the receipts.
+              See what happened in your fantasy league this week — then roast it.
             </p>
             <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-              Free: explore the dominance grid. {OFFER.unlockOnce}: export, share, and drop proof in the group chat.
-              Weekly and season packs included.
+              Weekly is the main loop. Receipts and season stay one tap away.
+              {` ${OFFER.unlockOnce}`}: share without watermarks.
             </p>
-            <p className="text-base text-foreground/90 max-w-lg mx-auto font-medium leading-snug italic border-l-4 border-primary/40 pl-4 py-1 text-left">
-              &ldquo;The Landlord owns half the league. Rent is due.&rdquo;
-              <span className="block text-xs font-normal not-italic text-muted-foreground mt-1">
-                Example receipt — see the real grid and cards in 1 click.
-              </span>
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center items-stretch sm:items-center">
-              <Button size="lg" onClick={handleTryExampleLeague} className="font-semibold interact-cta">
-                Try demo league — free
-              </Button>
-              <Button size="lg" variant="outline" onClick={() => document.getElementById("get-started")?.scrollIntoView({ behavior: "smooth" })} className="font-semibold interact-secondary">
-                Use my Sleeper league
-              </Button>
-            </div>
+            {resumeLeague ? (
+              <div className="flex flex-col gap-2 items-center max-w-md mx-auto">
+                <Button
+                  size="lg"
+                  onClick={handleContinueLeague}
+                  className="font-semibold interact-cta w-full sm:w-auto"
+                  data-testid="button-continue-league"
+                >
+                  {resumeContinueTitle(resumeLeague.leagueName)}
+                </Button>
+                <p className="text-sm text-muted-foreground" data-testid="text-continue-supporting">
+                  {resumeSupportingLine({
+                    lastWeek: resumeLeague.lastWeek,
+                    latestFinalWeek: nflLatestFinalWeek,
+                  })}
+                </p>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() =>
+                    document.getElementById("get-started")?.scrollIntoView({ behavior: "smooth" })
+                  }
+                  className="font-semibold interact-secondary w-full sm:w-auto"
+                >
+                  Switch league / username
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-3 justify-center items-stretch sm:items-center">
+                <Button size="lg" onClick={handleTryExampleLeague} className="font-semibold interact-cta">
+                  Try demo league — free
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() =>
+                    document.getElementById("get-started")?.scrollIntoView({ behavior: "smooth" })
+                  }
+                  className="font-semibold interact-secondary"
+                >
+                  Use my Sleeper league
+                </Button>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
-              No login for demo. Unlock your league later for a one-time {PRICE_LABEL}.
+              No login required. Unlock your league later for a one-time {PRICE_LABEL}.
             </p>
           </section>
 
-          {/* Receipts-first product story */}
+          {/* Weekly-first product story */}
           <section className="space-y-4" aria-labelledby="product-story-heading">
             <h2 id="product-story-heading" className="sr-only">
               What you get
@@ -216,15 +277,15 @@ export default function Home() {
             <Card className="border-2 border-primary/30 shadow-sm ring-1 ring-primary/10">
               <CardHeader className="pb-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-primary mb-1">
-                  The core product
+                  The main product
                 </p>
-                <CardTitle className="text-lg font-bold tracking-tight">League Receipts</CardTitle>
+                <CardTitle className="text-lg font-bold tracking-tight">Weekly Roast</CardTitle>
                 <p className="text-sm text-muted-foreground leading-snug">
-                  Who actually runs your league — all-time dominance, OWNED / NEMESIS badges, archetypes, and storylines you can prove.
+                  This week&apos;s chaos cards and commissioner email — open, laugh, send it to the group chat.
                 </p>
               </CardHeader>
               <CardContent className="pt-0 text-xs text-muted-foreground">
-                Built for arguments that end when someone posts the grid.
+                Built for the weekly loop, not a once-a-year scroll.
               </CardContent>
             </Card>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -233,9 +294,9 @@ export default function Home() {
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
                     Also included
                   </p>
-                  <CardTitle className="text-base font-bold tracking-tight">Weekly Roast</CardTitle>
+                  <CardTitle className="text-base font-bold tracking-tight">League Receipts</CardTitle>
                   <p className="text-sm text-muted-foreground leading-snug">
-                    This week&apos;s chaos cards and commissioner email — same voice as the receipts.
+                    Who owns who — all-time dominance, badges, and storylines you can prove.
                   </p>
                 </CardHeader>
               </Card>
@@ -255,9 +316,9 @@ export default function Home() {
 
           {/* Example Cards */}
           <section className="pt-2 pb-6 space-y-4">
-            <p className="text-center text-sm font-medium text-foreground">See the receipts</p>
+            <p className="text-center text-sm font-medium text-foreground">See the weekly roast</p>
             <p className="text-center text-xs text-muted-foreground">
-              Demo tiles — same unlock covers weekly and season too.
+              Demo tiles — same unlock covers receipts and season too.
             </p>
 
             <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory md:grid md:grid-cols-4 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0">
@@ -385,16 +446,24 @@ export default function Home() {
             </div>
           </section>
 
-          {/* What's Inside — receipts lead */}
+          {/* What's Inside — weekly leads */}
           <section className="rounded-xl border-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 p-6 md:p-8 space-y-6">
             <h2 className="text-xl md:text-2xl font-bold text-center">
-              Unlock the receipts
+              Unlock weekly + receipts
             </h2>
             <p className="text-center text-sm text-muted-foreground max-w-2xl mx-auto">
-              One-time {PRICE_LABEL}. Share who owns who. Weekly and season come with it.
+              One-time {PRICE_LABEL}. Roast the week. Receipts and season come with it.
             </p>
             <div className="grid gap-6 md:grid-cols-3 md:gap-4 text-left max-w-5xl mx-auto">
               <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-4 ring-1 ring-primary/10 md:col-span-1">
+                <h3 className="text-sm font-bold text-foreground">Weekly Roast</h3>
+                <ul className="space-y-1.5 text-sm text-muted-foreground">
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Week-by-week chaos &amp; matchup narratives</span></li>
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Screenshot-ready cards for the group chat</span></li>
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Commissioner email — preview or recap</span></li>
+                </ul>
+              </div>
+              <div className="space-y-2 rounded-lg border border-muted/60 bg-background/80 p-4">
                 <h3 className="text-sm font-bold text-foreground">League Receipts</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground">
                   <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>All-time dominance grid &amp; head-to-head records</span></li>
@@ -403,18 +472,10 @@ export default function Home() {
                 </ul>
               </div>
               <div className="space-y-2 rounded-lg border border-muted/60 bg-background/80 p-4">
-                <h3 className="text-sm font-bold text-foreground">Weekly (included)</h3>
-                <ul className="space-y-1.5 text-sm text-muted-foreground">
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Week-by-week chaos &amp; matchup narratives</span></li>
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Screenshot-ready cards for the group chat</span></li>
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Commissioner email — preview or recap</span></li>
-                </ul>
-              </div>
-              <div className="space-y-2 rounded-lg border border-muted/60 bg-background/80 p-4">
                 <h3 className="text-sm font-bold text-foreground">Season (included)</h3>
                 <ul className="space-y-1.5 text-sm text-muted-foreground">
                   <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Your season — highlights &amp; choke jobs</span></li>
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>League autopsy &amp; final verdict</span></li>
+                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>League autopsy &amp; season snapshot</span></li>
                   <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Defining moments &amp; identity cards</span></li>
                 </ul>
               </div>
@@ -441,7 +502,7 @@ export default function Home() {
             <div className="mb-4">
               <h2 className="text-lg font-semibold">Get Started</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Enter your Sleeper league — start with who owns who, then use weekly and season when you want them.
+                Enter your Sleeper username, pick a league, and land on this week&apos;s Weekly roast.
               </p>
             </div>
             <div className="space-y-4">

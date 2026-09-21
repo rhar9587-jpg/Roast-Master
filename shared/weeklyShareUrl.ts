@@ -40,7 +40,7 @@ export function weeklyPublicShareOgImageUrl(
 /** App deep-link to open this league in Weekly (not the public share page). */
 export function weeklyLeagueAppPath(leagueId: string): string {
   const id = encodeURIComponent(String(leagueId || "").trim());
-  return `/league-history/dominance?league_id=${id}`;
+  return `/league-history/dominance?league_id=${id}&tab=weekly`;
 }
 
 export function weeklyLeagueAppUrl(leagueId: string, origin: string = SITE_URL): string {

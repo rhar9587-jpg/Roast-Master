@@ -53,10 +53,15 @@ import {
   resolveWeeklyWeekPresentation,
   type WeeklyEmailMode,
 } from "./weeklyContext";
+import {
+  buildLeagueAppPath,
+  parseLeagueAppSearch,
+  type LeagueAppTab,
+} from "./leagueAppNav";
 import { isLeagueUnlocked, unlockLeague, unlockLeagues, lockLeague, hasUsedFreeSend } from "./premium";
 import { createCheckoutSession } from "@/lib/checkout";
 import { RestorePurchaseModal } from "./RestorePurchaseModal";
-import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername, getCommissionerEmail, setCommissionerEmail } from "./utils";
+import { fmtRecord, getViewerByLeague, setViewerByLeague, saveRecentLeague, getRecentLeagues, getStoredUsername, setStoredUsername, getCommissionerEmail, setCommissionerEmail, removeRecentLeague } from "./utils";
 import { computeLeagueStorylines, computeYourRoast, computeAdditionalMiniCards, type MiniCard } from "./storylines";
 import { computeHeroReceipts } from "./computeHeroReceipts";
 import { suggestViewerKey } from "./suggestViewer";
@@ -86,12 +91,19 @@ const WEEKLY_ENABLED = true;
 type Mode = "history" | "weekly" | "season" | "end";
 type TeamOption = { roster_id: number; name: string };
 
+const DEFAULT_MODE: Mode = WEEKLY_ENABLED ? "weekly" : "history";
+
 const PAGE_TITLE_BY_MODE: Record<Mode, string> = {
   history: "League Receipts",
   weekly: "Weekly Roast",
   season: "Your Season",
   end: "League Recap",
 };
+
+function tabToMode(tab: LeagueAppTab | null | undefined): Mode | null {
+  if (!tab) return null;
+  return tab;
+}
 
 function isCountable(c: DominanceCellDTO) {
   return (c?.games ?? 0) >= 3;
@@ -459,7 +471,7 @@ export default function LeagueHistoryPage() {
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoreModalMode, setRestoreModalMode] = useState<"save" | "restore">("restore");
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
-  const [activeMode, setActiveMode] = useState<Mode>("history");
+  const [activeMode, setActiveMode] = useState<Mode>(DEFAULT_MODE);
   const [leagueWeek, setLeagueWeek] = useState<number>(1);
   const [nflRecapWeek, setNflRecapWeek] = useState(1);
   const [nflPreviewWeek, setNflPreviewWeek] = useState(1);
@@ -531,6 +543,10 @@ export default function LeagueHistoryPage() {
   const personalAhaRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedFromUrl = useRef(false);
   const shouldAutoTrigger = useRef(false);
+  /** URL tab applied once on first league hydrate so league-change doesn't wipe deep links. */
+  const pendingUrlTabRef = useRef<Mode | null>(null);
+  const pendingUrlWeekRef = useRef<number | null>(null);
+  const pendingUrlEmailModeRef = useRef<WeeklyEmailMode | null>(null);
   const personalAhaDoneRef = useRef<string | null>(null);
   const viewerUserClearedRef = useRef(false);
 
@@ -642,48 +658,55 @@ export default function LeagueHistoryPage() {
     if (hasInitializedFromUrl.current) return;
     hasInitializedFromUrl.current = true;
 
-    const params = new URLSearchParams(window.location.search);
-    const urlLeagueId = params.get("league_id");
-    const urlStartWeek = params.get("start_week");
-    const urlEndWeek = params.get("end_week");
-    const urlViewer = params.get("view");
+    const parsed = parseLeagueAppSearch(window.location.search);
+    const urlLeagueId = parsed.leagueId;
+    const urlTab = tabToMode(parsed.tab);
+    if (urlTab) pendingUrlTabRef.current = urlTab;
+    if (parsed.week != null) pendingUrlWeekRef.current = parsed.week;
+    if (parsed.emailMode) pendingUrlEmailModeRef.current = parsed.emailMode;
 
     // Priority 1: URL params (shareable links, Home navigation)
-    if (urlLeagueId && urlLeagueId.trim()) {
-      setLeagueId(urlLeagueId.trim());
+    if (urlLeagueId) {
+      setLeagueId(urlLeagueId);
       shouldAutoTrigger.current = true;
-      if (urlStartWeek) {
-        const week = Number(urlStartWeek);
-        if (!isNaN(week) && week >= 1) {
-          setStartWeek(week);
-        }
+      if (parsed.startWeek != null) setStartWeek(parsed.startWeek);
+      if (parsed.endWeek != null) setEndWeek(parsed.endWeek);
+      if (urlTab) setActiveMode(urlTab);
+      else setActiveMode(DEFAULT_MODE);
+      if (parsed.week != null) {
+        setLeagueWeek(parsed.week);
+        setWeekOverride(true);
+        weekOverrideRef.current = true;
       }
-      if (urlEndWeek) {
-        const week = Number(urlEndWeek);
-        if (!isNaN(week) && week >= 1) {
-          setEndWeek(week);
-        }
-      }
-      // Set viewer if provided in URL
-      if (urlViewer && urlViewer.trim()) {
-        setViewerKey(urlViewer.trim());
-      }
-      return; // URL params take precedence, exit early
+      if (parsed.emailMode) setWeeklyCommissionerEmailMode(parsed.emailMode);
+      if (parsed.viewer) setViewerKey(parsed.viewer);
+      return;
     }
 
-    // Priority 2: Recent leagues (most recent entry)
+    // Priority 2: Recent leagues (most recent entry) — still open Weekly by default
     const recent = getRecentLeagues();
     if (recent.length > 0) {
       const mostRecent = recent[0];
       setLeagueId(mostRecent.leagueId);
       setStartWeek(mostRecent.startWeek);
       setEndWeek(mostRecent.endWeek);
-      // Don't auto-trigger for recent leagues (user should click Analyze)
+      const resumeTab = tabToMode(mostRecent.lastTab ?? null) ?? DEFAULT_MODE;
+      pendingUrlTabRef.current = resumeTab;
+      setActiveMode(resumeTab);
+      if (mostRecent.lastWeek != null && mostRecent.lastWeek >= 1) {
+        pendingUrlWeekRef.current = mostRecent.lastWeek;
+        setLeagueWeek(mostRecent.lastWeek);
+        setWeekOverride(true);
+        weekOverrideRef.current = true;
+      }
+      if (mostRecent.lastEmailMode) {
+        pendingUrlEmailModeRef.current = mostRecent.lastEmailMode;
+        setWeeklyCommissionerEmailMode(mostRecent.lastEmailMode);
+      }
       return;
     }
 
     // Priority 3: Empty state (user must enter league)
-    // leagueId already defaults to "" from useState
   }, []);
 
   // Post-checkout handling (success/canceled) + clean URL params
@@ -737,24 +760,49 @@ export default function LeagueHistoryPage() {
     }
   }, [leagueId, startWeek, endWeek, refetch]);
 
-  // Sync state changes to URL
+  // Sync state changes to URL (league + tab + weekly week — refreshable deep links)
   useEffect(() => {
     if (!hasInitializedFromUrl.current) return;
 
-    const params = new URLSearchParams();
-    if (leagueId.trim()) {
-      params.set("league_id", leagueId.trim());
+    const built = buildLeagueAppPath({
+      leagueId: leagueId.trim(),
+      tab: activeMode,
+      week: activeMode === "weekly" ? leagueWeek : undefined,
+      emailMode: activeMode === "weekly" ? weeklyCommissionerEmailMode : undefined,
+      startWeek,
+      endWeek,
+      viewer: viewerKey.trim() || undefined,
+    });
+    const nextParams = new URLSearchParams(built.includes("?") ? built.slice(built.indexOf("?") + 1) : "");
+    const current = new URLSearchParams(window.location.search);
+    for (const key of ["success", "canceled", "session_id"] as const) {
+      const v = current.get(key);
+      if (v) nextParams.set(key, v);
     }
-    params.set("start_week", String(startWeek));
-    params.set("end_week", String(endWeek));
-    // Include viewer if selected
-    if (viewerKey && viewerKey.trim()) {
-      params.set("view", viewerKey.trim());
-    }
+    const qs = nextParams.toString();
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`,
+    );
+  }, [
+    leagueId,
+    startWeek,
+    endWeek,
+    viewerKey,
+    activeMode,
+    leagueWeek,
+    weeklyCommissionerEmailMode,
+  ]);
 
-    const newUrl = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState({}, "", newUrl);
-  }, [leagueId, startWeek, endWeek, viewerKey]);
+  // Stale stored league: drop resume entry so Home cannot trap the user
+  useEffect(() => {
+    if (!error || !leagueId.trim()) return;
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg === "LEAGUE_NOT_FOUND") {
+      removeRecentLeague(leagueId.trim());
+    }
+  }, [error, leagueId]);
 
   // Track when league history loads
   const hasTrackedLoad = useRef(false);
@@ -773,7 +821,7 @@ export default function LeagueHistoryPage() {
     }
   }, [isFetching, hasData, leagueId]);
 
-  // Save to recent leagues after successful fetch
+  // Save to recent leagues after successful fetch (include Weekly resume fields)
   useEffect(() => {
     if (hasData && data?.league && leagueId.trim()) {
       saveRecentLeague(
@@ -781,10 +829,24 @@ export default function LeagueHistoryPage() {
         data.league.name ?? undefined,
         data.league.season ? String(data.league.season) : undefined,
         startWeek,
-        endWeek
+        endWeek,
+        {
+          lastTab: activeMode,
+          lastWeek: leagueWeek,
+          lastEmailMode: weeklyCommissionerEmailMode,
+        },
       );
     }
-  }, [hasData, data?.league, leagueId, startWeek, endWeek]);
+  }, [
+    hasData,
+    data?.league,
+    leagueId,
+    startWeek,
+    endWeek,
+    activeMode,
+    leagueWeek,
+    weeklyCommissionerEmailMode,
+  ]);
 
   const filenameBase = useMemo(() => {
     const leagueName = data?.league?.name
@@ -1760,19 +1822,35 @@ export default function LeagueHistoryPage() {
     setIsPremiumState(isLeagueUnlocked(leagueId.trim()));
   }, [leagueId]);
 
-  // Reset mode-specific data when league changes (not when History endWeek tweaks)
+  // Reset mode-specific data when league changes (default destination: Weekly)
   useEffect(() => {
     if (!leagueId) return;
-    setActiveMode("history");
-    setWeekOverride(false);
-    weekOverrideRef.current = false;
-    const sel = resolveDefaultWeeklyContext({
-      latestFinalWeek: nflLatestFinalWeek,
-      recapWeek: nflRecapWeek,
-      previewWeek: nflPreviewWeek,
-    });
-    setLeagueWeek(sel.week);
-    setWeeklyCommissionerEmailMode(sel.mode);
+    const pendingTab = pendingUrlTabRef.current;
+    pendingUrlTabRef.current = null;
+    setActiveMode(pendingTab ?? DEFAULT_MODE);
+
+    const pendingWeek = pendingUrlWeekRef.current;
+    const pendingEmail = pendingUrlEmailModeRef.current;
+    pendingUrlWeekRef.current = null;
+    pendingUrlEmailModeRef.current = null;
+
+    if (pendingWeek != null) {
+      setLeagueWeek(pendingWeek);
+      setWeekOverride(true);
+      weekOverrideRef.current = true;
+      if (pendingEmail) setWeeklyCommissionerEmailMode(pendingEmail);
+    } else {
+      setWeekOverride(false);
+      weekOverrideRef.current = false;
+      const sel = resolveDefaultWeeklyContext({
+        latestFinalWeek: nflLatestFinalWeek,
+        recapWeek: nflRecapWeek,
+        previewWeek: nflPreviewWeek,
+      });
+      setLeagueWeek(sel.week);
+      setWeeklyCommissionerEmailMode(pendingEmail ?? sel.mode);
+    }
+
     setWeeklyRoastData(null);
     setWeeklyRoastError(null);
     weeklyAutoLoadKeyRef.current = null;
@@ -2100,10 +2178,10 @@ export default function LeagueHistoryPage() {
           <div className="flex flex-wrap gap-2 rounded-xl border bg-muted/20 p-1">
             {(
               [
-                { id: "history" as const, label: "Receipts", job: "Who owns who", primary: true },
                 ...(WEEKLY_ENABLED
-                  ? [{ id: "weekly" as const, label: "Weekly", job: "Included", primary: false }]
+                  ? [{ id: "weekly" as const, label: "Weekly", job: "This week", primary: true }]
                   : []),
+                { id: "history" as const, label: "Receipts", job: "Who owns who", primary: !WEEKLY_ENABLED },
                 { id: "season" as const, label: "Season", job: "Included", primary: false },
                 { id: "end" as const, label: "Recap", job: "Included", primary: false },
               ] as const
