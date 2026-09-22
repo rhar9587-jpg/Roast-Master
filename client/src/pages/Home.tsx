@@ -12,7 +12,7 @@ import {
   resumeSupportingLine,
 } from "./LeagueHistory/leagueAppNav";
 import { trackFunnel } from "@/lib/track";
-import { OFFER, PRICE_LABEL, unlockCtaLabel } from "@/lib/brand";
+import { OFFER, PRICE_LABEL, unlockCtaLabel, unlockEntitlementStatement, ENTITLEMENT_BENEFITS } from "@/lib/brand";
 
 type Sport = "nfl" | "fpl";
 type LeagueOption = { league_id: string; name: string; season: string };
@@ -449,40 +449,22 @@ export default function Home() {
           {/* What's Inside — weekly leads */}
           <section className="rounded-xl border-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 p-6 md:p-8 space-y-6">
             <h2 className="text-xl md:text-2xl font-bold text-center">
-              Unlock weekly + receipts
+              Unlock Fantasy Roast for your league
             </h2>
             <p className="text-center text-sm text-muted-foreground max-w-2xl mx-auto">
-              One-time {PRICE_LABEL}. Roast the week. Receipts and season come with it.
+              One-time {PRICE_LABEL} for one Sleeper league. Weekly, Receipts, and season included.
             </p>
-            <div className="grid gap-6 md:grid-cols-3 md:gap-4 text-left max-w-5xl mx-auto">
-              <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-4 ring-1 ring-primary/10 md:col-span-1">
-                <h3 className="text-sm font-bold text-foreground">Weekly Roast</h3>
-                <ul className="space-y-1.5 text-sm text-muted-foreground">
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Week-by-week chaos &amp; matchup narratives</span></li>
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Screenshot-ready cards for the group chat</span></li>
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Commissioner email — preview or recap</span></li>
-                </ul>
-              </div>
-              <div className="space-y-2 rounded-lg border border-muted/60 bg-background/80 p-4">
-                <h3 className="text-sm font-bold text-foreground">League Receipts</h3>
-                <ul className="space-y-1.5 text-sm text-muted-foreground">
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>All-time dominance grid &amp; head-to-head records</span></li>
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Hero archetypes: Landlord, Victim, Choker, Heartbreaker…</span></li>
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Storylines &amp; share/export without watermarks</span></li>
-                </ul>
-              </div>
-              <div className="space-y-2 rounded-lg border border-muted/60 bg-background/80 p-4">
-                <h3 className="text-sm font-bold text-foreground">Season (included)</h3>
-                <ul className="space-y-1.5 text-sm text-muted-foreground">
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Your season — highlights &amp; choke jobs</span></li>
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>League autopsy &amp; season snapshot</span></li>
-                  <li className="flex gap-2"><span className="text-primary font-bold shrink-0">✓</span><span>Defining moments &amp; identity cards</span></li>
-                </ul>
-              </div>
-            </div>
+            <ul className="max-w-md mx-auto space-y-2 text-sm text-muted-foreground">
+              {ENTITLEMENT_BENEFITS.map((b) => (
+                <li key={b} className="flex gap-2">
+                  <span className="text-primary font-bold shrink-0">✓</span>
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
             <div className="text-center pt-4 border-t border-primary/10">
               <p className="text-lg font-bold text-primary">
-                {unlockCtaLabel()}
+                {unlockEntitlementStatement()}
               </p>
               <Button 
                 size="lg" 
@@ -492,7 +474,7 @@ export default function Home() {
                 {unlockCtaLabel()}
               </Button>
               <p className="text-xs text-muted-foreground mt-3">
-                {OFFER.unlockOnce} • {OFFER.noSubscription} • Designed for leagues that talk trash.
+                {OFFER.unlockOnce} • {OFFER.noSubscription} • {OFFER.scopeNote}.
               </p>
             </div>
           </section>

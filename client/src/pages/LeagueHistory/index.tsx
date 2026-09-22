@@ -67,7 +67,7 @@ import { computeHeroReceipts } from "./computeHeroReceipts";
 import { suggestViewerKey } from "./suggestViewer";
 import { computePersonalHookCard, type PersonalHookCard } from "./computePersonalHookCard";
 import { track, trackFunnel } from "@/lib/track";
-import { unlockCtaLabel } from "@/lib/brand";
+import { unlockCtaLabel, unlockEntitlementStatement } from "@/lib/brand";
 import type {
   Badge,
   DominanceApiResponse,
@@ -729,7 +729,8 @@ export default function LeagueHistoryPage() {
       const sessionFromUrl = params.get("session_id")?.trim() || null;
       setCheckoutSessionId(sessionFromUrl);
       toast({
-        title: "🔥 League unlocked. Drop the receipts.",
+        title: "Fantasy Roast unlocked for this league.",
+        description: "Weekly, Receipts, and season are included. Save your unlock email to restore later.",
       });
       setRestoreModalMode("save");
       setShowRestoreModal(true);
@@ -1928,7 +1929,9 @@ export default function LeagueHistoryPage() {
     }
     trackFunnel.unlockClicked("league_history");
     try {
-      const url = await createCheckoutSession(leagueId.trim());
+      const url = await createCheckoutSession(leagueId.trim(), {
+        leagueName: data?.league?.name ?? null,
+      });
       window.location.href = url;
     } catch (err: any) {
       toast({
@@ -2291,7 +2294,7 @@ export default function LeagueHistoryPage() {
 
       {activeMode === "history" && !showPremiumContent && hasData && (
         <p className="text-xs text-muted-foreground">
-          Free: see the truth. {unlockCtaLabel()} to share it — weekly and season included.
+          Free: browse Receipts. {unlockEntitlementStatement(data?.league?.name)} to share — Weekly and season included.
         </p>
       )}
 
@@ -2347,12 +2350,13 @@ export default function LeagueHistoryPage() {
 
       {WEEKLY_ENABLED && hasData && activeMode === "weekly" && !showPremiumContent && (
         <LockedModePreview
-          title="Weekly is included"
-          description={`${unlockCtaLabel()} — then this week's cards and commissioner email load instantly.`}
+          title="Weekly roast is locked"
+          description={`${unlockEntitlementStatement(data?.league?.name)} — then this week's cards and commissioner email load instantly.`}
           previewItems={[
-            "Top Dog, Biggest Blowout, Fraud Watch, Bench Crimes — one idea per share card",
-            "Share weekly recap for the group chat in one tap",
-            "Email tools for commissioner view / send",
+            "Full Weekly roast and share cards",
+            "Commissioner email tools",
+            "League Receipts and history",
+            "Season recap",
           ]}
           onUnlock={handleCheckout}
           lockedTotalCount={lockedTotalCount}
@@ -2501,12 +2505,13 @@ export default function LeagueHistoryPage() {
 
       {hasData && activeMode === "season" && !showPremiumContent && (
         <LockedModePreview
-          title="Season is included"
-          description={`${unlockCtaLabel()} — then generate your season wrapped.`}
+          title="Season recap is locked"
+          description={`${unlockEntitlementStatement(data?.league?.name)} — then generate your season wrapped.`}
           previewItems={[
-            "Personal highlights and lowlights",
-            "Your season story in shareable cards",
-            "A receipt-worthy recap for the group chat",
+            "Full Weekly roast and share cards",
+            "Commissioner email tools",
+            "League Receipts and history",
+            "Season recap",
           ]}
           onUnlock={handleCheckout}
           lockedTotalCount={lockedTotalCount}
@@ -2582,14 +2587,15 @@ export default function LeagueHistoryPage() {
 
       {hasData && activeMode === "end" && !showPremiumContent && (
         <LockedModePreview
-          title={seasonComplete ? "Recap is included" : "Season snapshot is included"}
-          description={`${unlockCtaLabel()} — then generate the ${
+          title={seasonComplete ? "League recap is locked" : "Season snapshot is locked"}
+          description={`${unlockEntitlementStatement(data?.league?.name)} — then generate the ${
             seasonComplete ? "end-of-season league finale" : "league season snapshot"
           }.`}
           previewItems={[
-            "Biggest blowouts and upsets",
-            "Season highs and lows",
-            "Shareable recap cards for the league",
+            "Full Weekly roast and share cards",
+            "Commissioner email tools",
+            "League Receipts and history",
+            "Season recap",
           ]}
           onUnlock={handleCheckout}
           lockedTotalCount={lockedTotalCount}

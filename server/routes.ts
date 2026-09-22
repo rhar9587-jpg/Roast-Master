@@ -1,6 +1,7 @@
 // server/routes.ts
 import type { Express, Request, Response } from "express";
 import Stripe from "stripe";
+import { buildStripeCheckoutSessionParams } from "./lib/checkoutSession";
 import type { Server } from "http";
 import {
   roastRequestSchema,
@@ -1715,6 +1716,8 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.post("/api/checkout/create-session", async (req: Request, res: Response) => {
     try {
       const league_id = String(req.body?.league_id || "").trim();
+      const league_name =
+        typeof req.body?.league_name === "string" ? req.body.league_name.trim() : "";
       if (!league_id) {
         return res.status(400).json({ error: "league_id is required" });
       }
@@ -1722,23 +1725,14 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         return res.status(500).json({ error: "Stripe is not configured" });
       }
 
-      const success_url = `${CLIENT_URL}/league-history/dominance?league_id=${encodeURIComponent(
-        league_id
-      )}&tab=weekly&success=true&session_id={CHECKOUT_SESSION_ID}`;
-      const cancel_url = `${CLIENT_URL}/league-history/dominance?league_id=${encodeURIComponent(
-        league_id
-      )}&tab=weekly&canceled=true`;
-
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
-        success_url,
-        cancel_url,
-        customer_creation: "if_required",
-        metadata: {
-          league_id,
-        },
+      const sessionParams = buildStripeCheckoutSessionParams({
+        leagueId: league_id,
+        leagueName: league_name || null,
+        priceId: STRIPE_PRICE_ID,
+        clientUrl: CLIENT_URL,
       });
+
+      const session = await stripe.checkout.sessions.create(sessionParams);
 
       if (!session.url) {
         return res.status(500).json({ error: "Failed to create checkout session" });

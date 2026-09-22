@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { OFFER, PRICE_LABEL, unlockCtaLabel } from "@/lib/brand";
+import { OFFER, PRICE_LABEL, unlockCtaLabel, unlockEntitlementStatement, ENTITLEMENT_BENEFITS } from "@/lib/brand";
 
 type Props = {
   onUpgrade?: () => void;
@@ -85,22 +85,18 @@ export function ConversionBanner({
       >
         <CardHeader className="text-center pb-4">
           <CardTitle className="text-2xl font-bold tracking-tight">
-            {`Want the receipts for YOUR league? ${unlockCtaLabel()}.`}
+            {`Want Fantasy Roast for YOUR league? ${unlockCtaLabel()}.`}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="max-w-2xl mx-auto">
             <ul className="space-y-3 text-sm">
-              <li className="flex items-start gap-2">
-                <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <span><strong>League Receipts</strong> — who owns who in YOUR league: dominance, grids, archetypes.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <Check className="h-4 w-4 text-primary/70 shrink-0 mt-0.5" />
-                <span className="text-muted-foreground">
-                  <strong className="text-foreground">Also included:</strong> weekly cards + commissioner email, and your season recap.
-                </span>
-              </li>
+              {ENTITLEMENT_BENEFITS.map((benefit) => (
+                <li key={benefit} className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <span>{benefit}</span>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -145,24 +141,18 @@ export function ConversionBanner({
     >
       <CardHeader className="text-center pb-4">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          {`${leagueName?.trim() ? leagueName : "This league"} has receipts waiting. ${unlockCtaLabel()}.`}
+          {unlockEntitlementStatement(leagueName)}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="max-w-2xl mx-auto">
           <ul className="space-y-3 text-sm">
-            <li className="flex items-start gap-2">
-              <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <span>
-                <strong>League Receipts</strong> — dominance grid, headlines, storylines, all-time records (share &amp; export)
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Check className="h-4 w-4 text-primary/70 shrink-0 mt-0.5" />
-              <span className="text-muted-foreground">
-                <strong className="text-foreground">Also included:</strong> weekly cards + commissioner email, and your season recap.
-              </span>
-            </li>
+            {ENTITLEMENT_BENEFITS.map((benefit) => (
+              <li key={benefit} className="flex items-start gap-2">
+                <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <span>{benefit}</span>
+              </li>
+            ))}
           </ul>
         </div>
 

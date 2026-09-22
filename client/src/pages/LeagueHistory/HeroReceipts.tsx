@@ -54,7 +54,7 @@ function CardWithHeading({
               {isHovered && (
                 <div className="space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">
-                    Unlock the receipts
+                    Unlock Fantasy Roast
                   </p>
                 </div>
               )}
@@ -150,7 +150,7 @@ export function HeroReceipts({ heroReceipts, isPremium, onUnlock, lockedTotalCou
             <CardWithHeading
               key={receipt.id}
               title={receipt.title}
-              subtitle={`🔒 Unlock the receipts — ${heroReceipts.length} more your league will argue about.`}
+              subtitle={`🔒 Unlock Fantasy Roast — ${heroReceipts.length} more your league will argue about.`}
               onUnlock={onUnlock}
               showOverlay={true}
             >

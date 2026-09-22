@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
-import { OFFER, PRICE_LABEL, unlockCtaLabel } from "@/lib/brand";
+import { OFFER, PRICE_LABEL, unlockCtaLabel, unlockEntitlementStatement } from "@/lib/brand";
 
 const STORAGE_KEY = "fantasy-roast-upgradeDismissedUntil";
 
@@ -126,10 +126,10 @@ export function StickyUpgradeBar({
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">
-                {`This is demo data. Get the real receipts for YOUR league • ${PRICE_LABEL}`}
+                {`This is demo data. Unlock Fantasy Roast for YOUR league • ${PRICE_LABEL}`}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                Unlock once for receipts — weekly and season included.
+                One-time unlock for one league — Weekly, Receipts, and season included.
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -174,10 +174,10 @@ export function StickyUpgradeBar({
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">
-              {unlockCtaLabel()}
+              {unlockEntitlementStatement(leagueName)}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-              Share who owns who. Weekly and season included.
+              Weekly, Receipts, and season — one-time for this league.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
