@@ -29,6 +29,68 @@ import { getStoredPreviousRankings, storeRankingsForWeek } from "./weeklyRanking
 import { findBestSitStartMiss } from "./sitStartMiss";
 import { resolvePlayerDisplayNameFromMap } from "./playerDisplayName";
 
+/**
+ * Prior rankings for trend/movement. Prefer durable store; if empty for week >= 2,
+ * bootstrap by computing + persisting week-1 rankings live (same engine, no second system).
+ */
+export async function resolvePriorRankingsForWeek(opts: {
+  leagueId: string;
+  week: number;
+  season: string;
+  explicitPrior?: { teamId: string; rank: number }[] | null;
+  /** Override live team load for bootstrap (e.g. demo fixtures). */
+  loadPriorWeekTeams?: (
+    priorWeek: number,
+  ) => Promise<{ teams: PowerRankingsTeamInput[]; season?: string } | null>;
+}): Promise<{ teamId: string; rank: number }[]> {
+  const leagueId = String(opts.leagueId || "").trim();
+  const week = Math.floor(Number(opts.week) || 0);
+  const season = String(opts.season || "").trim() || "unknown";
+  if (!leagueId || week < 2) return [];
+
+  if (opts.explicitPrior && opts.explicitPrior.length > 0) {
+    return opts.explicitPrior.map((r) => ({ teamId: r.teamId, rank: r.rank }));
+  }
+
+  const stored = await getStoredPreviousRankings(leagueId, week, season);
+  if (stored.length > 0) {
+    return stored.map((r) => ({ teamId: r.teamId, rank: r.rank }));
+  }
+
+  const priorWeek = week - 1;
+  try {
+    const loaded = opts.loadPriorWeekTeams
+      ? await opts.loadPriorWeekTeams(priorWeek)
+      : await buildTeamsFromSleeper(leagueId, priorWeek).then((r) => ({
+          teams: r.teams,
+          season: r.season,
+        }));
+    const teams = loaded?.teams ?? [];
+    if (!teams.length) return [];
+    const seasonKey = String(loaded?.season || season).trim() || season;
+    const rows = generatePowerRankings(teams, []);
+    await storeRankingsForWeek(
+      leagueId,
+      priorWeek,
+      rows.map((r) => ({ teamId: r.teamId, rank: r.rank, powerScore: r.powerScore })),
+      seasonKey,
+    );
+    return rows.map((r) => ({ teamId: r.teamId, rank: r.rank }));
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        event: "prior_rankings_bootstrap_failed",
+        leagueId,
+        week,
+        priorWeek,
+        season,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+    return [];
+  }
+}
+
 function normNames(name: string): string {
   return String(name ?? "").trim().toLowerCase();
 }
@@ -841,10 +903,12 @@ export async function getWeeklyCommissionerEmail(
     weekIsFinal = false;
   }
 
-  const prior =
-    previousRankings.length > 0
-      ? previousRankings
-      : await getStoredPreviousRankings(leagueId, week, leagueSeason);
+  const prior = await resolvePriorRankingsForWeek({
+    leagueId,
+    week,
+    season: leagueSeason,
+    explicitPrior: previousRankings,
+  });
   const rankings = generatePowerRankings(teams, prior);
   // Persist for next week — never fail the email if storage is down.
   await storeRankingsForWeek(

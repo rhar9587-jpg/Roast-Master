@@ -6,10 +6,10 @@
 
 import { getMatchups } from "../league-history/sleeper";
 import type { SleeperMatchup } from "../league-history/sleeper";
-import { buildTeamsFromSleeper } from "./weeklyCommissioner";
+import { buildTeamsFromSleeper, resolvePriorRankingsForWeek } from "./weeklyCommissioner";
 import type { PowerRankingRow } from "./powerRankings";
 import { generatePowerRankings } from "./powerRankings";
-import { getStoredPreviousRankings, storeRankingsForWeek } from "./weeklyRankingsStore";
+import { storeRankingsForWeek } from "./weeklyRankingsStore";
 import { getLeagueHistoryNarratives, type MatchupPair } from "./weeklyEmailNarratives";
 import { generateWeeklyEmail, generateWeeklyEmailPlainText, type WeeklyEmailData } from "./weeklyEmail";
 
@@ -234,7 +234,12 @@ export async function getWeeklyPreviewEmail(
   const throughWeek = Math.max(1, week - 1);
   const { leagueName, teams, season } = await buildTeamsFromSleeper(leagueId, throughWeek);
   // Rankings are through `throughWeek`; previous snapshot must be strictly before that week.
-  const previousRankings = await getStoredPreviousRankings(leagueId, throughWeek, season);
+  // Prefer durable store; bootstrap week-1 live when store is empty for throughWeek >= 2.
+  const previousRankings = await resolvePriorRankingsForWeek({
+    leagueId,
+    week: throughWeek,
+    season,
+  });
   const rankings = teams.length > 0 ? generatePowerRankings(teams, previousRankings) : [];
   if (rankings.length) {
     // Persist through-week rankings so next week's preview/recap has durable trends.

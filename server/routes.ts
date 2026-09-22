@@ -29,11 +29,10 @@ import {
 import { handleLeagueHistoryDominance } from "./league-history";
 import { getNflWeekContext, resolveLeagueWeekFinality } from "./league-history/nflState";
 import { selectTagline } from "./lib/seasonTagline";
-import { getWeeklyCommissionerEmail, generateWeeklyCommissionerEmail, getRecapSubject } from "./lib/weeklyCommissioner";
-import { buildTeamsFromSleeper } from "./lib/weeklyCommissioner";
+import { getWeeklyCommissionerEmail, generateWeeklyCommissionerEmail, getRecapSubject, buildTeamsFromSleeper, resolvePriorRankingsForWeek } from "./lib/weeklyCommissioner";
 import { generatePowerRankings } from "./lib/powerRankings";
 import { sendEmail } from "./lib/emailSender";
-import { getStoredPreviousRankings, storeRankingsForWeek } from "./lib/weeklyRankingsStore";
+import { storeRankingsForWeek } from "./lib/weeklyRankingsStore";
 import { recordSent, getSentRecord } from "./lib/weeklyReportStore";
 import { generateWeeklyEmailPlainText } from "./lib/weeklyEmail";
 import { selectCardCopy, interpolateTagline } from "./lib/cardCopy";
@@ -1188,7 +1187,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     if (league_id === STATIC_DEMO_LEAGUE_ID) {
       const season = "2024";
       const { leagueName, teams } = getDemoPowerRankingInputs(season, week);
-      const previousRankings = await getStoredPreviousRankings(league_id, week, season);
+      const previousRankings = await resolvePriorRankingsForWeek({
+        leagueId: league_id,
+        week,
+        season,
+        loadPriorWeekTeams: async (priorWeek) => {
+          const prior = getDemoPowerRankingInputs(season, priorWeek);
+          return { teams: prior.teams, season };
+        },
+      });
       const rankings = generatePowerRankings(teams, previousRankings);
       await storeRankingsForWeek(
         league_id,
@@ -1200,7 +1207,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
     try {
       const { leagueName, teams, season } = await buildTeamsFromSleeper(league_id, week);
-      const previousRankings = await getStoredPreviousRankings(league_id, week, season);
+      const previousRankings = await resolvePriorRankingsForWeek({
+        leagueId: league_id,
+        week,
+        season,
+      });
       const rankings = generatePowerRankings(teams, previousRankings);
       await storeRankingsForWeek(
         league_id,

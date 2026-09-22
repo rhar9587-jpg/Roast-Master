@@ -43,10 +43,7 @@ import {
   type PublicRecapHeroMoment,
 } from "./publicRecapHero";
 import { generatePowerRankings, type PowerRankingRow } from "./powerRankings";
-import {
-  buildTeamsFromSleeper,
-} from "./weeklyCommissioner";
-import { getStoredPreviousRankings } from "./weeklyRankingsStore";
+import { buildTeamsFromSleeper, resolvePriorRankingsForWeek } from "./weeklyCommissioner";
 import { buildWeeklyRoastNarrative } from "./weeklyRoastEngine";
 
 /** Official OG image size for weekly share cards. */
@@ -288,7 +285,11 @@ async function buildLivePublicPowerRankings(
     });
     if (!teams.length) return null;
     const seasonKey = String(resolvedSeason || season || "").trim() || "unknown";
-    const prior = await getStoredPreviousRankings(leagueId, week, seasonKey).catch(() => []);
+    const prior = await resolvePriorRankingsForWeek({
+      leagueId,
+      week,
+      season: seasonKey,
+    }).catch(() => [] as { teamId: string; rank: number }[]);
     const hasPrior = Array.isArray(prior) && prior.length > 0;
     const rankings = generatePowerRankings(teams, hasPrior ? prior : []);
     return toPublicShareRankings(rankings, { hasPriorWeekHistory: hasPrior });
