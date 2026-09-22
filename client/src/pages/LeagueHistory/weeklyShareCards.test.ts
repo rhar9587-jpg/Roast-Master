@@ -151,4 +151,101 @@ describe("mapEngineCardToVisual", () => {
     expect(visual.statLabel?.toLowerCase()).toContain("bench");
     expect(resolveWrappedVariant(visual)).toBe("hero");
   });
+
+  it("maps Carry Job to manager subject (not repeating category title)", () => {
+    const visual = mapEngineCardToVisual(
+      {
+        type: "carry_job",
+        title: "Carry Job",
+        subtitle: "Harks9 was basically Josh Allen + vibes.",
+        stat: "31% of team points",
+        tagline: "One player, most of the points.",
+        meta: {
+          manager_name: "Harks9",
+          team_name: "Harks9",
+          ratio: 0.31,
+          share_pct: "31%",
+          player_name: "Josh Allen",
+        },
+      },
+      2,
+      { stats },
+    );
+    expect(visual.kicker).toBe("CARRY JOB");
+    expect(visual.title).toBe("HARKS9");
+    expect(visual.title).not.toBe(visual.kicker);
+    expect(visual.bigValue).toBe("31%");
+    expect(visual.statLabel).toBe("of team points");
+    expect(visual.tagline).toContain("One player");
+    expect(resolveWrappedVariant(visual)).toBe("hero");
+  });
+
+  it("Carry Job without manager meta does not use category title as subject", () => {
+    const visual = mapEngineCardToVisual(
+      {
+        type: "carry_job",
+        title: "Carry Job",
+        subtitle: "Someone was basically a star + vibes.",
+        stat: "55% of team points",
+        tagline: "One player, most of the points.",
+        meta: { ratio: 0.55 },
+      },
+      2,
+      { stats },
+    );
+    expect(visual.kicker).toBe("CARRY JOB");
+    expect(visual.title.toLowerCase()).not.toBe("carry job");
+  });
+
+  it("other supporting categories keep category ≠ subject", () => {
+    const top = mapEngineCardToVisual(
+      {
+        type: "top_dog",
+        title: "Top Dog",
+        subtitle: "The Landlord paced.",
+        meta: { username: "The Landlord", score: 167.4 },
+      },
+      8,
+      { stats },
+    );
+    expect(top.kicker).toBe("TOP DOG");
+    expect(top.title).toBe("THE LANDLORD");
+
+    const fraud = mapEngineCardToVisual(
+      {
+        type: "fraud_watch",
+        title: "Fraud Watch",
+        meta: { manager_name: "Chaos", score: 78.2, kind: "lucky_win" },
+        stat: "Won light",
+      },
+      8,
+      { stats },
+    );
+    expect(fraud.kicker).toBe("FRAUD WATCH");
+    expect(fraud.title).toBe("CHAOS");
+
+    const bench = mapEngineCardToVisual(
+      {
+        type: "worst_coaching",
+        title: "Most Points Left on Bench",
+        meta: { team_name: "Dynasty", benchPoints: 40 },
+      },
+      8,
+      { stats },
+    );
+    expect(bench.kicker).toBe("BENCH CRIMES");
+    expect(bench.title).toBe("DYNASTY");
+
+    const jail = mapEngineCardToVisual(
+      {
+        type: "lowest_scorer",
+        title: "Straight to Jail",
+        meta: { username: "Rebuild Forever", score: 62.1 },
+      },
+      8,
+      { stats },
+    );
+    expect(jail.kicker).toBe("STRAIGHT TO JAIL");
+    expect(jail.title).toBe("REBUILD FOREVER");
+  });
 });

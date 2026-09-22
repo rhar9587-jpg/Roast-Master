@@ -23,7 +23,11 @@ type Props = {
 export function WeeklySupportingMoment({ card, week, data, isPremium }: Props) {
   const [posterOpen, setPosterOpen] = useState(false);
   const visual = mapEngineCardToVisual(card, week, data);
-  const title = visual.title;
+  const category = visual.kicker;
+  const subject =
+    visual.isMatchup && visual.matchupData
+      ? visual.matchupData.teamA
+      : visual.title;
   const punchline = visual.tagline || visual.subtitle || "";
   const stat = visual.bigValue
     ? `${visual.bigValue}${visual.statLabel ? ` ${visual.statLabel}` : ""}`.trim()
@@ -41,9 +45,9 @@ export function WeeklySupportingMoment({ card, week, data, isPremium }: Props) {
       <div className="flex items-start gap-3 px-3 py-2.5">
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-            {visual.kicker}
+            {category}
           </p>
-          <p className="text-sm font-bold text-foreground leading-snug truncate">{title}</p>
+          <p className="text-sm font-bold text-foreground leading-snug truncate">{subject}</p>
           {stat ? (
             <p className="text-sm font-semibold tabular-nums text-primary">{stat}</p>
           ) : null}

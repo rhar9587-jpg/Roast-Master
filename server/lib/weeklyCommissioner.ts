@@ -905,7 +905,7 @@ export async function getWeeklyCommissionerEmail(
       );
     }
   }
-  const biggestMovers = computeBiggestMovers(rankings, previousRankings);
+  const biggestMovers = computeBiggestMovers(rankings, prior);
   const weekMatchups = recapReady
     ? buildWeekMatchups(weekMatchupsRaw, rosterNameByTeamId)
     : [];
@@ -1069,6 +1069,8 @@ export async function getWeeklyCommissionerEmail(
     record: r.record,
     powerScore: r.powerScore,
     trend: r.trend,
+    placesMoved: r.placesMoved,
+    showMovement: r.showMovement,
     commentary: r.commentary,
   }));
 
