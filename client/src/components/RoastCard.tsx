@@ -28,6 +28,8 @@ import { mapEngineCardToVisual } from "@/pages/LeagueHistory/weeklyShareCards";
 import { SHARE_WEEKLY_RECAP_LABEL } from "@/pages/LeagueHistory/shareHierarchyLabels";
 import { WeeklyCompactResults } from "@/pages/LeagueHistory/WeeklyCompactResults";
 import { WeeklyPowerRankingsPanel } from "@/pages/LeagueHistory/WeeklyPowerRankingsPanel";
+import { WeeklySupportingMoment } from "@/pages/LeagueHistory/WeeklySupportingMoment";
+import { WEEKLY_SUPPORTING_MOMENT_LIMIT } from "@/pages/LeagueHistory/weeklyPresentation";
 
 type Accent = "green" | "pink" | "blue" | "orange";
 
@@ -269,7 +271,7 @@ function WeeklyEngineLayout({
     }
     return partitionWeeklyRoastCards(engineCards, {
       closestGame: closestOpts,
-      supportingLimit: 3,
+      supportingLimit: WEEKLY_SUPPORTING_MOMENT_LIMIT,
     });
   }, [engineCards, recapReady, closestOpts]);
 
@@ -313,12 +315,17 @@ function WeeklyEngineLayout({
     }
   };
 
-  const renderEngineCard = (c: Card, opts?: { hero?: boolean }) => {
+  const renderEngineCard = (c: Card, opts?: { hero?: boolean; remainder?: boolean }) => {
     const visual = mapEngineCardToVisual(c, data.week, data);
+    const testId = opts?.hero
+      ? "weekly-hero-roast"
+      : opts?.remainder
+        ? "weekly-remainder-full-card"
+        : "weekly-supporting-roast";
     return (
       <div
         className={opts?.hero ? "relative" : undefined}
-        data-testid={opts?.hero ? "weekly-hero-roast" : "weekly-supporting-roast"}
+        data-testid={testId}
         data-card-type={c.type}
       >
         {opts?.hero ? (
@@ -350,52 +357,57 @@ function WeeklyEngineLayout({
   const remainder = partition.remainder;
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-4" data-testid="weekly-engine-layout">
-      {/* 1–2. Hero roast — primary payoff */}
-      <div className="space-y-2">
-        {heroCard ? (
-          <motion.div
-            key={`hero-${heroCard.type}`}
-            initial={{ opacity: 0, y: 10, scale: 0.99 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.22 }}
+    <div
+      className="w-full max-w-3xl mx-auto space-y-4"
+      data-testid="weekly-engine-layout"
+      data-supporting-presentation="compact"
+    >
+      {/* Hero + primary week share — visually attached so share is early */}
+      <div className="space-y-2" data-testid="weekly-hero-share-block">
+        <div className="space-y-2">
+          {heroCard ? (
+            <motion.div
+              key={`hero-${heroCard.type}`}
+              initial={{ opacity: 0, y: 10, scale: 0.99 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.22 }}
+            >
+              {renderEngineCard(heroCard, { hero: true })}
+            </motion.div>
+          ) : (
+            <p className="text-sm text-muted-foreground rounded-lg border border-dashed bg-muted/20 px-3 py-4">
+              {recapReady
+                ? "No shareable league cards for this week yet."
+                : slateStatus === "live"
+                  ? "Week is live — final roast cards unlock when the slate is final."
+                  : slateStatus === "upcoming"
+                    ? "Week hasn't kicked off yet — check back after games are final."
+                    : "Scores aren't available for a completed recap yet."}
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-1.5" data-testid="weekly-primary-share">
+          <Button
+            type="button"
+            size="lg"
+            className="w-full font-bold interact-cta"
+            disabled={shareBusy}
+            onClick={() => void shareWeek()}
+            data-testid="share-weekly-recap"
           >
-            {renderEngineCard(heroCard, { hero: true })}
-          </motion.div>
-        ) : (
-          <p className="text-sm text-muted-foreground rounded-lg border border-dashed bg-muted/20 px-3 py-4">
-            {recapReady
-              ? "No shareable league cards for this week yet."
-              : slateStatus === "live"
-                ? "Week is live — final roast cards unlock when the slate is final."
-                : slateStatus === "upcoming"
-                  ? "Week hasn't kicked off yet — check back after games are final."
-                  : "Scores aren't available for a completed recap yet."}
-          </p>
-        )}
+            {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+            {copied ? "Copied" : shareBusy ? "Sharing…" : SHARE_WEEKLY_RECAP_LABEL}
+          </Button>
+        </div>
       </div>
 
-      {/* 3. Primary week share — single CTA, close to the joke */}
-      <div className="flex flex-col gap-1.5" data-testid="weekly-primary-share">
-        <Button
-          type="button"
-          size="lg"
-          className="w-full font-bold interact-cta"
-          disabled={shareBusy}
-          onClick={() => void shareWeek()}
-          data-testid="share-weekly-recap"
-        >
-          {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-          {copied ? "Copied" : shareBusy ? "Sharing…" : SHARE_WEEKLY_RECAP_LABEL}
-        </Button>
-      </div>
-
-      {/* 4. Compact results — final weeks only */}
+      {/* Compact results — final weeks only */}
       {recapReady && weekResults.length > 0 ? (
         <WeeklyCompactResults week={data.week} results={weekResults} />
       ) : null}
 
-      {/* 5. Power Rankings — shared /api/power-rankings source */}
+      {/* Power Rankings — shared /api/power-rankings source; Top 5 by default */}
       {recapReady ? (
         <WeeklyPowerRankingsPanel
           leagueId={data.league.league_id}
@@ -404,21 +416,31 @@ function WeeklyEngineLayout({
         />
       ) : null}
 
-      {/* 6–7. Supporting roast moments + card-level share (on WrappedCard) */}
+      {/* Compact supporting moments — not equal poster cards; full share graphic on expand */}
       {recapReady && supporting.length > 0 ? (
-        <section className="space-y-3" aria-label="Also this week" data-testid="weekly-supporting-moments">
+        <section
+          className="space-y-2"
+          aria-label="Also this week"
+          data-testid="weekly-supporting-moments"
+          data-presentation="compact"
+        >
           <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Also this week
           </h3>
-          <div className="space-y-4">
+          <div className="space-y-2">
             {supporting.map((c, i) => (
               <motion.div
                 key={`sup-${c.type}-${i}`}
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(i * 0.04, 0.12) }}
+                transition={{ duration: 0.18, delay: Math.min(i * 0.03, 0.1) }}
               >
-                {renderEngineCard(c)}
+                <WeeklySupportingMoment
+                  card={c}
+                  week={data.week}
+                  data={data}
+                  isPremium={isPremium}
+                />
               </motion.div>
             ))}
           </div>
@@ -439,9 +461,11 @@ function WeeklyEngineLayout({
               />
             </button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-4 pt-3">
+          <CollapsibleContent className="space-y-3 pt-3">
             {remainder.map((c, i) => (
-              <div key={`rem-${c.type}-${i}`}>{renderEngineCard(c)}</div>
+              <div key={`rem-${c.type}-${i}`} data-testid="weekly-remainder-roast">
+                {renderEngineCard(c, { remainder: true })}
+              </div>
             ))}
           </CollapsibleContent>
         </Collapsible>

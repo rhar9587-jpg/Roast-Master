@@ -28,7 +28,7 @@ export function WeeklyCompactResults({ week, results }: Props) {
               {r.winnerName}
             </span>
             <span className="tabular-nums font-bold text-primary whitespace-nowrap">
-              {r.winnerScore.toFixed(1)}–{r.loserScore.toFixed(1)}
+              {r.winnerScore.toFixed(1)} – {r.loserScore.toFixed(1)}
             </span>
             <span className="text-muted-foreground truncate text-right">
               {r.loserName}
