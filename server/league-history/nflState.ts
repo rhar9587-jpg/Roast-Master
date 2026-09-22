@@ -1,11 +1,17 @@
 /**
  * NFL week state from Sleeper — shared source for UI defaults and standings finality.
  *
- * Convention (already used by /api/nfl/state + League History week picker):
- * - previewWeek = current display week (may be in progress)
- * - recapWeek   = max(1, previewWeek - 1)  — UI default for "last recap"
- * - latestFinalWeek = max(0, previewWeek - 1) — last week safe to count as completed
+ * Convention (used by /api/nfl/state + League History week picker):
+ * - previewWeek = Sleeper display labeling week when present (may lag or lead week/leg)
+ * - progressionWeek = authoritative current week for calendar finality (week/leg)
+ * - recapWeek   = max(1, latestFinalWeek || 1)  — UI default for "last recap"
+ * - latestFinalWeek = max(0, progressionWeek - 1) — last week safe to count as completed
  *   for W/L/PF/PA (0 during week 1 before any week is final)
+ *
+ * Finality rule: prefer Sleeper `week` / `leg` for progression so a lagging
+ * `display_week` cannot hold `latestFinalWeek` back. `display_week` remains
+ * available for preview/presentation only and must not be the sole driver of
+ * calendar finality when week/leg are present.
  */
 
 import { fetchJson } from "./sleeper";
@@ -35,11 +41,41 @@ export type NflWeekContext = {
   latestFinalWeek: number;
 };
 
+/** Valid regular-season week number (1–18), or null if missing/invalid. */
+export function asPositiveNflWeek(value: unknown): number | null {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const w = Math.floor(n);
+  if (w < 1 || w > 18) return null;
+  return w;
+}
+
+/**
+ * Authoritative current NFL week for calendar finality progression.
+ * Uses max(valid week, valid leg); falls back to display_week only when both absent.
+ * Invalid fields never contribute.
+ */
+export function nflProgressionWeekFromState(state: SleeperNflStateRaw): number {
+  const week = asPositiveNflWeek(state.week);
+  const leg = asPositiveNflWeek(state.leg);
+  const display = asPositiveNflWeek(state.display_week);
+  const progressionCandidates = [week, leg].filter((v): v is number => v != null);
+  if (progressionCandidates.length > 0) {
+    return Math.max(...progressionCandidates);
+  }
+  return display ?? 1;
+}
+
 /** Derive week context from a Sleeper /state/nfl payload (pure; testable). */
 export function nflWeekContextFromState(state: SleeperNflStateRaw): NflWeekContext {
-  const previewWeekRaw = Number(state.display_week ?? state.week ?? state.leg ?? 0);
-  const previewWeek = Math.min(18, Math.max(1, previewWeekRaw || 1));
-  const latestFinalWeek = Math.max(0, previewWeek - 1);
+  const display = asPositiveNflWeek(state.display_week);
+  const week = asPositiveNflWeek(state.week);
+  const leg = asPositiveNflWeek(state.leg);
+
+  // Presentation: prefer display_week when valid (Sleeper UI labeling).
+  const previewWeek = display ?? week ?? leg ?? 1;
+  const progressionWeek = nflProgressionWeekFromState(state);
+  const latestFinalWeek = Math.max(0, progressionWeek - 1);
   const recapWeek = Math.max(1, latestFinalWeek || 1);
 
   return {
