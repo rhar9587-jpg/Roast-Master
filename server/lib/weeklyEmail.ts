@@ -3,12 +3,21 @@
  * HTML email for Gmail, Apple Mail, Outlook. Inline CSS, table layout, max 600px.
  */
 
+import {
+  formatRankMovementLabel,
+  type RankMovementState,
+} from "@shared/rankMovement";
+
 export interface WeeklyEmailRankingRow {
   rank: number;
   teamName: string;
   record: string;
   powerScore: number;
   trend: "up" | "down" | "flat";
+  /** Absolute places when up/down; 0 when same; null/omit when no prior. */
+  placesMoved?: number | null;
+  /** False/omit when no valid prior snapshot for this team. */
+  showMovement?: boolean;
   commentary: string;
 }
 
@@ -114,12 +123,23 @@ export function generateWeeklyEmail(data: WeeklyEmailData): string {
     data.mode === "preview" ||
     (Array.isArray(data.upcomingMatchups) && data.upcomingMatchups.length > 0 && !(data.rankings?.length));
 
-  const trendSymbol = (trend: string) =>
-    trend === "up" ? "&#8593;" : trend === "down" ? "&#8595;" : "&#8212;";
+  const movementLabel = (r: WeeklyEmailRankingRow): string => {
+    if (r.showMovement !== true) return "";
+    const state: RankMovementState =
+      r.trend === "up" ? "up" : r.trend === "down" ? "down" : "same";
+    return formatRankMovementLabel({
+      state,
+      places: r.placesMoved ?? (state === "same" ? 0 : null),
+    });
+  };
 
   const rankingsRows = (data.rankings ?? [])
     .map(
-      (r) => `
+      (r) => {
+        const move = movementLabel(r);
+        const moveColor =
+          r.trend === "up" ? "#7cb342" : r.trend === "down" ? "#e57373" : textMuted;
+        return `
     <tr style="background-color: ${r.rank === 1 ? bgRowFirst : bgRow}; border-bottom: 1px solid ${border};">
       <td style="padding: 12px 10px; font-size: 14px; color: ${r.rank === 1 ? accent : "#ffffff"}; font-weight: ${r.rank === 1 ? "bold" : "normal"}; vertical-align: top; width: 40px;">${r.rank}</td>
       <td style="padding: 12px 10px; font-size: 14px; color: #ffffff; vertical-align: top;">
@@ -128,8 +148,9 @@ export function generateWeeklyEmail(data: WeeklyEmailData): string {
       </td>
       <td style="padding: 12px 10px; font-size: 14px; color: #e0e0e0; vertical-align: top; width: 70px;">${escapeHtml(r.record)}</td>
       <td style="padding: 12px 10px; font-size: 14px; color: ${accent}; font-weight: 600; vertical-align: top; width: 50px;">${r.powerScore}</td>
-      <td style="padding: 12px 10px; font-size: 14px; color: ${r.trend === "up" ? "#7cb342" : r.trend === "down" ? "#e57373" : textMuted}; vertical-align: top; width: 36px;">${trendSymbol(r.trend)}</td>
-    </tr>`,
+      <td style="padding: 12px 10px; font-size: 14px; color: ${move ? moveColor : textMuted}; vertical-align: top; width: 52px; white-space: nowrap;">${move ? escapeHtml(move) : ""}</td>
+    </tr>`;
+      },
     )
     .join("");
 
@@ -523,8 +544,20 @@ export function generateWeeklyEmailPlainText(data: WeeklyEmailData): string {
   if (!isPreview && data.rankings && data.rankings.length > 0) {
     lines.push("POWER RANKINGS", "---");
     for (const r of data.rankings) {
-      const trend = r.trend === "up" ? "^" : r.trend === "down" ? "v" : "-";
-      lines.push(`${r.rank}. ${r.teamName} (${r.record}) — Power: ${r.powerScore} ${trend}`);
+      const state: RankMovementState =
+        r.showMovement !== true
+          ? "none"
+          : r.trend === "up"
+            ? "up"
+            : r.trend === "down"
+              ? "down"
+              : "same";
+      const move = formatRankMovementLabel({
+        state,
+        places: r.placesMoved ?? (state === "same" ? 0 : null),
+      });
+      const moveSuffix = move ? ` ${move}` : "";
+      lines.push(`${r.rank}. ${r.teamName} (${r.record}) — Power: ${r.powerScore}${moveSuffix}`);
       lines.push(`   ${r.commentary}`);
     }
     if (data.biggestMovers && (data.biggestMovers.riser || data.biggestMovers.faller)) {

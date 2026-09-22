@@ -2,12 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  formatRankMovementLabel,
+  rankMovementVisible,
+  type RankMovementState,
+} from "@shared/rankMovement";
 
 export type WeeklyPowerRankingRow = {
   rank: number;
   teamName: string;
   record: string;
   trend?: "up" | "down" | "flat";
+  placesMoved?: number | null;
+  showMovement?: boolean;
+  previousRank?: number | null;
 };
 
 type ApiResponse = {
@@ -18,6 +26,9 @@ type ApiResponse = {
     teamName: string;
     record: string;
     trend?: "up" | "down" | "flat";
+    placesMoved?: number | null;
+    showMovement?: boolean;
+    previousRank?: number | null;
   }>;
 };
 
@@ -35,12 +46,25 @@ export function weeklyPowerRankingsVisibleCount(opts: {
   return Math.min(opts.total, limit);
 }
 
+/** @deprecated Prefer row.showMovement + formatRankMovementLabel */
 export function rankingShowsMovement(
-  row: Pick<WeeklyPowerRankingRow, "trend">,
+  row: Pick<WeeklyPowerRankingRow, "trend" | "showMovement">,
   hasPriorHistory: boolean,
 ): boolean {
+  if (row.showMovement === true) return true;
+  if (row.showMovement === false) return false;
   if (!hasPriorHistory) return false;
   return row.trend === "up" || row.trend === "down";
+}
+
+export function weeklyRankMovementLabel(row: WeeklyPowerRankingRow): string {
+  if (row.showMovement !== true) return "";
+  const state: RankMovementState =
+    row.trend === "up" ? "up" : row.trend === "down" ? "down" : "same";
+  return formatRankMovementLabel({
+    state,
+    places: row.placesMoved ?? (state === "same" ? 0 : null),
+  });
 }
 
 type Props = {
@@ -75,28 +99,19 @@ export function WeeklyPowerRankingsPanel({ leagueId, week, enabled }: Props) {
       teamName: r.teamName,
       record: r.record,
       ...(r.trend ? { trend: r.trend } : {}),
+      placesMoved: r.placesMoved ?? null,
+      showMovement: r.showMovement === true,
+      ...(r.previousRank != null ? { previousRank: r.previousRank } : {}),
     }));
   }, [data]);
 
-  // API only returns non-flat trends when prior history existed for generatePowerRankings.
-  const hasPriorHistory = rankings.some((r) => r.trend === "up" || r.trend === "down");
-
-  // Mobile-first: default Top 5. Desktop (md+) shows all comfortably unless many teams.
-  const [isNarrow, setIsNarrow] = useState(true);
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 767px)");
-    const apply = () => setIsNarrow(mq.matches);
-    apply();
-    mq.addEventListener?.("change", apply);
-    return () => mq.removeEventListener?.("change", apply);
-  }, []);
+    setExpanded(false);
+  }, [trimmed, week]);
 
-  if (!enabled) return null;
-  if (isLoading) return null;
-  if (isError || !rankings.length) return null;
+  if (!enabled || isError || isLoading || !rankings.length) return null;
 
-  const compactDefault = isNarrow || rankings.length > 8;
+  const compactDefault = true;
   const visible = weeklyPowerRankingsVisibleCount({
     total: rankings.length,
     expanded,
@@ -116,7 +131,10 @@ export function WeeklyPowerRankingsPanel({ leagueId, week, enabled }: Props) {
       </h3>
       <ol className="rounded-lg border border-border/70 bg-muted/10 divide-y divide-border/60">
         {shown.map((r) => {
-          const move = rankingShowsMovement(r, hasPriorHistory);
+          const label = weeklyRankMovementLabel(r);
+          const show = Boolean(label) && rankMovementVisible({
+            state: r.showMovement !== true ? "none" : r.trend === "up" ? "up" : r.trend === "down" ? "down" : "same",
+          });
           return (
             <li
               key={`${r.rank}-${r.teamName}`}
@@ -128,15 +146,19 @@ export function WeeklyPowerRankingsPanel({ leagueId, week, enabled }: Props) {
               </span>
               <span className="font-semibold text-foreground truncate">
                 {r.teamName}
-                {move ? (
+                {show ? (
                   <span
                     className={cn(
-                      "ml-1.5 text-xs",
-                      r.trend === "up" ? "text-emerald-500" : "text-rose-400",
+                      "ml-1.5 text-xs tabular-nums",
+                      r.trend === "up"
+                        ? "text-emerald-500"
+                        : r.trend === "down"
+                          ? "text-rose-400"
+                          : "text-muted-foreground",
                     )}
-                    aria-label={r.trend}
+                    aria-label={label}
                   >
-                    {r.trend === "up" ? "↑" : "↓"}
+                    {label}
                   </span>
                 ) : null}
               </span>

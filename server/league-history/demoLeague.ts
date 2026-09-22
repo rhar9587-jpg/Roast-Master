@@ -729,6 +729,8 @@ export interface DemoWeeklyEmailPayload {
     record: string;
     powerScore: number;
     trend: "up" | "down" | "flat";
+    placesMoved?: number | null;
+    showMovement?: boolean;
     commentary: string;
   }>;
   villainOfTheWeek: { teamName: string; reason: string };
@@ -863,6 +865,8 @@ export async function getDemoWeeklyEmailPayload(
       record: r.record,
       powerScore: r.powerScore,
       trend: r.trend,
+      placesMoved: r.placesMoved,
+      showMovement: r.showMovement,
       commentary: r.commentary,
     })),
     villainOfTheWeek: villain,

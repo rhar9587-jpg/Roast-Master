@@ -150,16 +150,42 @@ describe("weekly share SSR HTML + OG metadata", () => {
     const withMove: WeeklyPublicShareData = {
       ...sample,
       powerRankings: [
-        { rank: 1, teamName: "Alice", record: "2-0", showMovement: true, trend: "up" },
-        { rank: 2, teamName: "Bob", record: "0-2", showMovement: true, trend: "down" },
-        { rank: 3, teamName: "Carol", record: "1-1", showMovement: true, trend: "flat" },
+        {
+          rank: 1,
+          teamName: "Alice",
+          record: "2-0",
+          showMovement: true,
+          trend: "up",
+          placesMoved: 2,
+          movementLabel: "↑ 2",
+        },
+        {
+          rank: 2,
+          teamName: "Bob",
+          record: "0-2",
+          showMovement: true,
+          trend: "down",
+          placesMoved: 2,
+          movementLabel: "↓ 2",
+        },
+        {
+          rank: 3,
+          teamName: "Carol",
+          record: "1-1",
+          showMovement: true,
+          trend: "flat",
+          placesMoved: 0,
+          movementLabel: "Same",
+        },
       ],
     };
     const html = buildWeeklySharePageHtml(withMove, SITE_URL);
     expect(html).toContain('class="rank-move up"');
+    expect(html).toContain("↑ 2");
     expect(html).toContain('class="rank-move down"');
-    // flat should not show a glyph
-    expect((html.match(/class="rank-move /g) || []).length).toBe(2);
+    expect(html).toContain("↓ 2");
+    expect(html).toContain('class="rank-move flat"');
+    expect(html).toContain("Same");
 
     const noHistory = buildWeeklySharePageHtml(sample, SITE_URL);
     expect(noHistory).not.toContain('class="rank-move');
@@ -448,6 +474,9 @@ describe("Power Rankings consistency across surfaces", () => {
           record: "1-0",
           powerScore: 80,
           trend: "up",
+          previousRank: 3,
+          placesMoved: 2,
+          showMovement: true,
           commentary: "x",
           wins: 1,
           losses: 0,
@@ -464,6 +493,93 @@ describe("Power Rankings consistency across surfaces", () => {
     );
     expect(rows[0]!.showMovement).toBe(false);
     expect(rows[0]!.trend).toBeUndefined();
+    expect(rows[0]!.movementLabel).toBe("");
+  });
+
+  it("toPublicShareRankings preserves shared place deltas when prior exists", () => {
+    const rows = toPublicShareRankings(
+      [
+        {
+          rank: 3,
+          teamId: "1",
+          teamName: "A",
+          record: "1-1",
+          powerScore: 70,
+          trend: "up",
+          previousRank: 5,
+          placesMoved: 2,
+          showMovement: true,
+          commentary: "x",
+          wins: 1,
+          losses: 1,
+          ties: 0,
+          pointsFor: 200,
+          winPct: 0.5,
+          averagePoints: 100,
+          recentFormAverage: 100,
+          expectedWins: 1,
+          luckDelta: 0,
+        },
+        {
+          rank: 6,
+          teamId: "2",
+          teamName: "B",
+          record: "0-2",
+          powerScore: 40,
+          trend: "down",
+          previousRank: 4,
+          placesMoved: 2,
+          showMovement: true,
+          commentary: "x",
+          wins: 0,
+          losses: 2,
+          ties: 0,
+          pointsFor: 150,
+          winPct: 0,
+          averagePoints: 75,
+          recentFormAverage: 75,
+          expectedWins: 0.5,
+          luckDelta: -0.5,
+        },
+        {
+          rank: 2,
+          teamId: "3",
+          teamName: "C",
+          record: "2-0",
+          powerScore: 85,
+          trend: "flat",
+          previousRank: 2,
+          placesMoved: 0,
+          showMovement: true,
+          commentary: "x",
+          wins: 2,
+          losses: 0,
+          ties: 0,
+          pointsFor: 220,
+          winPct: 1,
+          averagePoints: 110,
+          recentFormAverage: 110,
+          expectedWins: 1.5,
+          luckDelta: 0.5,
+        },
+      ],
+      { hasPriorWeekHistory: true },
+    );
+    expect(rows[0]).toMatchObject({
+      showMovement: true,
+      placesMoved: 2,
+      movementLabel: "↑ 2",
+    });
+    expect(rows[1]).toMatchObject({
+      showMovement: true,
+      placesMoved: 2,
+      movementLabel: "↓ 2",
+    });
+    expect(rows[2]).toMatchObject({
+      showMovement: true,
+      placesMoved: 0,
+      movementLabel: "Same",
+    });
   });
 });
 

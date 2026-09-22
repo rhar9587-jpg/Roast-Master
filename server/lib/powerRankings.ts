@@ -4,6 +4,10 @@
  */
 
 import { formatTeamRecord } from "./domain/teamStateThroughWeek";
+import {
+  resolveRankMovementFromPrior,
+  type RankMovement,
+} from "@shared/rankMovement";
 
 /** Explicit week identity for score history (never positional). */
 export type WeekKeyedScore = { week: number; score: number };
@@ -34,6 +38,12 @@ export interface PowerRankingRow {
   record: string;
   powerScore: number;
   trend: "up" | "down" | "flat";
+  /** Prior week rank when a valid snapshot existed for this team; else null. */
+  previousRank: number | null;
+  /** Absolute places moved when up/down; 0 when same; null when no prior. */
+  placesMoved: number | null;
+  /** True when a valid prior snapshot existed for this team. */
+  showMovement: boolean;
   commentary: string;
   wins: number;
   losses: number;
@@ -175,13 +185,8 @@ function getTrend(
   teamId: string,
   currentRank: number,
   previousRankings: PreviousRanking[],
-): "up" | "down" | "flat" {
-  if (!previousRankings?.length) return "flat";
-  const prev = previousRankings.find((r) => r.teamId === teamId);
-  if (!prev || prev.rank == null) return "flat";
-  if (currentRank < prev.rank) return "up";
-  if (currentRank > prev.rank) return "down";
-  return "flat";
+): RankMovement {
+  return resolveRankMovementFromPrior(teamId, currentRank, previousRankings);
 }
 
 interface LeagueStats {
@@ -280,13 +285,17 @@ export function generatePowerRankings(
   return withScore.map((t, i) => {
     const rank = i + 1;
     const ties = t.ties ?? 0;
+    const movement = getTrend(t.teamId, rank, previousRankings);
     return {
       rank,
       teamId: t.teamId,
       teamName: t.teamName,
       record: formatTeamRecord(t.wins, t.losses, ties),
       powerScore: t.powerScore,
-      trend: getTrend(t.teamId, rank, previousRankings),
+      trend: movement.trend,
+      previousRank: movement.previousRank,
+      placesMoved: movement.places,
+      showMovement: movement.state !== "none",
       commentary: getCommentary(t, leagueStats),
       wins: t.wins,
       losses: t.losses,

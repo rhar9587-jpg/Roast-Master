@@ -12,6 +12,7 @@ import { buildCompactWeekResults } from "./weeklyCompactResults";
 import {
   rankingShowsMovement,
   weeklyPowerRankingsVisibleCount,
+  weeklyRankMovementLabel,
   WEEKLY_POWER_RANKINGS_MOBILE_DEFAULT,
 } from "./WeeklyPowerRankingsPanel";
 import {
@@ -293,6 +294,38 @@ describe("Weekly Power Rankings presentation", () => {
     expect(rankingShowsMovement({ trend: "up" }, false)).toBe(false);
     expect(rankingShowsMovement({ trend: "up" }, true)).toBe(true);
     expect(rankingShowsMovement({ trend: "flat" }, true)).toBe(false);
+    expect(rankingShowsMovement({ trend: "flat", showMovement: true }, false)).toBe(true);
+    expect(weeklyRankMovementLabel({
+      rank: 3,
+      teamName: "A",
+      record: "1-1",
+      trend: "up",
+      placesMoved: 2,
+      showMovement: true,
+    })).toBe("↑ 2");
+    expect(weeklyRankMovementLabel({
+      rank: 6,
+      teamName: "B",
+      record: "0-2",
+      trend: "down",
+      placesMoved: 2,
+      showMovement: true,
+    })).toBe("↓ 2");
+    expect(weeklyRankMovementLabel({
+      rank: 2,
+      teamName: "C",
+      record: "2-0",
+      trend: "flat",
+      placesMoved: 0,
+      showMovement: true,
+    })).toBe("Same");
+    expect(weeklyRankMovementLabel({
+      rank: 1,
+      teamName: "D",
+      record: "1-0",
+      trend: "flat",
+      showMovement: false,
+    })).toBe("");
   });
 });
 

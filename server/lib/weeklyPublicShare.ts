@@ -15,6 +15,7 @@ import {
   weeklyPublicShareUrl,
 } from "@shared/weeklyShareUrl";
 import { weekSlateHeadline } from "@shared/weekSlateLabels";
+import { formatRankMovementLabel } from "@shared/rankMovement";
 import { getWeeklyShareOgFallbackPngBytes } from "../assets/weeklyShareOgFallbackPng";
 import { getNflWeekContext, resolveLeagueWeekFinality } from "../league-history/nflState";
 import {
@@ -80,7 +81,10 @@ export type WeeklyPublicShareRanking = {
   record: string;
   /** Present only when prior-week history exists; never fabricate movement. */
   trend?: "up" | "down" | "flat";
+  placesMoved?: number | null;
   showMovement: boolean;
+  /** Shared display label: "↑ 2" | "↓ 2" | "Same" | "". */
+  movementLabel?: string;
 };
 
 export type WeeklyPublicShareData = {
@@ -224,19 +228,38 @@ function buildCompletedMatchups(
 /**
  * Map engine rankings → public-safe compact rows.
  * Movement indicators only when prior-week history was supplied to the engine.
+ * Uses the same placesMoved / showMovement values as email + Weekly.
  */
 export function toPublicShareRankings(
   rankings: PowerRankingRow[],
   options?: { hasPriorWeekHistory?: boolean },
 ): WeeklyPublicShareRanking[] {
-  const hasPrior = options?.hasPriorWeekHistory === true;
-  return rankings.map((r) => ({
-    rank: r.rank,
-    teamName: r.teamName,
-    record: r.record,
-    showMovement: hasPrior,
-    ...(hasPrior ? { trend: r.trend } : {}),
-  }));
+  const leagueHasPrior = options?.hasPriorWeekHistory === true;
+  return rankings.map((r) => {
+    const show = leagueHasPrior && r.showMovement === true;
+    const state = !show
+      ? ("none" as const)
+      : r.trend === "up"
+        ? ("up" as const)
+        : r.trend === "down"
+          ? ("down" as const)
+          : ("same" as const);
+    const places = show ? r.placesMoved : null;
+    const movementLabel = formatRankMovementLabel({
+      state,
+      places: places ?? (state === "same" ? 0 : null),
+    });
+    return {
+      rank: r.rank,
+      teamName: r.teamName,
+      record: r.record,
+      showMovement: show,
+      movementLabel,
+      ...(show
+        ? { trend: r.trend, placesMoved: r.placesMoved }
+        : {}),
+    };
+  });
 }
 
 /** Shared ranking pipeline used by commissioner email + public recap (demo). */
@@ -577,10 +600,12 @@ export function buildShareOgDescription(
   return base;
 }
 
-function trendGlyph(trend: "up" | "down" | "flat" | undefined): string {
-  if (trend === "up") return "↑";
-  if (trend === "down") return "↓";
-  return "";
+function rankingMoveHtml(r: WeeklyPublicShareRanking): string {
+  if (!r.showMovement) return "";
+  const label = (r.movementLabel || "").trim();
+  if (!label) return "";
+  const cls = r.trend === "up" || r.trend === "down" ? r.trend : "flat";
+  return `<span class="rank-move ${cls}" aria-label="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
 }
 
 export function buildWeeklySharePageHtml(
@@ -646,10 +671,7 @@ export function buildWeeklySharePageHtml(
       <ol class="rank-list">
         ${data.powerRankings
           .map((r) => {
-            const move =
-              r.showMovement && r.trend && r.trend !== "flat"
-                ? `<span class="rank-move ${r.trend}" aria-label="${r.trend}">${trendGlyph(r.trend)}</span>`
-                : "";
+            const move = rankingMoveHtml(r);
             return `
         <li class="rank-row">
           <span class="rank-num">${r.rank}</span>

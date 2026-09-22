@@ -227,11 +227,14 @@ async function computeCarryJob(matchups: SleeperMatchup[], rosterName: (rid: num
     tagline: "One player, most of the points.",
     meta: {
       roster_id: best.roster_id,
+      manager_name: manager,
+      team_name: manager,
       roster_points: best.roster_points,
       player_id: best.player_id,
       player_name: playerName,
       player_points: best.player_points,
       ratio: best.ratio,
+      share_pct: share,
     },
   };
 }

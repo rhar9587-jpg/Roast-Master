@@ -178,12 +178,31 @@ export function mapEngineCardToVisual(
   }
 
   if (type.includes("carry")) {
+    const manager =
+      metaStr(meta, "manager_name") ||
+      metaStr(meta, "team_name") ||
+      metaStr(meta, "username");
+    const ratio = metaNum(meta, "ratio");
+    const sharePct =
+      metaStr(meta, "share_pct") ||
+      (ratio != null && Number.isFinite(ratio)
+        ? `${Math.round(ratio * 100)}%`
+        : null) ||
+      (card.stat ? String(card.stat).match(/(\d+(?:\.\d+)?%)/)?.[1] : null);
+    // Subject must be the manager/team — never repeat the category title.
+    const subject = (manager || "ONE MAN ARMY").toUpperCase();
     return {
       kicker: "CARRY JOB",
-      title: shortPunchline(card.title, "ONE MAN ARMY", 40).toUpperCase(),
-      subtitle: shortPunchline(card.subtitle, "One player did the heavy lifting.", 110),
-      bigValue: card.stat,
-      statLabel: "Share",
+      title: subject,
+      subtitle: shortPunchline(
+        manager
+          ? `${manager} leaned on one starter.`
+          : card.subtitle,
+        "One player did the heavy lifting.",
+        110,
+      ),
+      bigValue: sharePct || undefined,
+      statLabel: sharePct ? "of team points" : undefined,
       tagline: shortPunchline(card.tagline, "Everyone else was scenery."),
       accent: "slate",
     };
