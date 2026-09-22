@@ -87,7 +87,7 @@ function BlurredCardWrapper({
             <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground">This is just the beginning…</p>
               <p className="text-xs font-medium text-muted-foreground">
-                Unlock the receipts to share who owns who
+                Unlock Fantasy Roast to share who owns who
               </p>
             </div>
           )}

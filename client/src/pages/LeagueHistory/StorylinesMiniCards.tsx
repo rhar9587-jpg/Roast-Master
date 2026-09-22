@@ -179,7 +179,7 @@ function BlurredMiniCardWrapper({
                   This is just the beginning…
                 </p>
                 <p className="text-xs font-medium text-muted-foreground">
-                  Unlock the receipts to share who owns who
+                  Unlock Fantasy Roast to share who owns who
                 </p>
               </div>
             )}
@@ -239,7 +239,7 @@ export function StorylinesMiniCards({
           )}
           {!isPremium && yourRoastCards.length > 0 && (
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Free to view &amp; save. Unlock the receipts to share the whole league.
+              Free to view &amp; save. Unlock Fantasy Roast to share the whole league.
             </p>
           )}
         </section>
