@@ -214,6 +214,7 @@ export async function getRecentEvents(limit: number = 50): Promise<Array<{
   route: string;
   method: string;
   time: string;
+  league_id?: string | null;
   meta: Record<string, any>;
 }>> {
   await initDb();
@@ -221,15 +222,16 @@ export async function getRecentEvents(limit: number = 50): Promise<Array<{
   if (dbAvailable && pool) {
     try {
       const { rows } = await pool.query(`
-        SELECT type, route, method, timestamp, meta FROM analytics_events 
+        SELECT type, route, method, timestamp, meta, league_id FROM analytics_events 
         ORDER BY timestamp DESC LIMIT $1
       `, [limit]);
       
-      return rows.map((row: { type: string; route: string; method: string; timestamp: string; meta: string | Record<string, any> }) => ({
+      return rows.map((row: { type: string; route: string; method: string; timestamp: string; meta: string | Record<string, any>; league_id?: string | null }) => ({
         type: row.type,
         route: row.route,
         method: row.method,
         time: new Date(parseInt(row.timestamp, 10)).toISOString(),
+        league_id: row.league_id || null,
         meta: typeof row.meta === "string" ? JSON.parse(row.meta) : row.meta,
       }));
     } catch (err) {
@@ -243,9 +245,196 @@ export async function getRecentEvents(limit: number = 50): Promise<Array<{
       route: e.route,
       method: e.method,
       time: new Date(e.timestamp).toISOString(),
+      league_id: e.league_id || null,
       meta: e.meta,
     }));
   }
+}
+
+export type JourneyStep = {
+  type: string;
+  time: string;
+  route: string;
+  meta: Record<string, any>;
+};
+
+export type PurchaseJourney = {
+  league_id: string;
+  purchase_time: string | null;
+  session_id: string | null;
+  amount_cents: number | null;
+  currency: string | null;
+  confirmed_via_webhook: boolean;
+  client_success_seen: boolean;
+  unlock_clicked_source: string | null;
+  steps: JourneyStep[];
+  post_purchase_actions: string[];
+};
+
+const FUNNEL_STEP_TYPES = new Set([
+  "unlock_clicked",
+  "checkout_session_created",
+  "purchase_completed_webhook",
+  "purchase_success",
+  "purchase_cancel",
+  "unlock_save_email",
+  "unlock_restore",
+]);
+
+function parseMeta(meta: string | Record<string, any> | undefined): Record<string, any> {
+  if (!meta) return {};
+  if (typeof meta === "string") {
+    try {
+      return JSON.parse(meta);
+    } catch {
+      return {};
+    }
+  }
+  return meta;
+}
+
+function buildJourneyFromEvents(
+  leagueId: string,
+  eventsAsc: Array<{ type: string; route: string; timestamp: number; meta: Record<string, any> }>,
+): PurchaseJourney {
+  const purchase = [...eventsAsc].reverse().find((e) => e.type === "purchase_completed_webhook")
+    || [...eventsAsc].reverse().find((e) => e.type === "purchase_success")
+    || [...eventsAsc].reverse().find((e) => e.type === "checkout_session_created");
+
+  const unlockClick = eventsAsc.find((e) => e.type === "unlock_clicked");
+  const postPurchase = eventsAsc
+    .filter((e) => purchase && e.timestamp >= purchase.timestamp && !FUNNEL_STEP_TYPES.has(e.type))
+    .map((e) => e.type);
+
+  return {
+    league_id: leagueId,
+    purchase_time: purchase ? new Date(purchase.timestamp).toISOString() : null,
+    session_id: purchase?.meta?.session_id ? String(purchase.meta.session_id) : null,
+    amount_cents: typeof purchase?.meta?.amount_cents === "number" ? purchase.meta.amount_cents : null,
+    currency: purchase?.meta?.currency ? String(purchase.meta.currency) : null,
+    confirmed_via_webhook: eventsAsc.some((e) => e.type === "purchase_completed_webhook"),
+    client_success_seen: eventsAsc.some((e) => e.type === "purchase_success"),
+    unlock_clicked_source: unlockClick?.meta?.source ? String(unlockClick.meta.source) : null,
+    steps: eventsAsc.map((e) => ({
+      type: e.type,
+      time: new Date(e.timestamp).toISOString(),
+      route: e.route,
+      meta: e.meta,
+    })),
+    post_purchase_actions: Array.from(new Set(postPurchase)),
+  };
+}
+
+/**
+ * Reconstruct recent purchase / checkout journeys by league_id.
+ * Seeds from webhook purchases (preferred), then client success / checkout sessions.
+ */
+export async function getPurchaseJourneys(limit: number = 20): Promise<PurchaseJourney[]> {
+  await initDb();
+  const take = Math.max(1, Math.min(50, limit));
+  const windowBeforeMs = 48 * 60 * 60 * 1000;
+  const windowAfterMs = 7 * 24 * 60 * 60 * 1000;
+
+  type RawEvent = { type: string; route: string; timestamp: number; meta: Record<string, any>; league_id: string };
+
+  let seedEvents: RawEvent[] = [];
+  let allLeagueEvents: RawEvent[] = [];
+
+  if (dbAvailable && pool) {
+    try {
+      const seedRes = await pool.query(
+        `SELECT type, route, timestamp, meta, league_id
+         FROM analytics_events
+         WHERE type = ANY($1)
+           AND league_id IS NOT NULL
+         ORDER BY timestamp DESC
+         LIMIT $2`,
+        [["purchase_completed_webhook", "purchase_success", "checkout_session_created"], take * 3],
+      );
+      seedEvents = seedRes.rows.map((row: any) => ({
+        type: row.type,
+        route: row.route,
+        timestamp: parseInt(row.timestamp, 10),
+        meta: parseMeta(row.meta),
+        league_id: String(row.league_id),
+      }));
+
+      const leagueIds = Array.from(new Set(seedEvents.map((e) => e.league_id))).slice(0, take);
+      if (leagueIds.length === 0) return [];
+
+      const minTs = Math.min(...seedEvents.map((e) => e.timestamp)) - windowBeforeMs;
+      const maxTs = Math.max(...seedEvents.map((e) => e.timestamp)) + windowAfterMs;
+
+      const evRes = await pool.query(
+        `SELECT type, route, timestamp, meta, league_id
+         FROM analytics_events
+         WHERE league_id = ANY($1)
+           AND timestamp BETWEEN $2 AND $3
+         ORDER BY timestamp ASC`,
+        [leagueIds, minTs, maxTs],
+      );
+      allLeagueEvents = evRes.rows.map((row: any) => ({
+        type: row.type,
+        route: row.route,
+        timestamp: parseInt(row.timestamp, 10),
+        meta: parseMeta(row.meta),
+        league_id: String(row.league_id),
+      }));
+    } catch (err) {
+      console.error("[analytics-db] Error getting purchase journeys:", err);
+      return [];
+    }
+  } else {
+    const fallback = getInMemoryFallback();
+    seedEvents = fallback.events
+      .filter((e) =>
+        e.league_id &&
+        ["purchase_completed_webhook", "purchase_success", "checkout_session_created"].includes(e.type),
+      )
+      .map((e) => ({
+        type: e.type,
+        route: e.route,
+        timestamp: e.timestamp,
+        meta: e.meta || {},
+        league_id: String(e.league_id),
+      }))
+      .sort((a, b) => b.timestamp - a.timestamp);
+
+    const leagueIds = Array.from(new Set(seedEvents.map((e) => e.league_id))).slice(0, take);
+    allLeagueEvents = fallback.events
+      .filter((e) => e.league_id && leagueIds.includes(e.league_id))
+      .map((e) => ({
+        type: e.type,
+        route: e.route,
+        timestamp: e.timestamp,
+        meta: e.meta || {},
+        league_id: String(e.league_id),
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  // Prefer webhook seeds; one journey per league (most recent purchase window)
+  const seen = new Set<string>();
+  const journeys: PurchaseJourney[] = [];
+  const seedsPreferred = [
+    ...seedEvents.filter((e) => e.type === "purchase_completed_webhook"),
+    ...seedEvents.filter((e) => e.type === "purchase_success"),
+    ...seedEvents.filter((e) => e.type === "checkout_session_created"),
+  ];
+
+  for (const seed of seedsPreferred) {
+    if (seen.has(seed.league_id)) continue;
+    seen.add(seed.league_id);
+    const start = seed.timestamp - windowBeforeMs;
+    const end = seed.timestamp + windowAfterMs;
+    const eventsAsc = allLeagueEvents.filter(
+      (e) => e.league_id === seed.league_id && e.timestamp >= start && e.timestamp <= end,
+    );
+    journeys.push(buildJourneyFromEvents(seed.league_id, eventsAsc));
+    if (journeys.length >= take) break;
+  }
+
+  return journeys;
 }
 
 export async function getFirstStartedAt(): Promise<number> {

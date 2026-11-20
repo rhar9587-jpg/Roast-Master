@@ -724,7 +724,7 @@ export default function LeagueHistoryPage() {
       if (urlLeagueId) {
         unlockLeague(urlLeagueId);
         setIsPremiumState(isLeagueUnlocked(urlLeagueId));
-        trackFunnel.purchaseSuccess();
+        trackFunnel.purchaseSuccess(urlLeagueId);
       }
       const sessionFromUrl = params.get("session_id")?.trim() || null;
       setCheckoutSessionId(sessionFromUrl);
@@ -736,7 +736,7 @@ export default function LeagueHistoryPage() {
       setShowRestoreModal(true);
     } else if (canceled === "true") {
       if (urlLeagueId) {
-        trackFunnel.purchaseCancel();
+        trackFunnel.purchaseCancel(urlLeagueId);
       }
       toast({
         title: "Payment canceled.",
@@ -1927,7 +1927,7 @@ export default function LeagueHistoryPage() {
       });
       return;
     }
-    trackFunnel.unlockClicked("league_history");
+    trackFunnel.unlockClicked("league_history", leagueId.trim());
     try {
       const url = await createCheckoutSession(leagueId.trim(), {
         leagueName: data?.league?.name ?? null,
