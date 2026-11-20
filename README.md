@@ -75,6 +75,18 @@ Funnel analytics and conversion metrics.
 curl "https://your-app.com/api/admin/analytics/summary?key=YOUR_ADMIN_KEY"
 ```
 
+#### `GET /api/admin/analytics/journeys?key=ADMIN_KEY`
+
+Per-purchase flow reconstruction (what a buyer clicked / did around checkout).
+
+```bash
+curl "https://fantasyroast.net/api/admin/analytics/journeys?key=YOUR_ADMIN_KEY"
+```
+
+Response includes:
+- `journeys[]` — timeline of events for each purchased league (`unlock_clicked` → checkout → webhook → post-purchase actions)
+- `recent_unlocks[]` — entitlement rows with masked emails (no full addresses)
+
 Response:
 ```json
 {

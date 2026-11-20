@@ -21,6 +21,7 @@ import {
   isUsingDatabase,
   ensureDb,
   getAnalyticsSummary,
+  getPurchaseJourneys,
   hashIp,
   type RecordEventOptions,
 } from "./analytics-db";
@@ -78,6 +79,7 @@ import {
   hasUsedFreeSend,
   markFreeSendUsed,
   getFreeSendStatus,
+  listRecentUnlockEntitlements,
 } from "./lib/entitlementsStore";
 
 // -------------------------
@@ -2043,6 +2045,35 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (err: any) {
       console.error("[/api/admin/analytics/summary] Error:", err);
       return res.status(500).json({ error: "Failed to retrieve analytics summary" });
+    }
+  });
+
+  // -------------------------
+  // Purchase journey reconstruction (per league_id timeline)
+  // -------------------------
+  app.get("/api/admin/analytics/journeys", async (req: Request, res: Response) => {
+    const key = req.query.key as string | undefined;
+    if (!ADMIN_KEY || key !== ADMIN_KEY) {
+      return res.status(401).json({ error: "Unauthorized. Provide ?key=ADMIN_KEY" });
+    }
+
+    try {
+      const limitRaw = Number(req.query.limit);
+      const limit = Number.isFinite(limitRaw) ? limitRaw : 20;
+      const [journeys, recentUnlocks] = await Promise.all([
+        getPurchaseJourneys(limit),
+        listRecentUnlockEntitlements(limit),
+      ]);
+
+      return res.json({
+        generated_at: new Date().toISOString(),
+        purchase_count: journeys.filter((j) => j.confirmed_via_webhook || j.client_success_seen).length,
+        journeys,
+        recent_unlocks: recentUnlocks,
+      });
+    } catch (err: any) {
+      console.error("[/api/admin/analytics/journeys] Error:", err);
+      return res.status(500).json({ error: "Failed to retrieve purchase journeys" });
     }
   });
 

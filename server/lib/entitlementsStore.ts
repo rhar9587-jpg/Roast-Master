@@ -299,6 +299,73 @@ export async function findCustomerIdByEmail(emailRaw: string): Promise<string | 
   return customerId;
 }
 
+/** Mask email for admin analytics (never return full address). */
+export function maskEmail(emailRaw: string): string {
+  const email = normalizeEmail(emailRaw);
+  const at = email.indexOf("@");
+  if (at <= 0) return "***";
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}***@${domain || "***"}`;
+}
+
+export type RecentUnlockSummary = {
+  leagueId: string;
+  emailMasked: string;
+  sessionId: string | null;
+  unlockedAt: string;
+  source: string | null;
+};
+
+/** Recent paid unlocks for admin purchase analytics (emails masked). */
+export async function listRecentUnlockEntitlements(
+  limit: number = 25,
+): Promise<RecentUnlockSummary[]> {
+  const take = Math.max(1, Math.min(100, limit));
+  if (await initDb()) {
+    try {
+      const res = await pool!.query(
+        `SELECT league_id, email, stripe_session_id, unlocked_at, source
+         FROM unlock_entitlements
+         ORDER BY unlocked_at DESC
+         LIMIT $1`,
+        [take],
+      );
+      return res.rows.map(
+        (r: {
+          league_id: string;
+          email: string;
+          stripe_session_id?: string | null;
+          unlocked_at: string | Date;
+          source?: string | null;
+        }) => ({
+          leagueId: String(r.league_id),
+          emailMasked: maskEmail(String(r.email || "")),
+          sessionId: r.stripe_session_id ? String(r.stripe_session_id) : null,
+          unlockedAt: new Date(r.unlocked_at).toISOString(),
+          source: r.source ? String(r.source) : null,
+        }),
+      );
+    } catch (err) {
+      console.error("[entitlements-store] listRecentUnlockEntitlements DB error:", err);
+    }
+  }
+
+  const local = await readUnlockFile();
+  return (local.entitlements || [])
+    .slice()
+    .sort((a, b) => Date.parse(b.unlockedAt) - Date.parse(a.unlockedAt))
+    .slice(0, take)
+    .map((e) => ({
+      leagueId: e.leagueId,
+      emailMasked: maskEmail(e.email),
+      sessionId: e.sessionId ? String(e.sessionId) : null,
+      unlockedAt: e.unlockedAt,
+      source: e.source ? String(e.source) : null,
+    }));
+}
+
 export async function hasUsedFreeSend(leagueId: string): Promise<boolean> {
   const id = leagueId.trim();
   if (!id) return false;
